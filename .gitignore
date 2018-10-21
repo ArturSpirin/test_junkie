@@ -1,0 +1,7 @@
+playground
+.idea
+__pycache__
+*.pyc
+build
+dist
+test_junkie.egg-info
