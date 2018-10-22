@@ -11,7 +11,7 @@ setuptools.setup(
     description="Advanced execution framework for test scenarios",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="",
+    url="https://github.com/ArturSpirin/test_junkie",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
