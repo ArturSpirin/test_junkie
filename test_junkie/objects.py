@@ -93,7 +93,7 @@ class SuiteObject:
 
     def get_meta(self):
 
-        return self.__suite_definition["class_meta"]
+        return self.__suite_definition.get("class_meta", {})
 
     def get_unsuccessful_tests(self):
 

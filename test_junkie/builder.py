@@ -42,7 +42,7 @@ class Builder(object):
                 Builder.__CURRENT_SUITE_OBJECT["class_object"] = decorated_function
                 Builder.__CURRENT_SUITE_OBJECT["class_retry"] = decorator_kwargs.get("retry", 1)
                 Builder.__CURRENT_SUITE_OBJECT["class_skip"] = decorator_kwargs.get("skip", False)
-                Builder.__CURRENT_SUITE_OBJECT["class_meta"] = decorator_kwargs.get("meta", None)
+                Builder.__CURRENT_SUITE_OBJECT["class_meta"] = decorator_kwargs.get("meta", {})
                 Builder.__CURRENT_SUITE_OBJECT["test_listener"] = decorator_kwargs.get("listener", Listener)
                 Builder.__CURRENT_SUITE_OBJECT["test_rules"] = decorator_kwargs.get("rules", Rules)
                 Builder.__CURRENT_SUITE_OBJECT["pr"] = decorator_kwargs.get("pr", [])
