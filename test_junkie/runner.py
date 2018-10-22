@@ -362,7 +362,3 @@ class Runner:
                 LogJunkie.print_traceback()
                 raise TestJunkieExecutionError("Encountered error while processing skip condition")
         return val
-
-    def get_stats(self):
-        from test_junkie.metrics import StatsJunkie
-        return StatsJunkie(self.__stats)

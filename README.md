@@ -1,4 +1,4 @@
-## Test Junkie [pre-release]
+## Test Junkie [alpha] [![Build Status](https://travis-ci.com/ArturSpirin/test_junkie.svg?branch=master)](https://travis-ci.com/ArturSpirin/test_junkie) [![Maintainability](https://api.codeclimate.com/v1/badges/40b17ed68d5b3eca140b/maintainability)](https://codeclimate.com/github/ArturSpirin/test_junkie/maintainability) <a href="https://codeclimate.com/github/ArturSpirin/test_junkie/test_coverage"><img src="https://api.codeclimate.com/v1/badges/40b17ed68d5b3eca140b/test_coverage" /></a>
 
 Test Junkie is a classy framework for executing test scenarios. Designed to be simple and intuitive so any beginner 
 can get started while delivering many features that are desired by high end test engineers.
