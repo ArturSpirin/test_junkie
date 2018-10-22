@@ -9,5 +9,4 @@ python:
   - "3.6-dev"
   - "3.7-dev"
 script:
-  - pytest tests/basics.py
-  - pytest tests/before_class.py
+  - pytest
