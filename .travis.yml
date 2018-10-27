@@ -10,4 +10,4 @@ install:
 script:
   -  py.test --cov=test_junkie tests/
 after_success:
-  - coverage -t $CODECOV_TOKEN
+  - codecov -t $CODECOV_TOKEN
