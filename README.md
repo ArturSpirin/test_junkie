@@ -5,7 +5,6 @@
 [![PyPI version shields.io](https://img.shields.io/pypi/v/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/) 
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/)
 ##
-##
 ## Test Junkie
 
 Test Junkie is a classy framework for executing test scenarios. Designed to be simple and intuitive so any beginner 
