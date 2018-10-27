@@ -10,4 +10,4 @@ install:
 script:
   -  py.test --cov=test_junkie tests/
 after_success:
-  - bash < (curl -s https://codecov.io/bash) -t $CODECOV_TOKEN
+  - coverage -t $CODECOV_TOKEN

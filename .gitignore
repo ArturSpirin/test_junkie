@@ -7,3 +7,4 @@ dist
 test_junkie.egg-info
 .pytest_cache
 .coverage
+coverage.xml
