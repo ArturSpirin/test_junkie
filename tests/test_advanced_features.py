@@ -1,5 +1,6 @@
 import pprint
-
+import sys
+sys.path.insert(1, __file__.split("tests")[0])
 from test_junkie.debugger import LogJunkie
 LogJunkie.enable_logging(10)
 
