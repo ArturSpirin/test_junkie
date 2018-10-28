@@ -8,6 +8,10 @@ python:
 install:
   - pip install -r requirements.txt
 script:
-  -  py.test --cov=test_junkie tests/
+  - if [[ $TRAVIS_PYTHON_VERSION != 2.7 ]]; then (py.test --cov=test_junkie tests/); fi
+  # deadlocks observed on python 2 + PyTest; runs fine outside of PyTest on python 2
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (python tests/test_advanced_features.py); fi
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (python tests/on_class/test_cancel.py); fi
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (py.test --cov=test_junkie tests/ --ignore=tests/test_advanced_features.py --ignore=tests/on_class/test_cancel.py); fi
 after_success:
   - codecov -t $CODECOV_TOKEN
