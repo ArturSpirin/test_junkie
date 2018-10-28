@@ -56,7 +56,7 @@ class Runner:
                 suite_object = Builder.get_execution_roster().get(suite, None)
                 if suite_object is not None:
                     if not suite_object.is_parallelized():
-                        LogJunkie.debug("Cant Suite: {} in parallel with any other suites"
+                        LogJunkie.debug("Cant run suite: {} in parallel with any other suites"
                                         .format(suite_object.get_class_object()))
                         ParallelProcessor.wait_for_parallels_to_finish(parallels)
                     if self.__processor.suite_multithreading():
@@ -68,6 +68,9 @@ class Runner:
                         self.__executed_suites.append(suite_object)
                         self.__run_suite(suite_object)
                         self.__suites.remove(suite)
+                else:
+                    LogJunkie.debug("Suite: {} not found!".format(suite))
+                    self.__suites.remove(suite)
             LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
             time.sleep(1)
 
@@ -101,7 +104,7 @@ class Runner:
 
                         for test in suite.get_test_objects():
                             if not test.is_parallelized():
-                                LogJunkie.debug("Cant run: {} in parallel with any other tests"
+                                LogJunkie.debug("Cant run test: {} in parallel with any other tests"
                                                 .format(test.get_function_object()))
                                 ParallelProcessor.wait_for_parallels_to_finish(parallels)
                             while self.__processor.test_limit_reached(parallels):
@@ -111,9 +114,9 @@ class Runner:
                             LogJunkie.debug("===============Running test: {}=================="
                                             .format(test.get_function_object()))
 
-                            if not Runner.__positive_skip_condition(suite, test) and \
-                                    Runner.__runnable_tags(test_tags=test.get_tags(),
-                                                           tag_config=self.__run_config.get("tag_config", None)):
+                            if not Runner.__positive_skip_condition(test) and \
+                                    Runner.__runnable_tags(test=test,
+                                                           tag_config=self.__run_config.get("tag_config", {})):
                                 parameters = test.get_parameters()
                                 if not parameters or not isinstance(parameters, list):  # Validating parameters
                                     # If parameters are invalid, will raise a meaningful exception
@@ -303,47 +306,46 @@ class Runner:
                                     .format(event_function))
 
     @staticmethod
-    def __runnable_tags(test_tags, tag_config):
+    def __runnable_tags(test, tag_config):
         """
         This function evaluates if test should be executed based on its tags and the tag config
-        :param test_tags: LIST of tags for the test case
+        :param test: TestObject
         :param tag_config: DICT tag configuration
         :return: BOOLEAN
         """
-        if not test_tags and tag_config is not None:
-            # tests without tags will be skipped if tags were provided to the runner
-            return False
+        test_tags = test.get_tags()
+
+        def __config_set(config):
+            return tag_config.get(config, None) is not None
+
+        def __full_match(config):
+            for tag in tag_config[config]:
+                if tag not in test_tags:
+                    return False
+            return True
+
+        def __partial_match(config):
+            for tag in tag_config[config]:
+                if tag in test_tags:
+                    return True
 
         if tag_config is not None:
             try:
-                if tag_config.get("skip_on_match_all", None) is not None:
-                    for tag in tag_config["skip_on_match_all"]:
-                        if tag not in test_tags:
-                            return True
+                if __config_set("skip_on_match_all") and __full_match("skip_on_match_all"):
                     return False
-                elif tag_config.get("skip_on_match_any", None) is not None:
-                    for tag in tag_config["skip_on_match_any"]:
-                        if tag in test_tags:
-                            return False
-                elif tag_config.get("run_on_match_all", None) is not None:
-                    for tag in tag_config["run_on_match_all"]:
-                        if tag not in test_tags:
-                            return False
-                elif tag_config.get("run_on_match_any", None) is not None:
-                    for tag in tag_config["run_on_match_any"]:
-                        if tag in test_tags:
-                            return True
+                elif __config_set("skip_on_match_any") and __partial_match("skip_on_match_any"):
                     return False
-                else:
-                    raise ConfigError("Incorrect configuration is set for `tag_config`")
-            except Exception as error:
-                if not isinstance(error, ConfigError):
-                    raise ConfigError("Failed to parse `tag_config`. Make sure tags are provided as a list")
-                raise error
+                elif __config_set("run_on_match_all") and __full_match("run_on_match_all"):
+                    return True
+                elif __config_set("run_on_match_any") and __partial_match("run_on_match_any"):
+                    return True
+            except Exception:
+                LogJunkie.print_traceback()
+                raise ConfigError("Error occurred while trying to parse `tag_config`")
         return True
 
     @staticmethod
-    def __positive_skip_condition(suite, test):
+    def __positive_skip_condition(test):
         """
         This function will evaluate inputs for skip parameter whether its a function or a boolean
         :param suite: SuiteObject object
@@ -354,7 +356,7 @@ class Runner:
         if inspect.isfunction(val):
             try:
                 if "meta" in inspect.getargspec(val).args:  # deprecated but supports Python 2
-                    val = val(meta=suite.get_listener().kwargs)
+                    val = val(meta=test.get_meta())
                 else:
                     val = val()
                 assert isinstance(val, bool), "Function: {} must return a boolean. Got: {}".format(val, type(val))

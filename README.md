@@ -68,11 +68,12 @@ class LoginFunctionality:
     ...
 ```
 @Suite decorator supports the following decorator properties:
-+ [Meta](#meta): `@Suite(meta=meta(name="Suite Name"))`
++ [Meta](#meta): `@Suite(meta=meta(name="Suite Name", known_bugs=[11111, 22222, 33333]))`
 + [Retry](#retrying-testssuites): `@Suite(retry=2)` 
-+ [Skip](#skipping-testssuites): `@Suite(skip=Boolean)` 
++ [Skip](#skipping-testssuites): `@Suite(skip=True)` 
 + [Listeners](#test-listeners): `@Suite(listener=YourListener)`
 + [Rules](#rules): `@Suite(rules=YourRules)`
++ [Parameters](#parameterized-suites): `@Suite(parameters=[{"fruits": ["apple", "peach"]}, None, "blue", [1, 2, 3]])`
 + [Parallel Restriction](#restricting-parallel-execution-at-suitetest-level): `@Suite(pr=[ATestSuite])`
 + [Parallelized](#restricting-parallel-execution-at-suitetest-level): `@Suite(parallelized=False)`
 

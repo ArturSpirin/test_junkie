@@ -1,56 +1,7 @@
-from test_junkie.decorators import test, beforeTest, afterTest, afterClass, beforeClass, Suite
 from test_junkie.runner import Runner
+from tests.junkie_suites.BasicSuite import BasicSuite
 
-
-def skip_function():
-    return True
-
-
-@Suite()
-class CommonUseCases:
-
-    @beforeClass()
-    def before_class(self):
-        pass
-
-    @beforeTest()
-    def before_test(self):
-        pass
-
-    @afterTest()
-    def after_test(self):
-        pass
-
-    @afterClass()
-    def after_class(self):
-        pass
-
-    @test()
-    def failure(self):
-        assert True is False
-
-    @test()
-    def error(self):
-        raise Exception("Exception")
-
-    @test(skip=True)
-    def skip(self):
-        pass
-
-    @test(skip=skip_function)
-    def skip_function(self):
-        pass
-
-    @test(parameters=[1, 2, 3, 4])
-    def parameters(self, parameter):
-        pass
-
-    @test(retry=2)
-    def retry(self):
-        assert True is False
-
-
-runner = Runner(CommonUseCases)
+runner = Runner(BasicSuite)
 runner.run()
 results = runner.get_executed_suites()
 tests = results[0].get_test_objects()
@@ -85,6 +36,7 @@ def test_class_stats():
 
 def test_failure():
 
+    tested = False
     for test in tests:
         if test.get_function_name() == "failure":
             properties = test.metrics.get_metrics()["None"]["None"]
@@ -95,10 +47,14 @@ def test_failure():
             assert properties["status"] == "fail"
             assert properties["retry"] == 1
             assert properties["param"] is None
+            tested = True
+    if not tested:
+        raise Exception("Test did not run")
 
 
 def test_error():
 
+    tested = False
     for test in tests:
         if test.get_function_name() == "error":
             properties = test.metrics.get_metrics()["None"]["None"]
@@ -110,10 +66,14 @@ def test_error():
             assert properties["status"] == "error"
             assert properties["retry"] == 1
             assert properties["param"] is None
+            tested = True
+    if not tested:
+        raise Exception("Test did not run")
 
 
 def test_skip():
 
+    tested = False
     for test in tests:
         if test.get_function_name() == "skip":
             properties = test.metrics.get_metrics()["None"]["None"]
@@ -124,10 +84,14 @@ def test_skip():
             assert properties["status"] == "skip"
             assert properties["retry"] == 1
             assert properties["param"] is None
+            tested = True
+    if not tested:
+        raise Exception("Test did not run")
 
 
 def test_skip_function():
 
+    tested = False
     for test in tests:
         if test.get_function_name() == "skip_function":
             properties = test.metrics.get_metrics()["None"]["None"]
@@ -138,10 +102,14 @@ def test_skip_function():
             assert properties["status"] == "skip"
             assert properties["retry"] == 1
             assert properties["param"] is None
+            tested = True
+    if not tested:
+        raise Exception("Test did not run")
 
 
 def test_retry():
 
+    tested = False
     for test in tests:
         if test.get_function_name() == "retry":
             properties = test.metrics.get_metrics()["None"]["None"]
@@ -153,10 +121,14 @@ def test_retry():
             assert properties["status"] == "fail"
             assert properties["retry"] == 2
             assert properties["param"] is None
+            tested = True
+    if not tested:
+        raise Exception("Test did not run")
 
 
 def test_parameters():
 
+    tested = False
     for test in tests:
         if test.get_function_name() == "parameters":
             properties = test.metrics.get_metrics()["None"]
@@ -168,3 +140,6 @@ def test_parameters():
                 assert metrics["status"] == "success"
                 assert metrics["retry"] == 1
                 assert str(metrics["param"]) == param
+            tested = True
+    if not tested:
+        raise Exception("Test did not run")

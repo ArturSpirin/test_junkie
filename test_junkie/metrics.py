@@ -55,6 +55,7 @@ class TestMetrics:
         self.__stats[string_class_param][string_param]["retry"] += 1
         self.__stats[string_class_param][string_param]["status"] = status
         self.__stats[string_class_param][string_param]["param"] = param
+        self.__stats[string_class_param][string_param]["class_param"] = class_param
 
     def get_metrics(self):
 
