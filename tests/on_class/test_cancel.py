@@ -9,8 +9,8 @@ from tests.junkie_suites.CancelSuite import CancelSuite
 
 runner = Runner(CancelSuite)
 thread = threading.Thread(target=runner.run, args=())
-thread.start()
 runner.cancel()
+thread.start()
 thread.join()
 results = runner.get_executed_suites()
 
