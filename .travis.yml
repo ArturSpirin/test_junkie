@@ -13,10 +13,10 @@ script:
   # Works perfectly fine outside of pytest on python 2. Also works fine with/without pytest on python 3.
   - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (python tests/test_advanced_features.py); fi
   - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (python tests/on_class/test_cancel.py); fi
-  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (python tests/metrics/test_reporting.py); fi
+  - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (python tests/reporting/test_reporting.py); fi
   - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (py.test --cov=test_junkie tests/
                                                   --ignore=tests/test_advanced_features.py
-                                                  --ignore=tests/metrics/test_reporting.py
+                                                  --ignore=tests/reporting/test_reporting.py
                                                   --ignore=tests/on_class/test_cancel.py); fi
 after_success:
   - codecov -t $CODECOV_TOKEN
