@@ -1,5 +1,5 @@
-import pprint
-
+import pprint, sys
+sys.path.insert(1, __file__.split("tests")[0])
 from test_junkie.runner import Runner
 from tests.junkie_suites.FeatureAggregations import LoginSessions, Login, Dashboard
 
