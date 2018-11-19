@@ -1,15 +1,12 @@
-import os
 import pprint
 
 from test_junkie.constants import TestCategory
 from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
 from tests.junkie_suites.FeatureAggregations import LoginSessions, Login, Dashboard
-
-runner = Runner([Login, LoginSessions, Dashboard],
-                monitor_resources=True,
-                html_report=__file__.replace("test_aggregation.py", "test.html"),
-                xml_report=__file__.replace("test_aggregation.py", "test.xml"))
+f = __file__.replace("test_aggregation.pyc", "test.html")  # for python 2
+f = f.replace("test_aggregation.py", "test.html")
+runner = Runner([Login, LoginSessions, Dashboard], monitor_resources=True, html_report=f, xml_report=f)
 runner_metrics = runner.run()
 results = runner.get_executed_suites()
 tests = results[0].get_test_objects()
