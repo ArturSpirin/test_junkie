@@ -1,7 +1,8 @@
 from test_junkie.decorators import test, beforeClass, Suite
+from tests.junkie_suites.TestListener import TestListener
 
 
-@Suite(retry=2)
+@Suite(retry=2, listener=TestListener)
 class BeforeClassExceptionSuite:
 
     @beforeClass()

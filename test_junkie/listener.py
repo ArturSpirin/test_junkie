@@ -5,10 +5,6 @@ class Listener:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
 
-    def on_in_progress(self, **kwargs):
-        if kwargs.get("custom_function", None) is not None:
-            kwargs.get("custom_function")(properties=kwargs.get("properties"))
-
     def on_cancel(self, **kwargs):
         if kwargs.get("custom_function", None) is not None:
             kwargs.get("custom_function")(properties=kwargs.get("properties"))
@@ -55,10 +51,6 @@ class Listener:
         if kwargs.get("custom_function", None) is not None:
             kwargs.get("custom_function")(properties=kwargs.get("properties", None),
                                           exception=kwargs.get("error", None))
-
-    def on_class_in_progress(self, **kwargs):
-        if kwargs.get("custom_function", None) is not None:
-            kwargs.get("custom_function")(properties=kwargs.get("properties"))
 
     def on_class_skip(self, **kwargs):
         if kwargs.get("custom_function", None) is not None:

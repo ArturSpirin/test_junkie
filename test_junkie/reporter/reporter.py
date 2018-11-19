@@ -1,6 +1,4 @@
 import time
-from statistics import mean
-
 from test_junkie.constants import TestCategory
 
 
@@ -35,6 +33,7 @@ class Reporter:
                                 if self.totals[TestCategory.SUCCESS] > 0 else 0)
 
             if self.monitoring_file is not None:
+                from statistics import mean
                 html = html.replace("<span>Resource monitoring disabled</span>", "")
                 cpu_data = self.__get_dataset_for_cpu_trend()
                 html = html.replace("{cpu_labels}", str(cpu_data["labels"]))

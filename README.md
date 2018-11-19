@@ -8,10 +8,12 @@
 
 ## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
 
-Test Junkie is a classy framework for executing test scenarios. Designed to be simple and intuitive so any beginner 
-can get started while delivering many features that are desired by high end test engineers.
+Test Junkie is the most advanced test runner for Python. Its highly configurable and feature rich framework designed 
+to cater to larger QA teams. It aims to provide simple out of the box test management solution and give visibility on 
+how the test are performing. Test Junkie's [reporting capabilities](#reporting) will help you make decisions on which 
+tests to optimize so you can test more in less time.
 
-_This is a pre-release version, documentation may be incomplete and functionality of features is subject to change._
+_Still in ALFA, documentation may be incomplete and functionality of features is subject to change._
 
 ## Table of  content
 
@@ -840,6 +842,7 @@ Test Junkie is tracking a number of metrics during test execution:
 + Test results by [Features](#features--components)
 + Test results by [Tags](#tags)
 + Test results by [Assignees](#suite--test-assignees)
++ *More coming soon...*
 
 ![Test Junkie HTML Report Graphics](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/reports.png)
 
@@ -853,7 +856,7 @@ from test_junkie.runner import Runner
 runner = Runner(suites=[...], html_report="/path/to/file/report.html")
 ```
 
-Big thanks to [Charts JS](https://www.chartjs.org/)! Without their charts, visualization of data would not be possible without.
+Big thanks to [Charts JS](https://www.chartjs.org/)! Without their charts, visualization of data would not be possible.
 
 #### JSON Reports
 JSON reports are used under the hood for all of the other reports produced by Test Junkie. 

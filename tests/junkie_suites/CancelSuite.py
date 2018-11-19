@@ -1,9 +1,10 @@
 import time
 
 from test_junkie.decorators import Suite, beforeClass, afterClass, test, afterTest, beforeTest
+from tests.junkie_suites.TestListener import TestListener
 
 
-@Suite()
+@Suite(listener=TestListener)
 class CancelSuite:
 
     @beforeClass()

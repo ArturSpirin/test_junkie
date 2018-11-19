@@ -6,9 +6,6 @@ class TestListener(Listener):
     def __init__(self, **kwargs):
         Listener.__init__(self, **kwargs)
 
-    def on_in_progress(self, properties):
-        pass
-
     def on_cancel(self, properties):
         pass
 
@@ -37,9 +34,6 @@ class TestListener(Listener):
         pass
 
     def on_after_class_failure(self, properties, exception):
-        pass
-
-    def on_class_in_progress(self, properties):
         pass
 
     def on_class_skip(self, properties):

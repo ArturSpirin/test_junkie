@@ -231,13 +231,3 @@ class ResourceMonitor(threading.Thread):
 
     def shutdown(self):
         self.exit.set()
-
-
-if "__main__" == __name__:
-
-    monitoring = ResourceMonitor()
-    monitoring.start()
-    time.sleep(10000)
-    monitoring.shutdown()
-    monitoring.join()
-    print("Finished!")
