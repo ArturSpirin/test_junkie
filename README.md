@@ -6,7 +6,7 @@
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/)
 ##
 
-## ![GitHub Logo](test_junkie\assets\logo.png)
+## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
 
 Test Junkie is a classy framework for executing test scenarios. Designed to be simple and intuitive so any beginner 
 can get started while delivering many features that are desired by high end test engineers.
@@ -841,7 +841,7 @@ Test Junkie is tracking a number of metrics during test execution:
 + Test results by [Tags](#tags)
 + Test results by [Assignees](#suite--test-assignees)
 
-![GitHub Logo](test_junkie\assets\reports.png)
+![Test Junkie HTML Report Graphics](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/reports.png)
 
 You can ask Test Junkie to visualize those metrics in the form of an HTML report. To do that, you need to provide 
 a path to a file where you want to save the report during the initialization of the `Runner`. Once tests are done 
