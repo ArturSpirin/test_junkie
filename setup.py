@@ -24,5 +24,5 @@ setuptools.setup(
         "Topic :: Software Development :: Testing",
         "Development Status :: 3 - Alpha"
     ],
-    install_requires=["statistics"],
+    install_requires=["statistics", "psutil"],
 )

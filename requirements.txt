@@ -1,4 +1,5 @@
 pytest
 pytest-cov
 codecov
+psutil
 statistics
