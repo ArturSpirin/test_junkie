@@ -21,6 +21,8 @@ class Reporter:
         self.runtime = runtime
         self.average_runtime = aggregator.get_average_test_runtime()
         self.html_template = __file__.replace("reporter.py", "report_template.html")
+        if self.html_template.endswith("c"):
+            self.html_template = self.html_template.split("c")[0]
         self.__processed_resources = {}
 
     def generate_html_report(self, write_file):
