@@ -56,10 +56,3 @@ class LogJunkie:
 
         if LogJunkie.__ENABLED:
             LogJunkie.__get_logger().warning(msg)
-
-    @staticmethod
-    @synchronized()
-    def print_traceback():
-
-        import traceback
-        traceback.print_exc()

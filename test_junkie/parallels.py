@@ -38,6 +38,12 @@ class ParallelProcessor:
             LogJunkie.warn("Thread limit for suites cannot be 0, falling back to limit of 1 thread per test suite.")
             self.__suite_limit = 1
 
+        LogJunkie.debug("=======================Parallel Processor Settings=============================")
+        LogJunkie.debug(">> Suite level multi-threading enabled: {}".format(self.suite_multithreading()))
+        LogJunkie.debug(">> Suite level multi-threading limit: {}".format(self.__suite_limit))
+        LogJunkie.debug(">> Test level multi-threading enabled: {}".format(self.test_multithreading()))
+        LogJunkie.debug(">> Test level multi-threading limit: {}".format(self.__test_limit))
+        LogJunkie.debug("===============================================================================")
     def suite_multithreading(self):
 
         return self.__multi_threaded_config.get("suites")
@@ -97,6 +103,16 @@ class ParallelProcessor:
         return active_parallels
 
     @staticmethod
+    def get_active_test_parallels_count(suite_object):
+        active_parallels = 0
+        data = ParallelProcessor.__PARALLELS.get(suite_object.get_class_object(), None)
+        if data is not None:
+            for test in data["tests"]:
+                if test["thread"].isAlive():
+                    active_parallels += 1
+        return active_parallels
+
+    @staticmethod
     def get_active_parallels():
         return ParallelProcessor.__PARALLELS
 
@@ -144,29 +160,84 @@ class ParallelProcessor:
                                             .format(suite.get_class_object(), reverse_suite))
                             return False
             return True
-        start = time.time()
-        if suite.get_parallel_restrictions():
-            LogJunkie.debug("Suite: {} has parallel restrictions: {}"
-                            .format(suite.get_class_object(), suite.get_parallel_restrictions()))
-            for restriction in suite.get_parallel_restrictions():
 
+        if suite.get_parallel_restrictions():
+            for restriction in suite.get_parallel_restrictions():
                 if inspect.isfunction(restriction):
                     raise Exception("Parallel suite restrictions must be class objects. "
                                     "Instead suite: {} was restricted by a function: {}"
                                     .format(suite.get_class_object(), restriction))
-
                 _build_reverse_restriction()
-
                 if not _passes_restriction():
                     return False
-
         if not _passes_reverse_restriction():
             return False
 
         if self.__suite_limit is not None:
             while ParallelProcessor.get_active_parallels_count() >= self.__suite_limit:
-                LogJunkie.debug("Thread limit reached! Active suites: {}/{}"
+                LogJunkie.debug("Suite level Thread limit reached! Active suites: {}/{}"
                                 .format(ParallelProcessor.get_active_parallels_count(), self.__suite_limit))
                 time.sleep(5)
-        print("Done in {} sec".format(time.time() - start))
+        return True
+
+    def test_qualifies(self, suite, test):
+
+        def _build_reverse_restriction():
+            """
+            Bidirectional parallel restriction will be automatically added.
+            If suite `A` is restricted to run when suite `B` is running - suite `B` will be automatically restricted
+            to run when suite `A` is running
+            :return: None
+            """
+            if restriction not in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS:
+                ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS.update({restriction: [test.get_function_object()]})
+            elif test.get_function_object() not in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[restriction]:
+                ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[restriction].append(test.get_function_object())
+            else:
+                return  # if nothing to add, return - to avoid logging
+            LogJunkie.debug("Added reverse test restriction! {} will not be processed while test: {} is running"
+                            .format(restriction, test.get_function_object()))
+
+        def _passes_restriction():
+            """
+            If current suite does not have any active restrictions, we can run it
+            :return: BOOLEAN
+            """
+            for class_object, suite_mapping in ParallelProcessor.__PARALLELS.items():
+                for test_mapping in suite_mapping["tests"]:
+                    if test_mapping["test"].get_function_object() in test.get_parallel_restrictions():
+                        if test_mapping["thread"].isAlive():
+                            return False
+            return True
+
+        def _passes_reverse_restriction():
+            """
+            If current suite is part of parallel restriction in another suite which is currently active, can't run it.
+            :return: BOOLEAN
+            """
+            if test.get_function_object() in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS:
+                reverse_tests = ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[test.get_function_object()]
+                for class_object, suite_mapping in ParallelProcessor.__PARALLELS.items():
+                    for test_mapping in suite_mapping["tests"]:
+                        if test_mapping["test"].get_function_object() in reverse_tests:
+                            if test_mapping["thread"].isAlive():
+                                return False
+            return True
+
+        if test.get_parallel_restrictions():
+            for restriction in test.get_parallel_restrictions():
+                if not inspect.isfunction(restriction):
+                    raise Exception("Parallel test restrictions must be function objects."
+                                    .format(test.get_function_object()))
+                _build_reverse_restriction()
+                if not _passes_restriction():
+                    return False
+        if not _passes_reverse_restriction():
+            return False
+
+        if self.__test_limit is not None:
+            while ParallelProcessor.get_active_test_parallels_count(suite) >= self.__test_limit:
+                LogJunkie.debug("Test level Thread limit reached! Active tests: {}/{}"
+                                .format(ParallelProcessor.get_active_test_parallels_count(suite), self.__test_limit))
+                time.sleep(5)
         return True

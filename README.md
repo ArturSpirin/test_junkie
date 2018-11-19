@@ -25,10 +25,14 @@ _This is a pre-release version, documentation may be incomplete and functionalit
     * [@afterClass](#afterclass)
   * [Skipping Tests/Suites](#skipping-testssuites)
   * [Retrying Tests/Suites](#retrying-testssuites)
+    * [Retry on Specific Exception](#retry-on-specific-exception)
+    * [Do not Retry on Specific Exception](#no-retry-on-specific-exception)
   * [Parameterized Tests](#parameterized-tests)
   * [Parameterized Suites](#parameterized-suites)
   * [Parallel Test/Suite Execution](#parallel-test-execution)
-    * [Restricting Parallel Execution](#restricting-parallel-execution-at-suitetest-level)
+    * [Controlling Parallel Suite Execution](#controlling-parallel-execution-at-suite-level)
+    * [Controlling Parallel Test Execution](#controlling-parallel-execution-at-test-level)
+  * [Priority for Suite/Test](#priority)
   * [Test Listeners](#test-listeners)
     * [On Success](#on-success)
     * [On Fail](#on-fail)
@@ -43,11 +47,20 @@ _This is a pre-release version, documentation may be incomplete and functionalit
     * [On After Class Fail](#on-after-class-failure)
     * [On After Class Error](#on-after-class-error)
   * [Meta](#meta)
+  * [Suite/Test Assignees](#suite--test-assignees)
   * [Rules](#rules)
+  * [Priority](#priority)
+  * [Features & Components](#features--components)
   * [Tags](#tags)
+  * [Reporting](#reporting)
+    * [HTML Report](#test-junkies-html-report)
+    * [JSON Report](#json-reports)
+    * [Jenkins Report](#jenkins-xml-report)
 * [Examples](#examples)
   * [Test Suite](#test-suite)
   * [Running Test Suite(s)](#executing-test-suites)
+    * [Run tests for certain features](#run-tests-for-certain-features)
+    * [Run tests for certain components](#run-tests-for-certain-components)
     * [Using Runner with Tags](#executing-with-tags)
     * [Using parallel execution](#using-parallel-test-execution)
     * [Canceling test execution](#canceling-test-execution)
@@ -74,8 +87,11 @@ class LoginFunctionality:
 + [Listeners](#test-listeners): `@Suite(listener=YourListener)`
 + [Rules](#rules): `@Suite(rules=YourRules)`
 + [Parameters](#parameterized-suites): `@Suite(parameters=[{"fruits": ["apple", "peach"]}, None, "blue", [1, 2, 3]])`
-+ [Parallel Restriction](#restricting-parallel-execution-at-suitetest-level): `@Suite(pr=[ATestSuite])`
-+ [Parallelized](#restricting-parallel-execution-at-suitetest-level): `@Suite(parallelized=False)`
++ [Parallel Restriction](#controlling-parallel-execution-at-suite-level): `@Suite(pr=[ATestSuite])`
++ [Parallelized](#controlling-parallel-execution-at-suite-level): `@Suite(parallelized=False)`
++ [Priority](#priority): `@Suite(priority=1)`
++ [Feature](#features--components): `@Suite(feature="Login")`
++ [Owner](#suite--test-assignees): `@Suite(owner="John Doe")`
 
 #### @beforeClass
 This decorator will prioritize execution of a decorated function at the very beginning of a test suite.
@@ -131,8 +147,14 @@ def b_test():
 + [Retry](#retrying-testssuites): `@test(retry=2)` 
 + [Skip](#skipping-testssuites): `@test(skip=Boolean)` 
 + [Parameters](#parameterized-tests): `@test(parameters=[1, 2, 3, 4])`
-+ [Parallelized](#restricting-parallel-execution-at-suitetest-level): `@test(parallelized=False)`
-+ [Parallelized Parameters](#restricting-parallel-execution-at-suitetest-level): `@test(parallelized_parameters=True)`
++ [Parallelized](#controlling-parallel-execution-at-test-level): `@test(parallelized=False)`
++ [Parallelized Parameters](#controlling-parallel-execution-at-test-level): `@test(parallelized_parameters=True)`
++ [Parallel Restriction](#controlling-parallel-execution-at-test-level): `@test(pr=[ExampleTestSuite.example_test])`
++ [Priority](#priority): `@test(priority=1)`
++ [Retry On](#retry-on-specific-exception): `@test(retry_on=[AssertionException])`
++ [No Retry On](#no-retry-on-specific-exception): `@test(no_retry_on=[TimeoutError])`
++ [Component](#features--components): `@test(component="Authentication")`
++ [Owner](#suite--test-assignees): `@test(owner="John Doe")`
 
 #### @afterTest
 This decorator will de-prioritize execution of a decorated function for the end of each test case in the suite.
@@ -221,10 +243,57 @@ Only unsuccessful tests will be retried.
 
 With that said, the above test case will be retried 4 times in total.
 
+#### Retry on Specific Exception
+In addition to generic retries, Test Junkie support retrying of tests only on specific exception(s).
+[@test](#test) decorator accepts a property `retry_on` which takes a list of exception object types. 
+If such a list is provided, test will only be retried in case that it failed with that particular 
+exception type.
+```python
+...
+    @test(retry=2, retry_on=[AssertionError])
+    def a_test(self):
+        # Will be retried because it will fail and produce AssertionError, 
+        # and its configured to retry only on AssertionError
+        assert True is False
+...
+```
+
+#### No Retry on Specific Exception
+Similar to [Retry on Specific Exception](#retry-on-specific-exception), [@test](#test) decorator accepts a list 
+of exception object types. But instead, if `no_retry_on` is provided, it will retry test case only in case it 
+failed with an exception type that is not part of the `no_retry_on` list.
+```python
+...
+    @test(retry=2, no_retry_on=[AssertionError])
+    def a_test(self):
+        # Won't be retried because it will fail and produce AssertionError, 
+        # and its configured not to retry on AssertionError
+        assert True is False
+...
+```
+
 ### Parameterized Tests
 Test Junkie allows you to run parameterized test scenarios out of the box and it allows all data types to be 
 used as parameters.
+
+Function objects can also be used to pass the parameters, as long as a list object is returned upon function execution.
+Advantage of using function object, is that Test Junkie will run the function when its appropriate to use 
+the parameters. Typically this is useful when you have a function that takes a while to create parameters. When 
+providing such function in a decorator, that function will be executed on import of the class - but you may not be 
+running that particular class/suite thus you will be wasting time waiting for the function to run and generate 
+parameters.
+
 ```python
+...
+def long_running_function():
+    """
+    Assume this function makes many API and/or DB calls to create dynamic config based on the output from the API/DB
+    This config will be used for parameters
+    Since its expensive, it makes sense to call this function only when we actually need to use the parameters
+    """
+    return ["some", "data", ...]
+...
+
 from test_junkie.decorators import Suite, test
 
 @Suite()
@@ -233,37 +302,68 @@ class ExampleSuite:
     @test(parameters=[{"fruits": ["apple", "peach"]}, None, "blue", [1, 2, 3]])
     def a_test(self, parameter):
     
+        print("Test parameter: {}".format(parameter))
+        
+    @test(parameters=long_running_function)  # This will be executed only when Test Junkie starts running this suite
+    def b_test(self, parameter):
+    
+        print("Test parameter: {}".format(parameter))
+        
+    @test(parameters=long_running_function())  # This will be executed on import of this suite
+    def b_test(self, parameter):
+    
         print("Test parameter: {}".format(parameter)) 
 ```
 + Any time parameterized test is defined, the decorated function must accept `parameter` in the function signature.
 + If parameterized test fails and [retry](#retrying-testssuites) is used, only the parameter(s) that test failed 
 with will be [retried](#retrying-testssuites).
 
+
 ### Parameterized Suites
 There is a slightly different spin, suite level parameters can apply to all of the decorated functions in the suite. 
-You can control in which functions or tests to use them. In the functions, where you want to use suite level 
-parameters, add `suite_parameter` to the function's signature:
+You can control in which special functions or tests will use them. In the special functions, where you want to use 
+suite level parameters, add `suite_parameter` to the function's signature. 
+
+In parameterized suites, tests which do not have `suite_parameter` in the signature, will run only once or as many
+times as they need to run to honor test level parameters and/or other test properties.
+
+Similar to [Test Level Parameters](#parameterized-tests), you can use function objects to pass parameters to 
+Test Junkie tests.
 ```python
 from test_junkie.decorators import Suite, test, beforeClass, beforeTest
 
 @Suite(parameters=[{"fruits": ["apple", "peach"]}, None, "blue", [1, 2, 3]])
+# or 
+@Suite(parameters=long_running_function)  # will run when suite is executed by Test Junkie
+# or
+@Suite(parameters=long_running_function())  # will run on suite import
 class ExampleSuite:
 
     @beforeClass()
-    def before_class(self, suite_parameter):
+    def before_class(self, suite_parameter):  # Setup functions can be parameterized in this way
         print("Before Class with suite parameter: {}".format(suite_parameter))
         
     @beforeTest()
-    def before_test(self, suite_parameter):
+    def before_test(self, suite_parameter):  # Setup functions can be parameterized in this way
         print("Before Test with suite parameter: {}".format(suite_parameter))
 
     @test()
-    def a_test(self, suite_parameter):
+    def a_test(self):  # Even though no params, this test will run once (there is no retry defined in this suite)
+    
+        pass
+        
+    @test(parameters=[1, 2, 3])
+    def a_test(self, parameter):  # This test will honor only the test level parameters
+    
+        pass
+
+    @test()
+    def b_test(self, suite_parameter):
     
         print("Suite parameter: {}".format(suite_parameter))
         
     @test(parameters=[1, 2, 3])
-    def a_test(self, parameter, suite_parameter):
+    def c_test(self, parameter, suite_parameter):
     
         print("Test parameter: {}".format(parameter))
         print("Suite parameter: {}".format(suite_parameter))
@@ -281,14 +381,14 @@ Test Junkie supports parallel execution out of the box. Two modes are available 
 function of the `Runner` instance.
 + `suite_multithreading_limit`: Use to define max number of suites to run in parallel. By default it will use one 
 thread, which means suites wont be running in parallel until you set value greater than 1.
-+ `test_multithreading_limit`: Use to define max number of suites to run in parallel. By default it will use one 
-thread, which means tests wont be running in parallel until you set value greater than 1.
++ `test_multithreading_limit`: Use to define max number of test to run in parallel. By default it will use one 
+thread, which means tests wont be running in parallel until you set value greater than 1. 
+This limit applies to parallelized parameterized tests as well.
 
-#### Restricting Parallel Execution at Suite/Test level
+#### Controlling Parallel Execution at Suite level
 
-Restrict parallel execution at the suite level: 
 - Lets say you have suites: `A`, `B`, `C` and suite `A` 
-can have a conflict with suite `C` if it runs in parallel. Using the property `pr` (stands for parallel restriction) 
+can have a conflict with suite `C`, if it runs in parallel. Using the property `pr` (stands for parallel restriction) 
 from the [@Suite](#suite) decorator which takes a list of class objects, you can let Test Junkie know that you 
 don't want to run those suites in parallel.
     ```python
@@ -307,15 +407,35 @@ don't want to run those suites in parallel.
 - If you flat out don't want to run a suite in parallel with any other suites, you can also set `parallelized` 
 property of the [@Suite](#suite) decorator to `False`.
 
-Restricting parallel execution at the test level:
-- Parameterized tests can be executed in multi threaded mode as well and this limit applies to tests with 
-parallelized parameters. By default `paralellized_parameters` mode is set off, but you can turn it on 
-via the [@test](#test) decorator properties.
-- Its possible that some tests could conflict with others when ran in parallel, for this reason all of the test 
-cases have individually controlled parallelized mode via `parallelized` [@test](#test) 
-decorator property. What this means: When Test Junkie reaches a test in parallelized mode that 
-has individual parallelized mode set to False, Test Junkie will wait for all of the currently parallelized 
-tests to finish before running that one test.
+For usage examples see [Using Parallel Execution](#using-parallel-test-execution). 
+
+#### Controlling Parallel Execution at Test level
+
+- If you have tests that may conflict with each other if ran in parallel, you can tell that to Test Junkie and those 
+test will never be executed at the same time. To tell that to Test Junkie, use `pr` property from the [@test](#test)
+decorator, it  take a list of test objects. `pr` stands for parallel restriction, and this restriction is bi-directional,
+meaning if you have test `A` and test `B` that cannot be ran in parallel, it is enough to set `pr` in one of those 
+tests, you do not need to do it in both.
+    ```python
+    ...
+    @test(pr=[SecuritySuite.policy_change])
+    def login():
+      """
+      Lets assume this test is validating a simple login which may be impacted by another test which validates security
+      policy settings which may restrict login from certain IP or revoke access to certain accounts - in this case
+      we do not want to run this test as it may produce a false negative. Thus we use pr to set restriction. This will,
+      also, prevent "SecuritySuite.policy_change" test to run during the execution of this test.
+      """
+      ...
+    ```
+- Certain test cases you may not want to run in parallel with any other tests at all. In such cases set `parallelized` 
+property of [@test](#test) decorator to `False`. Generally, non-parallelized tests get de-prioritised and they will be 
+ran at the very end, unless, they have a [Priority](#priority) set.
+
+- Tests have an additional threaded mode - by default this mode is disabled and only applies to parameterized tests.
+If test case is parameterized, you can choose to test those parameters in parallel. To do that, use 
+`paralellized_parameters` property of [@test](#test) decorator and set it to `True`. 
+`test_multithreading_limit` will apply - each test executed with a parameter will consume a thread slot.
 
 For usage examples see [Using Parallel Execution](#using-parallel-test-execution). 
 
@@ -514,7 +634,7 @@ Exception object will be accessible through this argument. No test level event l
 ```
 
 
-#### Meta
+### Meta
 All of the TestListener class instance functions have access to the test's and suite's meta information if such 
 was passed in to the [@Suite](#suite) or [@test](#test) decorator. Metadata can be of any data type. 
 You can use meta to set properties such as:
@@ -582,13 +702,13 @@ def a_test(self):
     ...
     Meta.update(name="new test name", expected="updated expectation")
     ...
-    
+
 @test(parameters=[1, 2, 3])
 def b_test(self, parameter):
     ...
     Meta.update(parameter=parameter, name="new test name", expected="updated expectation")
     ...
-    
+
 @test(parameters=[1, 2, 3])
 def c_test(self, parameter, suite_parameter):
     ...
@@ -597,7 +717,19 @@ def c_test(self, parameter, suite_parameter):
     ...
 ```
 
-#### Rules
+### Suite & Test Assignees
+If you have a large QA team that uses the same framework for test automation, you will be pleased to know that 
+Test Junkie supports test assignees or test owners.
+
+Owners of tests can be defined in two ways:
++ At the suite level, using the `owner` property supported by the [@Suite](#suite) decorator, which takes a string. 
+This will apply the owner to all of the underlying tests in that suite.
++ At the test level, using the `owner` property supported by the [@test](#test) decorator, which takes a string. 
+This will overwrite the [@Suite](#suite) owner for that particular test if one was set.
+
+Test Junkie can do specialized [Reporting](#reporting) based on test assignees/owners.
+
+### Rules
 You may have a situation where you find your self copy pasting code from one suite's @beforeClass or @beforeTest 
 function(s) into another. Test Junkie allows you to define Rules in such cases. Rule definitions are reusable, similar 
 to the [Listeners](#test-listeners) and also supported by the [@Suite](#suite) decorator.
@@ -648,8 +780,35 @@ Execution priority vs the [Decorators](#decorators):
 Failures/Exceptions, produced inside this functions, will be treated similar to their respective 
 [Decorators](#decorators).
 
+### Priority
+Test Junkie has a priority system which is optimized for performance. It is possible to influence priority for 
+Tests and Suites. Priority starts at 1 and goes up from there. 1 being the highest priority. 
+To set priority use `priority` property of the [@Suite](#suite) or [@test](#test) decorator.
 
-#### Tags
+- Suites & Tests without priority and disabled parallelized execution get de-prioritized the most
+- Suites & Tests without priority and enabled parallelized execution get prioritized higher
+- Suites & Tests with priority get prioritised according to the priority that was set. However, they are always 
+prioritised above those that do not have any priority
+
+### Features & Components
+Execution of tests can be initiated based on features and/or components, similar to [Tags](#tags). 
+- Suites can be labeled with a `feature` property
+- Tests can be labeled with a `component` property
+
+Labeling of suites and tests will effect the way [Reports](#reporting) are presented to you. 
+[Report](#reporting) will be broken down by features and components 
+and their health status, based on the test results.
+
+It is highly recommended to leverage this feature from the very beginning and structure your regression 
+coverage in such a way that when there is an update to the codebase, for existing features, you can kick of a 
+subset of tests that will cover the regression for the feature or component of the feature that was updated.
+
+For example, lets say there is a Login feature. Within that feature, there may be components for regular 
+Authentication, OAuth, Two Factor Authentication, Logout etc. Now, lets say there is an update to the login feature 
+which touches only code path for OAuth - Now you can have Test Junkie only run the tests which are labeled with 
+`component="OAuth"`.
+
+### Tags
 Test Junkie allows you to tag your test scenarios. You can use the tags to run or skip test cases that match the tags 
 when you run your tests. Following tag configurations are supported:
 + `run_on_match_all` - Will run test cases that match all of the tags in the list. 
@@ -670,8 +829,86 @@ which ever matches first will be executed or skipped.
 
 See [Using Runner with Tags](#executing-with-tags) for usage examples.
 
-### Examples
-#### Test Suite
+### Reporting
+#### Test Junkie's HTML Report
+Test Junkie is tracking a number of metrics during test execution:
++ Absolute KPIs (# of tests executed, % of passed tests, total runtime, average time per test etc)
++ Local resource trends for CPU and MEM (You'll need to set `monitor_resources=True` when initiating the 
+`Runner` object to get this data)
++ Test results by [Features](#features--components)
++ Test results by [Tags](#tags)
++ Test results by [Assignees](#suite--test-assignees)
+
+You can ask Test Junkie to visualize those metrics in the form of an HTML report. To do that, you need to provide 
+a path to a file where you want to save the report during the initialization of the `Runner`. Once tests are done 
+running, the report will be produced in the provided file. 
+
+For example: 
+```python
+from test_junkie.runner import Runner
+runner = Runner(suites=[...], html_report="/path/to/file/report.html")
+```
+
+Big thanks to [Charts JS](https://www.chartjs.org/)! Without their charts, visualization of data would not be possible without.
+
+#### JSON Reports
+JSON reports are used under the hood for all of the other reports produced by Test Junkie. 
+You can use JSON reports to slice the data in the way that is meaningful to you.
+
+JSON reports can be extracted from a number of objects, all of which will be accessible after the test have 
+finished executing:
+```python
+from test_junkie.runner import Runner
+runner = Runner(suites=[...])
+aggregator = runner.run()
+```
++ From the `SuiteObject` & `TestObject` classes:
+    ```python
+    suite_objects = runner.get_executed_suites()
+    for suite in suite_objects:
+        test_objects = suite.get_test_objects()
+        print(suite.metrics.get_metrics())
+        for test in test_objects:
+            print(test.metrics.get_metrics())
+    ```
++ From `Aggregator` object:
+    ```python
+    tags = aggregator.get_report_by_tags()
+    features = aggregator.get_report_by_features()
+    totals = aggregator.get_basic_report()
+    owners = aggregator.get_report_by_owner()
+    ```
+
+#### Jenkins XML Report
+Test Junkie can also produce basic XML reports. Similar to the [HTML Report](#test-junkies-html-report), 
+you'll need to initialize the `Runner` object with appropriate arguments to get the XML file. Once tests are done 
+running, the report will be produced in the provided file.
+
+For example: 
+```python
+from test_junkie.runner import Runner
+runner = Runner(suites=[...], xml_report="/path/to/file/report.xml")
+```
+
+Its advised against using this file to analyze test results as its very generic. This feature is primary here only 
+to support Jenkins' [JUnit Plugin](https://wiki.jenkins.io/display/JENKINS/JUnit+Plugin) that can visualize this data 
+in a trended graph of build vs test results over time. 
+
+Parameterized tests, are treated as stand alone tests in reporting, thus you may see multiple entries for the same 
+test name, this is OK if that test is parameterized. For example, test `a` is parameterized thus following is OK:
+```xml
+<root>
+    <testsuite failures="0" name="ExampleSuite" passed="4" tests="4">
+        <testcase name="a" status="success" />
+        <testcase name="a" status="success" />
+        <testcase name="a" status="success" />
+        <testcase name="b" status="success" />
+    </testsuite>
+</root>
+```
+
+## Examples
+### Test Suite
 ```python
 from random import randint
 from test_junkie.decorators import test, Suite, beforeTest, beforeClass, afterTest, afterClass
@@ -726,7 +963,7 @@ class ExampleTestSuite(object):
         print("TEST 'C'")
 ```
 
-#### Executing Test Suites
+### Executing Test Suites
 Use the `run()` function from the `Runner` instance to start running tests. `run()` supports a number of properties:
 + `tag_config`: allows to run tests that conforms to the tags, 
 see [Executing with Tags](#executing-with-tags) for more info.
@@ -747,8 +984,24 @@ runner = Runner([ExampleTestSuite])
 runner.run()
 ```
 
-##### Executing with Tags
-`TestRunner.run()` supports `tag_config` keyword that defines the configuration you want to use for the tags. 
+#### Run tests for certain Features
+You can request Test Junkie's `Runner` to `run()` regression for specific features:
+```python
+runner.run(features=["Login"])
+```
+
+#### Run tests for certain Components
+You can request Test Junkie's `Runner` to `run()` regression for specific components:
+```python
+runner.run(components=["OAuth"])
+```
+or for specific components of a feature:
+```python
+runner.run(features=["Login"], components=["OAuth"])
+```
+
+#### Executing with Tags
+`Runner.run()` supports `tag_config` keyword that defines the configuration you want to use for the tags. 
 All of the supported configurations as well as honor priority are defined in the [Tags](#tags) section.
 ```python
 runner.run(tag_config={"run_on_match_all": ["component_a", "critical"]})
@@ -757,7 +1010,7 @@ runner.run(tag_config={"run_on_match_all": ["component_a", "critical"]})
 runner.run(tag_config={"skip_on_match_any": ["trivial", "known_failure"]})
 ```
 
-##### Using Parallel Test Execution
+#### Using Parallel Test Execution
 Will enable multithreading for suites and tests, but by default both will use 1 thread each:
 ```python
 runner = Runner([ExampleTestSuite, ExampleTestSuite2])
@@ -775,7 +1028,7 @@ Of course, you can set any limits that your system can handle or that otherwise 
  
 For more info,  see [Parallel Test/Suite Execution](#parallel-test-execution).
 
-##### Canceling Test Execution
+#### Canceling Test Execution
 If you are integrating Test Junkie into a bigger framework, its possible that you would like to programmatically stop 
 test execution. Good news that Test Junkie allows, gracefully, to do just that. If you call `cancel()` on the `Runner`
 Object, the Runner will start marking tests and suites as canceled, which will trigger respective event listeners: 

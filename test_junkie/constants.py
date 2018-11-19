@@ -28,3 +28,19 @@ class DecoratorType:
     AFTER_TEST = "afterTest"
     AFTER_CLASS = "afterClass"
     TEST_CASE = "testCase"
+
+
+class Event:
+
+    ON_SUCCESS = 1
+    ON_FAILURE = 2
+    ON_ERROR = 3
+    ON_SKIP = 4
+    ON_IGNORE = 5
+    ON_CANCEL = 6
+    ON_CLASS_SKIP = 7
+    ON_CLASS_CANCEL = 8
+    ON_BEFORE_CLASS_ERROR = 9
+    ON_BEFORE_CLASS_FAIL = 10
+    ON_AFTER_CLASS_ERROR = 11
+    ON_AFTER_CLASS_FAIL = 12

@@ -1,6 +1,7 @@
 import pprint
 
 from test_junkie.runner import Runner
+from tests.QualityManager import QualityManager
 from tests.junkie_suites.SkipSuite import SkipSuite
 
 runner = Runner(SkipSuite)
@@ -15,25 +16,13 @@ for test in results[0].get_test_objects():
 
 def test_class_metrics():
 
-    class_stats = results[0].metrics.get_metrics()
-    assert class_stats["retry"] == 0
-    assert class_stats["status"] == "skip"
-    assert class_stats["runtime"] >= 0
-
-    assert len(class_stats["afterClass"]["exceptions"]) == 0
-    assert len(class_stats["afterClass"]["performance"]) == 0
-
-    assert class_stats["beforeClass"]["exceptions"] == []
-    assert len(class_stats["beforeClass"]["performance"]) == 0
-
-    assert class_stats["beforeTest"]["exceptions"] == []
-    assert len(class_stats["beforeTest"]["performance"]) == 0
-
-    assert class_stats["afterTest"]["exceptions"] == []
-    assert len(class_stats["afterTest"]["performance"]) == 0
+    metrics = results[0].metrics.get_metrics()
+    QualityManager.check_class_metrics(metrics,
+                                       expected_status="skip",
+                                       expected_retry_count=0)
 
 
-def test_test_metrics2():
+def test_test_metrics():
 
     assert results[0].get_test_objects()
     for test in results[0].get_test_objects():

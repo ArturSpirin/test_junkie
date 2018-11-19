@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.2a8",
+    version="0.3a8",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Advanced execution framework for test scenarios",
@@ -24,4 +24,5 @@ setuptools.setup(
         "Topic :: Software Development :: Testing",
         "Development Status :: 3 - Alpha"
     ],
+    install_requires=["statistics"],
 )

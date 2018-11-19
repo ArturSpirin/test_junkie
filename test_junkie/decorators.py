@@ -18,14 +18,17 @@ class Suite(object):
         return cls
 
 
-def test(**decorator_kwargs):
-    def decorator(decorated_function):
-        def wrapped_function():
-            Builder.build_suite_definitions(decorated_function=decorated_function,
-                                            decorator_kwargs=decorator_kwargs,
-                                            decorator_type=DecoratorType.TEST_CASE)
-        return wrapped_function()
-    return decorator
+class test(object):
+
+    def __init__(self, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+
+    def __call__(self, decorated_function):
+
+        Builder.build_suite_definitions(decorated_function=decorated_function,
+                                        decorator_kwargs=self.decorator_kwargs,
+                                        decorator_type=DecoratorType.TEST_CASE)
+        return decorated_function
 
 
 def beforeTest(**decorator_kwargs):

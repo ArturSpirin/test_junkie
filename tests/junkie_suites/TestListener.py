@@ -1,5 +1,3 @@
-import traceback
-
 from test_junkie.listener import Listener
 
 
@@ -18,28 +16,28 @@ class TestListener(Listener):
         pass
 
     def on_failure(self, properties, exception):
-        traceback.print_exc()
+        pass
 
     def on_skip(self, properties):
         pass
 
     def on_error(self, properties, exception):
-        traceback.print_exc()
+        pass
 
     def on_ignore(self, properties, exception):
-        traceback.print_exc()
+        pass
 
     def on_before_class_error(self, properties, exception):
-        traceback.print_exc()
+        pass
 
     def on_before_class_failure(self, properties, exception):
-        traceback.print_exc()
+        pass
 
     def on_after_class_error(self, properties, exception):
-        traceback.print_exc()
+        pass
 
     def on_after_class_failure(self, properties, exception):
-        traceback.print_exc()
+        pass
 
     def on_class_in_progress(self, properties):
         pass

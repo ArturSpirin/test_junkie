@@ -45,7 +45,6 @@ class Builder(object):
                 Builder.__CURRENT_SUITE_OBJECT["class_meta"] = decorator_kwargs.get("meta", {})
                 Builder.__CURRENT_SUITE_OBJECT["test_listener"] = decorator_kwargs.get("listener", Listener)
                 Builder.__CURRENT_SUITE_OBJECT["test_rules"] = decorator_kwargs.get("rules", Rules)
-                Builder.__CURRENT_SUITE_OBJECT["pr"] = decorator_kwargs.get("pr", [])
                 Builder.__CURRENT_SUITE_OBJECT["class_parameters"] = decorator_kwargs.get("parameters", [None])
                 Builder.__CURRENT_SUITE_OBJECT["parallelized"] = decorator_kwargs.get("parallelized", True)
                 Builder.__CURRENT_SUITE_OBJECT["decorator_kwargs"] = decorator_kwargs

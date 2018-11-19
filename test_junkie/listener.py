@@ -1,4 +1,3 @@
-import traceback
 
 
 class Listener:
@@ -6,44 +5,65 @@ class Listener:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
 
-    def on_in_progress(self, properties):
-        pass
+    def on_in_progress(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties"))
 
-    def on_cancel(self, properties):
-        pass
+    def on_cancel(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties"))
 
-    def on_success(self, properties):
-        pass
+    def on_success(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties"))
 
-    def on_failure(self, properties, exception):
-        traceback.print_exc()
+    def on_failure(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties", None),
+                                          exception=kwargs.get("error", None))
 
-    def on_skip(self, properties):
-        pass
+    def on_skip(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties"))
 
-    def on_error(self, properties, exception):
-        traceback.print_exc()
+    def on_error(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties", None),
+                                          exception=kwargs.get("error", None))
 
-    def on_ignore(self, properties, exception):
-        traceback.print_exc()
+    def on_ignore(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties", None),
+                                          exception=kwargs.get("error", None))
 
-    def on_before_class_error(self, properties, exception):
-        traceback.print_exc()
+    def on_before_class_error(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties", None),
+                                          exception=kwargs.get("error", None))
 
-    def on_before_class_failure(self, properties, exception):
-        traceback.print_exc()
+    def on_before_class_failure(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties", None),
+                                          exception=kwargs.get("error", None))
 
-    def on_after_class_error(self, properties, exception):
-        traceback.print_exc()
+    def on_after_class_error(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties", None),
+                                          exception=kwargs.get("error", None))
 
-    def on_after_class_failure(self, properties, exception):
-        traceback.print_exc()
+    def on_after_class_failure(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties", None),
+                                          exception=kwargs.get("error", None))
 
-    def on_class_in_progress(self, properties):
-        pass
+    def on_class_in_progress(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties"))
 
-    def on_class_skip(self, properties):
-        pass
+    def on_class_skip(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties"))
 
-    def on_class_cancel(self, properties):
-        pass
+    def on_class_cancel(self, **kwargs):
+        if kwargs.get("custom_function", None) is not None:
+            kwargs.get("custom_function")(properties=kwargs.get("properties"))

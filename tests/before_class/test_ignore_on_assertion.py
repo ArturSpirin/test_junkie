@@ -1,4 +1,5 @@
 from test_junkie.runner import Runner
+from tests.QualityManager import QualityManager
 from tests.junkie_suites.BeforeClassAssertionSuite import BeforeClassAssertionSuite
 
 runner = Runner(BeforeClassAssertionSuite)
@@ -8,25 +9,13 @@ results = runner.get_executed_suites()
 
 def test_class_metrics():
 
-    class_stats = results[0].metrics.get_metrics()
-    assert class_stats["retry"] == 2
-    assert class_stats["status"] == "fail"
-    assert class_stats["runtime"] >= 0
-
-    assert len(class_stats["afterClass"]["exceptions"]) == 0
-    assert class_stats["afterClass"]["exceptions"] == []
-    assert len(class_stats["afterClass"]["performance"]) == 0
-
-    assert len(class_stats["beforeClass"]["exceptions"]) == 2
-    for i in class_stats["beforeClass"]["exceptions"]:
-        assert type(i) == AssertionError
-    assert len(class_stats["beforeClass"]["performance"]) == 2
-
-    assert len(class_stats["beforeTest"]["exceptions"]) == 0
-    assert len(class_stats["beforeTest"]["performance"]) == 0
-
-    assert len(class_stats["afterTest"]["performance"]) == 0
-    assert len(class_stats["afterTest"]["exceptions"]) == 0
+    metrics = results[0].metrics.get_metrics()
+    QualityManager.check_class_metrics(metrics,
+                                       expected_status="fail",
+                                       expected_retry_count=2,
+                                       expected_beforeclass_exception_count=2,
+                                       expected_beforeclass_exception_object=AssertionError,
+                                       expected_beforeclass_performance_count=2)
 
 
 def test_test_metrics():
@@ -34,13 +23,10 @@ def test_test_metrics():
     assert results[0].get_test_objects()
     for test in results[0].get_test_objects():
 
-        properties = test.metrics.get_metrics()["None"]["None"]
-        for i in properties["exceptions"]:
-            assert type(i) == AssertionError
-        assert len(properties["exceptions"]) == 2
-        assert len(properties["performance"]) == 2
-        for i in properties["performance"]:
-            assert i >= 0
-        assert properties["status"] == "ignore"
-        assert properties["retry"] == 2  # 2 not 4 (test x suite)
-        assert properties["param"] is None
+        metrics = test.metrics.get_metrics()["None"]["None"]
+        QualityManager.check_test_metrics(metrics,
+                                          expected_status="ignore",
+                                          expected_exception_count=2,
+                                          expected_performance_count=2,
+                                          expected_retry_count=2,
+                                          expected_exception=AssertionError)

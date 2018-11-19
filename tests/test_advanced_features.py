@@ -1,6 +1,9 @@
 import pprint
 import sys
+
+
 sys.path.insert(1, __file__.split("tests")[0])
+from tests.QualityManager import QualityManager
 from test_junkie.debugger import LogJunkie
 LogJunkie.enable_logging(10)
 
@@ -25,32 +28,26 @@ for test in tests:
 
 def test_class_stats():
 
-    class_stats = results[0].metrics.get_metrics()
-    assert class_stats["retry"] == 2
-    assert class_stats["status"] == "fail"
-    assert class_stats["runtime"] >= 0
+    metrics = results[0].metrics.get_metrics()
+    QualityManager.check_class_metrics(metrics,
+                                       expected_status="fail",
+                                       expected_retry_count=2,
 
-    for i in ["afterClass", "beforeClass"]:
-        for l in class_stats[i]["exceptions"]:  # Should be no exceptions in class level decorators
-            assert l is None
-        assert len(class_stats[i]["exceptions"]) == 4
-        assert len(class_stats[i]["performance"]) == 4
-        for l in class_stats[i]["performance"]:
-            assert l >= 0
+                                       expected_beforeclass_exception_count=4,
+                                       expected_beforeclass_exception_object=None,
+                                       expected_beforeclass_performance_count=4,
 
-    assert len(class_stats["beforeTest"]["exceptions"]) == 47
-    for i in class_stats["beforeTest"]["exceptions"]:
-        assert i is None
-    assert len(class_stats["beforeTest"]["performance"]) == 47
-    for i in class_stats["beforeTest"]["performance"]:
-        assert i >= 0
+                                       expected_afterclass_exception_count=4,
+                                       expected_afterclass_exception_object=None,
+                                       expected_afterclass_performance_count=4,
 
-    assert len(class_stats["afterTest"]["performance"]) == 19
-    for i in class_stats["afterTest"]["performance"]:
-        assert i >= 0
-    assert len(class_stats["afterTest"]["exceptions"]) == 19
-    for i in class_stats["afterTest"]["exceptions"]:
-        assert i is None
+                                       expected_beforetest_exception_count=29,
+                                       expected_beforetest_exception_object=None,
+                                       expected_beforetest_performance_count=29,
+
+                                       expected_aftertest_exception_count=13,
+                                       expected_aftertest_exception_object=None,
+                                       expected_aftertest_performance_count=13)
 
 
 def test_no_retry():
@@ -59,14 +56,11 @@ def test_no_retry():
     for test in tests:
         if test.get_function_name() == "no_retry":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    assert properties["exceptions"] == [None]
-                    assert len(properties["performance"]) == 1
-                    assert properties["performance"][0] >= 0
-                    assert properties["status"] == "success"
-                    assert properties["retry"] == 1
-                    assert properties["param"] is not None
-                    assert properties["class_param"] is not None
+                for param, metrics in class_data.items():
+                    QualityManager.check_test_metrics(metrics,
+                                                      expected_status="success",
+                                                      expected_param=param,
+                                                      expected_class_param=metrics["class_param"])
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -78,14 +72,11 @@ def test_no_retry2():
     for test in tests:
         if test.get_function_name() == "no_retry2":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    assert properties["exceptions"] == [None]
-                    assert len(properties["performance"]) == 1
-                    assert properties["performance"][0] >= 0
-                    assert properties["status"] == "success"
-                    assert properties["retry"] == 1
-                    assert properties["param"] is not None
-                    assert properties["class_param"] is not None
+                for param, metrics in class_data.items():
+                    QualityManager.check_test_metrics(metrics,
+                                                      expected_status="success",
+                                                      expected_param=param,
+                                                      expected_class_param=metrics["class_param"])
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -97,14 +88,11 @@ def test_no_retry3():
     for test in tests:
         if test.get_function_name() == "no_retry3":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    assert properties["exceptions"] == [None]
-                    assert len(properties["performance"]) == 1
-                    assert properties["performance"][0] >= 0
-                    assert properties["status"] == "success"
-                    assert properties["retry"] == 1
-                    assert properties["param"] is not None
-                    assert properties["class_param"] is not None
+                for param, metrics in class_data.items():
+                    QualityManager.check_test_metrics(metrics,
+                                                      expected_status="success",
+                                                      expected_param=param,
+                                                      expected_class_param=metrics["class_param"])
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -116,16 +104,16 @@ def test_retry():
     for test in tests:
         if test.get_function_name() == "retry":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    for i in properties["exceptions"]:
-                        assert type(i) == AssertionError
+                for param, metrics in class_data.items():
+                    QualityManager.check_test_metrics(metrics,
+                                                      expected_status="fail",
+                                                      expected_exception=AssertionError,
+                                                      expected_retry_count=4,
+                                                      expected_exception_count=4,
+                                                      expected_performance_count=4,
+                                                      expected_class_param=metrics["class_param"])
+                    for i in metrics["exceptions"]:
                         assert str(i.with_traceback(None)) == "Expected Assertion Error"
-                    assert len(properties["performance"]) == 4
-                    assert properties["performance"][0] >= 0
-                    assert properties["status"] == "fail"
-                    assert properties["retry"] == 4
-                    assert properties["param"] is None
-                    assert properties["class_param"] is not None
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -137,14 +125,12 @@ def test_retry2():
     for test in tests:
         if test.get_function_name() == "retry2":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    assert properties["exceptions"] == [None, None, None, None]
-                    assert len(properties["performance"]) == 4
-                    assert properties["performance"][0] >= 0
-                    assert properties["status"] == "skip"
-                    assert properties["retry"] == 4
-                    assert properties["param"] is None
-                    assert properties["class_param"] is None
+                for param, metrics in class_data.items():
+                    QualityManager.check_test_metrics(metrics,
+                                                      expected_status="skip",
+                                                      expected_retry_count=4,
+                                                      expected_exception_count=4,
+                                                      expected_performance_count=4)
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -156,25 +142,24 @@ def test_retry3():
     for test in tests:
         if test.get_function_name() == "retry3":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    if properties["param"] == 10 and properties["class_param"] == 1:
-                        for i in properties["exceptions"]:
-                            assert type(i) == Exception
+                for param, metrics in class_data.items():
+                    if metrics["param"] == 10 and metrics["class_param"] == 1:
+
+                        QualityManager.check_test_metrics(metrics,
+                                                          expected_status="error",
+                                                          expected_exception=Exception,
+                                                          expected_retry_count=4,
+                                                          expected_exception_count=4,
+                                                          expected_performance_count=4,
+                                                          expected_param=param,
+                                                          expected_class_param=metrics["class_param"])
+                        for i in metrics["exceptions"]:
                             assert str(i.with_traceback(None)) == "On purpose"
-                        assert len(properties["performance"]) == 4
-                        assert properties["performance"][0] >= 0
-                        assert properties["status"] == "error"
-                        assert properties["retry"] == 4
-                        assert properties["param"] is not None
-                        assert properties["class_param"] is not None
                     else:
-                        assert properties["exceptions"] == [None]
-                        assert len(properties["performance"]) == 1
-                        assert properties["performance"][0] >= 0
-                        assert properties["status"] == "success"
-                        assert properties["retry"] == 1
-                        assert properties["param"] is not None
-                        assert properties["class_param"] is not None
+                        QualityManager.check_test_metrics(metrics,
+                                                          expected_status="success",
+                                                          expected_param=param,
+                                                          expected_class_param=metrics["class_param"])
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -186,25 +171,24 @@ def test_retry4():
     for test in tests:
         if test.get_function_name() == "retry4":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    if properties["param"] == 10:
-                        for i in properties["exceptions"]:
-                            assert type(i) == Exception
+                for param, metrics in class_data.items():
+                    if metrics["param"] == 10:
+
+                        QualityManager.check_test_metrics(metrics,
+                                                          expected_status="error",
+                                                          expected_exception=Exception,
+                                                          expected_retry_count=4,
+                                                          expected_exception_count=4,
+                                                          expected_performance_count=4,
+                                                          expected_param=param,
+                                                          expected_class_param=metrics["class_param"])
+                        for i in metrics["exceptions"]:
                             assert str(i.with_traceback(None)) == "On purpose"
-                        assert len(properties["performance"]) == 4
-                        assert properties["performance"][0] >= 0
-                        assert properties["status"] == "error"
-                        assert properties["retry"] == 4
-                        assert properties["param"] is not None
-                        assert properties["class_param"] is not None
                     else:
-                        assert properties["exceptions"] == [None]
-                        assert len(properties["performance"]) == 1
-                        assert properties["performance"][0] >= 0
-                        assert properties["status"] == "success"
-                        assert properties["retry"] == 1
-                        assert properties["param"] is not None
-                        assert properties["class_param"] is not None
+                        QualityManager.check_test_metrics(metrics,
+                                                          expected_status="success",
+                                                          expected_param=param,
+                                                          expected_class_param=metrics["class_param"])
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -216,25 +200,23 @@ def test_retry5():
     for test in tests:
         if test.get_function_name() == "retry5":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    if properties["class_param"] == 1:
-                        for i in properties["exceptions"]:
-                            assert type(i) == Exception
+                for param, metrics in class_data.items():
+                    if metrics["class_param"] == 1:
+                        QualityManager.check_test_metrics(metrics,
+                                                          expected_status="error",
+                                                          expected_exception=Exception,
+                                                          expected_retry_count=4,
+                                                          expected_exception_count=4,
+                                                          expected_performance_count=4,
+                                                          expected_param=param,
+                                                          expected_class_param=metrics["class_param"])
+                        for i in metrics["exceptions"]:
                             assert str(i.with_traceback(None)) == "On purpose"
-                        assert len(properties["performance"]) == 4
-                        assert properties["performance"][0] >= 0
-                        assert properties["status"] == "error"
-                        assert properties["retry"] == 4
-                        assert properties["param"] is not None
-                        assert properties["class_param"] is not None
                     else:
-                        assert properties["exceptions"] == [None]
-                        assert len(properties["performance"]) == 1
-                        assert properties["performance"][0] >= 0
-                        assert properties["status"] == "success"
-                        assert properties["retry"] == 1
-                        assert properties["param"] is not None
-                        assert properties["class_param"] is not None
+                        QualityManager.check_test_metrics(metrics,
+                                                          expected_status="success",
+                                                          expected_param=param,
+                                                          expected_class_param=metrics["class_param"])
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -246,14 +228,12 @@ def test_skip():
     for test in tests:
         if test.get_function_name() == "skip":
             for class_param, class_data in test.metrics.get_metrics().items():
-                for test_param, properties in class_data.items():
-                    assert properties["exceptions"] == [None, None, None, None]
-                    assert len(properties["performance"]) == 4
-                    assert properties["performance"][0] >= 0
-                    assert properties["status"] == "skip"
-                    assert properties["retry"] == 4
-                    assert properties["param"] is None
-                    assert properties["class_param"] is None
+                for param, metrics in class_data.items():
+                    QualityManager.check_test_metrics(metrics,
+                                                      expected_status="skip",
+                                                      expected_retry_count=4,
+                                                      expected_exception_count=4,
+                                                      expected_performance_count=4)
                     tested = True
     if not tested:
         raise Exception("Test did not run")
