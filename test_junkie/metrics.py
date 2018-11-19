@@ -210,6 +210,7 @@ class ResourceMonitor(threading.Thread):
 
         self.file_path = "{dir}{sep}.resources".format(dir=os.path.dirname(os.path.abspath(__file__)),
                                                        sep=os.sep) if file_path is None else file_path
+
         threading.Thread.__init__(self)
         self.exit = multiprocessing.Event()
 

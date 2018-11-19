@@ -9,3 +9,5 @@ test_junkie.egg-info
 .coverage
 .resources
 coverage.xml
+test_*.html
+test_*.xml
