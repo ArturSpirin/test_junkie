@@ -14,3 +14,10 @@ def test_reporting():
     runner = Runner([Login, LoginSessions, Dashboard],
                     monitor_resources=True, html_report=html, xml_report=xml)
     runner.run()
+
+    suites = runner.get_executed_suites()
+    for suite in suites:
+        suite.get_average_performance_of_after_class()
+        suite.get_average_performance_of_before_class()
+        suite.get_average_performance_of_after_test()
+        suite.get_average_performance_of_before_test()

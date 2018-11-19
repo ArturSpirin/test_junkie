@@ -150,22 +150,22 @@ class SuiteObject:
     def get_average_performance_of_after_class(self):
         from statistics import mean
         performance = self.metrics.get_metrics().get("afterClass", {}).get("performance", None)
-        return mean(performance) if performance is not None else None
+        return mean(performance) if performance else None
 
     def get_average_performance_of_before_class(self):
         from statistics import mean
         performance = self.metrics.get_metrics().get("beforeClass", {}).get("performance", None)
-        return mean(performance) if performance is not None else None
+        return mean(performance) if performance else None
 
     def get_average_performance_of_after_test(self):
         from statistics import mean
         performance = self.metrics.get_metrics().get("afterTest", {}).get("performance", None)
-        return mean(performance) if performance is not None else None
+        return mean(performance) if performance else None
 
     def get_average_performance_of_before_test(self):
         from statistics import mean
         performance = self.metrics.get_metrics().get("beforeTest", {}).get("performance", None)
-        return mean(performance) if performance is not None else None
+        return mean(performance) if performance else None
 
     def get_runtime(self):
 
