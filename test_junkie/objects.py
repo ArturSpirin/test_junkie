@@ -175,24 +175,6 @@ class SuiteObject:
 
     def get_data_by_tags(self):
 
-        def __update(_tag):
-
-            for class_param, class_param_data in test_metrics.items():
-                for param, param_data in class_param_data.items():
-                    for entry in param_data["performance"]:
-                        data[_tag]["performance"].append(entry)
-                        data["_totals_"]["performance"].append(entry)
-                    for entry in param_data["exceptions"]:
-                        if entry is not None:
-                            data[_tag]["exceptions"].append(entry)
-                            data["_totals_"]["exceptions"].append(entry)
-                    data[_tag]["retries"].append(param_data["retry"])
-                    data["_totals_"]["retries"].append(param_data["retry"])
-                    data[_tag]["total"] += 1
-                    data["_totals_"]["total"] += 1
-                    data[_tag][param_data["status"]] += 1
-                    data["_totals_"][param_data["status"]] += 1
-
         data = {"_totals_": Aggregator.get_template()}
         for test in self.get_test_objects():
             test_metrics = test.metrics.get_metrics()
@@ -200,12 +182,11 @@ class SuiteObject:
                 for tag in test.get_tags():
                     if tag not in data:
                         data.update({tag: Aggregator.get_template()})
-                    __update(tag)
+                    Aggregator._update_report(data, test_metrics, tag)
             else:
                 if None not in data:
                     data.update({None: Aggregator.get_template()})
-                __update(None)
-
+                Aggregator._update_report(data, test_metrics, None)
         return data
 
 

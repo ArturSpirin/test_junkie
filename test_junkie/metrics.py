@@ -43,18 +43,20 @@ class TestMetrics:
         self.__stats = {}
 
     def update_metrics(self, status, start_time, param=None, class_param=None, exception=None):
+
+        def __get_template():
+
+            return {"status": None,
+                    "retry": 0,
+                    "performance": [],
+                    "exceptions": []}
+
         string_param = str(param)
         string_class_param = str(class_param)
         if string_class_param not in self.__stats:
-            self.__stats.update({string_class_param: {string_param: {"status": None,
-                                                                     "retry": 0,
-                                                                     "performance": [],
-                                                                     "exceptions": []}}})
+            self.__stats.update({string_class_param: {string_param: __get_template()}})
         elif string_param not in self.__stats[string_class_param]:
-            self.__stats[string_class_param].update({string_param: {"status": None,
-                                                                    "retry": 0,
-                                                                    "performance": [],
-                                                                    "exceptions": []}})
+            self.__stats[string_class_param].update({string_param: __get_template()})
         self.__stats[string_class_param][string_param]["performance"].append(time.time() - start_time)
         self.__stats[string_class_param][string_param]["exceptions"].append(exception)
         self.__stats[string_class_param][string_param]["retry"] += 1
@@ -104,21 +106,7 @@ class Aggregator:
                 if component not in report[feature]:
                     report[feature].update({component: Aggregator.get_template()})
                 test_metrics = test.metrics.get_metrics()
-                for class_param, class_param_data in test_metrics.items():
-                    for param, param_data in class_param_data.items():
-                        for entry in param_data["performance"]:
-                            report[feature][component]["performance"].append(entry)
-                            report[feature]["_totals_"]["performance"].append(entry)
-                        for entry in param_data["exceptions"]:
-                            if entry is not None:
-                                report[feature][component]["exceptions"].append(entry)
-                                report[feature]["_totals_"]["exceptions"].append(entry)
-                        report[feature][component]["retries"].append(param_data["retry"])
-                        report[feature]["_totals_"]["retries"].append(param_data["retry"])
-                        report[feature][component]["total"] += 1
-                        report[feature]["_totals_"]["total"] += 1
-                        report[feature][component][param_data["status"]] += 1
-                        report[feature]["_totals_"][param_data["status"]] += 1
+                Aggregator._update_report(report, test_metrics, feature, component)
         return report
 
     def get_report_by_tags(self):
@@ -130,25 +118,18 @@ class Aggregator:
                 if metric == "_totals_":
                     continue
                 metric = metric if metric is not None else "Not Defined"
-
                 if metric not in report:
                     report.update({metric: Aggregator.get_template()})
-
                 for entry in metric_data["performance"]:
                     report[metric]["performance"].append(entry)
-
                 for entry in metric_data["exceptions"]:
                     if entry is not None:
                         report[metric]["exceptions"].append(entry)
-
                 for retry in metric_data["retries"]:
                     report[metric]["retries"].append(retry)
-
                 report[metric]["total"] += metric_data["total"]
-
                 for status in TestCategory.ALL:
                     report[metric][status] += metric_data[status]
-
         return report
 
     def get_report_by_owner(self):
@@ -160,21 +141,44 @@ class Aggregator:
                 if owner not in report:
                     report.update({owner: Aggregator.get_template()})
                 test_metrics = test.metrics.get_metrics()
-                for class_param, class_param_data in test_metrics.items():
-                    for param, param_data in class_param_data.items():
-                        for entry in param_data["performance"]:
-                            report[owner]["performance"].append(entry)
-                            report["_totals_"]["performance"].append(entry)
-                        for entry in param_data["exceptions"]:
-                            if entry is not None:
-                                report[owner]["exceptions"].append(entry)
-                                report["_totals_"]["exceptions"].append(entry)
-                        report[owner]["retries"].append(param_data["retry"])
-                        report["_totals_"]["retries"].append(param_data["retry"])
-                        report[owner]["total"] += 1
-                        report["_totals_"]["total"] += 1
-                        report[owner][param_data["status"]] += 1
-                        report["_totals_"][param_data["status"]] += 1
+                Aggregator._update_report(report, test_metrics, owner)
+        return report
+
+    @staticmethod
+    def _update_report(report, metrics, category, subcategory=None):
+
+        for class_param, class_param_data in metrics.items():
+            for param, data in class_param_data.items():
+                for entry in data["performance"]:
+                    if subcategory is None:
+                        report[category]["performance"].append(entry)
+                        report["_totals_"]["performance"].append(entry)
+                    else:
+                        report[category][subcategory]["performance"].append(entry)
+                        report[category]["_totals_"]["performance"].append(entry)
+                for entry in data["exceptions"]:
+                    if entry is not None:
+                        if subcategory is None:
+                            report[category]["exceptions"].append(entry)
+                            report["_totals_"]["exceptions"].append(entry)
+                        else:
+                            report[category][subcategory]["exceptions"].append(entry)
+                            report[category]["_totals_"]["exceptions"].append(entry)
+                if subcategory is None:
+                    report[category]["retries"].append(data["retry"])
+                    report["_totals_"]["retries"].append(data["retry"])
+                    report[category]["total"] += 1
+                    report["_totals_"]["total"] += 1
+                    report[category][data["status"]] += 1
+                    report["_totals_"][data["status"]] += 1
+                else:
+                    report[category][subcategory]["retries"].append(data["retry"])
+                    report[category]["_totals_"]["retries"].append(data["retry"])
+                    report[category][subcategory]["total"] += 1
+                    report[category]["_totals_"]["total"] += 1
+                    report[category][subcategory][data["status"]] += 1
+                    report[category]["_totals_"][data["status"]] += 1
+
         return report
 
     @staticmethod
