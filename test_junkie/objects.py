@@ -287,20 +287,15 @@ class TestObject:
 
     def is_qualified_for_retry(self, param=None, class_param=None):
 
-        if str(class_param) not in self.metrics.get_metrics():
-            return True  # Test did not run for this class param yet
-        else:
-            if str(param) not in self.metrics.get_metrics()[str(class_param)]:
-                return True  # Test did not run for this test param yet
+        if str(class_param) not in self.metrics.get_metrics() or \
+                str(param) not in self.metrics.get_metrics()[str(class_param)]:
+            return True  # Test did not run for this class/test param yet
         test = self.metrics.get_metrics()[str(class_param)][str(param)]
         if test["status"] in TestCategory.ALL_UN_SUCCESSFUL:
-            if self.get_no_retry_on():
-                if type(test["exceptions"][-1]) in self.get_no_retry_on():
+            if self.get_no_retry_on() or self.get_retry_on():
+                if type(test["exceptions"][-1]) in self.get_no_retry_on() or \
+                        type(test["exceptions"][-1]) not in self.get_retry_on():
                     return False
-            if self.get_retry_on():
-                if type(test["exceptions"][-1]) in self.get_retry_on():
-                    return True
-                return False
             return True
         return False
 
@@ -331,18 +326,14 @@ class TestObject:
 
     def get_status(self, param, class_param):
 
-        if str(class_param) not in self.metrics.get_metrics():
-            return None  # Test did not run for this class param yet
-        else:
-            if str(param) not in self.metrics.get_metrics()[str(class_param)]:
-                return None  # Test did not run for this test param yet
+        if str(class_param) not in self.metrics.get_metrics() or \
+                str(param) not in self.metrics.get_metrics()[str(class_param)]:
+            return None  # Test did not run for this class/test param yet
         return self.metrics.get_metrics()[str(class_param)][str(param)]["status"]
 
     def get_number_of_actual_retries(self, param, class_param):
 
-        if str(class_param) not in self.metrics.get_metrics():
-            return 0  # Test did not run for this class param yet
-        else:
-            if str(param) not in self.metrics.get_metrics()[str(class_param)]:
-                return 0  # Test did not run for this test param yet
+        if str(class_param) not in self.metrics.get_metrics() or \
+                str(param) not in self.metrics.get_metrics()[str(class_param)]:
+            return 0  # Test did not run for this class/test param yet
         return self.metrics.get_metrics()[str(class_param)][str(param)]["retry"]
