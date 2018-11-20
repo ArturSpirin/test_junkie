@@ -5,7 +5,7 @@ import traceback
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import TestCategory
 from test_junkie.errors import TestJunkieExecutionError
-from test_junkie.metrics import ClassMetrics, TestMetrics
+from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
 
 
 class SuiteObject:
@@ -147,25 +147,23 @@ class SuiteObject:
 
         return self.get_kwargs().get("priority", None)
 
-    def get_average_performance_of_after_class(self):
+    def __get_average_metric(self, decorator, metric):
+
         from statistics import mean
-        performance = self.metrics.get_metrics().get("afterClass", {}).get("performance", None)
+        performance = self.metrics.get_metrics().get(decorator, {}).get(metric, None)
         return mean(performance) if performance else None
+
+    def get_average_performance_of_after_class(self):
+        return self.__get_average_metric(DecoratorType.AFTER_CLASS, "performance")
 
     def get_average_performance_of_before_class(self):
-        from statistics import mean
-        performance = self.metrics.get_metrics().get("beforeClass", {}).get("performance", None)
-        return mean(performance) if performance else None
+        return self.__get_average_metric(DecoratorType.BEFORE_CLASS, "performance")
 
     def get_average_performance_of_after_test(self):
-        from statistics import mean
-        performance = self.metrics.get_metrics().get("afterTest", {}).get("performance", None)
-        return mean(performance) if performance else None
+        return self.__get_average_metric(DecoratorType.AFTER_TEST, "performance")
 
     def get_average_performance_of_before_test(self):
-        from statistics import mean
-        performance = self.metrics.get_metrics().get("beforeTest", {}).get("performance", None)
-        return mean(performance) if performance else None
+        return self.__get_average_metric(DecoratorType.BEFORE_TEST, "performance")
 
     def get_runtime(self):
 
@@ -176,19 +174,6 @@ class SuiteObject:
         return self.metrics.get_metrics().get("retries", None)
 
     def get_data_by_tags(self):
-
-        def __get_template():
-
-            return {"performance": [],
-                    "exceptions": [],
-                    "retries": [],
-                    "total": 0,
-                    TestCategory.SUCCESS: 0,
-                    TestCategory.SKIP: 0,
-                    TestCategory.FAIL: 0,
-                    TestCategory.CANCEL: 0,
-                    TestCategory.IGNORE: 0,
-                    TestCategory.ERROR: 0}
 
         def __update(_tag):
 
@@ -208,17 +193,17 @@ class SuiteObject:
                     data[_tag][param_data["status"]] += 1
                     data["_totals_"][param_data["status"]] += 1
 
-        data = {"_totals_": __get_template()}
+        data = {"_totals_": Aggregator.get_template()}
         for test in self.get_test_objects():
             test_metrics = test.metrics.get_metrics()
             if test.get_tags():
                 for tag in test.get_tags():
                     if tag not in data:
-                        data.update({tag: __get_template()})
+                        data.update({tag: Aggregator.get_template()})
                     __update(tag)
             else:
                 if None not in data:
-                    data.update({None: __get_template()})
+                    data.update({None: Aggregator.get_template()})
                 __update(None)
 
         return data

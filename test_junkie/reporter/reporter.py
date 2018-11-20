@@ -27,6 +27,9 @@ class Reporter:
 
     def generate_html_report(self, write_file):
 
+        def __round(value):
+            return str(float("{0:.2f}".format(float(mean(value)))))
+
         with open(self.html_template, "r") as f:
             html = f.read()
             html = html.replace("{total_test_executed}", str(self.totals["total"]))
@@ -40,12 +43,12 @@ class Reporter:
                 cpu_data = self.__get_dataset_for_cpu_trend()
                 html = html.replace("{cpu_labels}", str(cpu_data["labels"]))
                 html = html.replace("{cpu_data}", str(cpu_data["data"]))
-                html = html.replace("{average_cpu}", str(float("{0:.2f}".format(float(mean(cpu_data["samples"]))))))
+                html = html.replace("{average_cpu}", __round(cpu_data["samples"]))
 
                 mem_data = self.__get_dataset_for_mem_trend()
                 html = html.replace("{mem_labels}", str(mem_data["labels"]))
                 html = html.replace("{mem_data}", str(mem_data["data"]))
-                html = html.replace("{average_memory}", str(float("{0:.2f}".format(float(mean(mem_data["samples"]))))))
+                html = html.replace("{average_memory}", __round(mem_data["samples"]))
             else:
                 html = html.replace("{average_cpu}", "Unknown ")
                 html = html.replace("{average_memory}", "Unknown ")
@@ -64,17 +67,22 @@ class Reporter:
             with open(write_file, "w+") as output:
                 output.write(html)
 
-    def __get_dataset_per_feature(self):
+    @staticmethod
+    def __get_template():
 
-        labels = []
-        datasets = []
-
-        data = {TestCategory.SUCCESS: {"values": []},
+        return {TestCategory.SUCCESS: {"values": []},
                 TestCategory.FAIL: {"values": []},
                 TestCategory.ERROR: {"values": []},
                 TestCategory.IGNORE: {"values": []},
                 TestCategory.SKIP: {"values": []},
                 TestCategory.CANCEL: {"values": []}}
+
+    def __get_dataset_per_feature(self):
+
+        labels = []
+        datasets = []
+
+        data = Reporter.__get_template()
 
         for feature, components in self.features.items():
             labels.append(feature if feature is not None else "Not Defined")
@@ -93,12 +101,7 @@ class Reporter:
         labels = []
         datasets = []
 
-        data = {TestCategory.SUCCESS: {"values": []},
-                TestCategory.FAIL: {"values": []},
-                TestCategory.ERROR: {"values": []},
-                TestCategory.IGNORE: {"values": []},
-                TestCategory.SKIP: {"values": []},
-                TestCategory.CANCEL: {"values": []}}
+        data = Reporter.__get_template()
 
         for tag, tag_data in self.tags.items():
             labels.append(tag)
@@ -117,12 +120,7 @@ class Reporter:
         labels = []
         datasets = []
 
-        data = {TestCategory.SUCCESS: {"values": []},
-                TestCategory.FAIL: {"values": []},
-                TestCategory.ERROR: {"values": []},
-                TestCategory.IGNORE: {"values": []},
-                TestCategory.SKIP: {"values": []},
-                TestCategory.CANCEL: {"values": []}}
+        data = Reporter.__get_template()
 
         for owner, owner_data in self.owners.items():
             if owner == "_totals_":

@@ -35,7 +35,6 @@ _Still in ALFA, documentation may be incomplete and functionality of features is
   * [Parallel Test/Suite Execution](#parallel-test-execution)
     * [Controlling Parallel Suite Execution](#controlling-parallel-execution-at-suite-level)
     * [Controlling Parallel Test Execution](#controlling-parallel-execution-at-test-level)
-  * [Priority for Suite/Test](#priority)
   * [Test Listeners](#test-listeners)
     * [On Success](#on-success)
     * [On Fail](#on-fail)
@@ -50,7 +49,7 @@ _Still in ALFA, documentation may be incomplete and functionality of features is
     * [On After Class Fail](#on-after-class-failure)
     * [On After Class Error](#on-after-class-error)
   * [Meta](#meta)
-  * [Suite/Test Assignees](#suite--test-assignees)
+  * [Assignees](#suite--test-assignees)
   * [Rules](#rules)
   * [Priority](#priority)
   * [Features & Components](#features--components)
@@ -880,10 +879,10 @@ aggregator = runner.run()
     ```
 + From `Aggregator` object:
     ```python
-    tags = aggregator.get_report_by_tags()
-    features = aggregator.get_report_by_features()
-    totals = aggregator.get_basic_report()
-    owners = aggregator.get_report_by_owner()
+    print(aggregator.get_report_by_tags())
+    print(aggregator.get_report_by_features())
+    print(aggregator.get_basic_report())
+    print(aggregator.get_report_by_owner())
     ```
 
 #### Jenkins XML Report

@@ -98,11 +98,11 @@ class Aggregator:
         for suite in self.__executed_suites:
             feature = suite.get_feature()
             if feature not in report:
-                report.update({feature: {"_totals_": Aggregator.__get_template()}})
+                report.update({feature: {"_totals_": Aggregator.get_template()}})
             for test in suite.get_test_objects():
                 component = test.get_component()
                 if component not in report[feature]:
-                    report[feature].update({component: Aggregator.__get_template()})
+                    report[feature].update({component: Aggregator.get_template()})
                 test_metrics = test.metrics.get_metrics()
                 for class_param, class_param_data in test_metrics.items():
                     for param, param_data in class_param_data.items():
@@ -132,7 +132,7 @@ class Aggregator:
                 metric = metric if metric is not None else "Not Defined"
 
                 if metric not in report:
-                    report.update({metric: Aggregator.__get_template()})
+                    report.update({metric: Aggregator.get_template()})
 
                 for entry in metric_data["performance"]:
                     report[metric]["performance"].append(entry)
@@ -153,12 +153,12 @@ class Aggregator:
 
     def get_report_by_owner(self):
 
-        report = {"_totals_": Aggregator.__get_template()}
+        report = {"_totals_": Aggregator.get_template()}
         for suite in self.__executed_suites:
             for test in suite.get_test_objects():
                 owner = test.get_owner()
                 if owner not in report:
-                    report.update({owner: Aggregator.__get_template()})
+                    report.update({owner: Aggregator.get_template()})
                 test_metrics = test.metrics.get_metrics()
                 for class_param, class_param_data in test_metrics.items():
                     for param, param_data in class_param_data.items():
@@ -178,7 +178,7 @@ class Aggregator:
         return report
 
     @staticmethod
-    def __get_template():
+    def get_template():
 
         return {"performance": [],
                 "exceptions": [],
