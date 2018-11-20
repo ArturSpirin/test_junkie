@@ -40,18 +40,17 @@ class Reporter:
             if self.monitoring_file is not None:
                 from statistics import mean
                 html = html.replace("<span>Resource monitoring disabled</span>", "")
-                cpu_data = self.__get_dataset_for_cpu_trend()
-                html = html.replace("{cpu_labels}", str(cpu_data["labels"]))
-                html = html.replace("{cpu_data}", str(cpu_data["data"]))
-                html = html.replace("{average_cpu}", __round(cpu_data["samples"]))
-
-                mem_data = self.__get_dataset_for_mem_trend()
-                html = html.replace("{mem_labels}", str(mem_data["labels"]))
-                html = html.replace("{mem_data}", str(mem_data["data"]))
-                html = html.replace("{average_memory}", __round(mem_data["samples"]))
+                for resource in [{"key": "cpu", "id": 1}, {"key": "mem", "id": 2}]:
+                    resource_data = self.__get_source_dataset(resource.get("id"))
+                    html = html.replace("{{{key}_labels}}".format(key=resource.get("key")),
+                                        str(resource_data["labels"]))
+                    html = html.replace("{{{key}_data}}".format(key=resource.get("key")),
+                                        str(resource_data["data"]))
+                    html = html.replace("{{average_{key}}}".format(key=resource.get("key")),
+                                        __round(resource_data["samples"]))
             else:
                 html = html.replace("{average_cpu}", "Unknown ")
-                html = html.replace("{average_memory}", "Unknown ")
+                html = html.replace("{average_mem}", "Unknown ")
 
             html = html.replace("{absolute_data}", str(self.__get_absolute_results_dataset()))
 
@@ -77,51 +76,39 @@ class Reporter:
                 TestCategory.SKIP: {"values": []},
                 TestCategory.CANCEL: {"values": []}}
 
+    @staticmethod
+    def __get_datasets(data):
+        datasets = []
+        for status, status_data in data.items():
+            datasets.append({"label": status,
+                             "data": status_data["values"],
+                             "backgroundColor": Reporter.__COLOR_MAPPING[status]})
+        return datasets
+
     def __get_dataset_per_feature(self):
 
         labels = []
-        datasets = []
-
         data = Reporter.__get_template()
-
         for feature, components in self.features.items():
             labels.append(feature if feature is not None else "Not Defined")
             for status, status_data in data.items():
                 data[status]["values"].append(components["_totals_"][status])
-
-        for status, status_data in data.items():
-            datasets.append({"label": status,
-                             "data": status_data["values"],
-                             "backgroundColor": Reporter.__COLOR_MAPPING[status]})
-
-        return {"labels": labels, "datasets": datasets}
+        return {"labels": labels, "datasets": Reporter.__get_datasets(data)}
 
     def __get_dataset_per_tag(self):
 
         labels = []
-        datasets = []
-
         data = Reporter.__get_template()
-
         for tag, tag_data in self.tags.items():
             labels.append(tag)
             for status, status_data in data.items():
                 data[status]["values"].append(tag_data[status])
-
-        for status, status_data in data.items():
-            datasets.append({"label": status,
-                             "data": status_data["values"],
-                             "backgroundColor": Reporter.__COLOR_MAPPING[status]})
-
-        return {"labels": labels, "datasets": datasets}
+        return {"labels": labels, "datasets": Reporter.__get_datasets(data)}
 
     def __get_dataset_per_owner(self):
 
         labels = []
-        datasets = []
-
         data = Reporter.__get_template()
-
         for owner, owner_data in self.owners.items():
             if owner == "_totals_":
                 continue
@@ -129,13 +116,7 @@ class Reporter:
             labels.append(owner)
             for status, status_data in data.items():
                 data[status]["values"].append(owner_data[status])
-
-        for status, status_data in data.items():
-            datasets.append({"label": status,
-                             "data": status_data["values"],
-                             "backgroundColor": Reporter.__COLOR_MAPPING[status]})
-
-        return {"labels": labels, "datasets": datasets}
+        return {"labels": labels, "datasets": Reporter.__get_datasets(data)}
 
     def __get_dataset_per_suite(self):
 
@@ -187,16 +168,13 @@ class Reporter:
                                                "labels": labels})
         return self.__processed_resources
 
-    def __get_dataset_for_cpu_trend(self):
-
+    def __get_source_dataset(self, index):
+        """
+        Will parse out the resource data
+        :param index: INT
+        :return: DICT
+        """
         data = self.__process_resource_data()
         return {"labels": data["labels"],
-                "data": data[1]["data"],
-                "samples": data[1]["samples"]}
-
-    def __get_dataset_for_mem_trend(self):
-
-        data = self.__process_resource_data()
-        return {"labels": data["labels"],
-                "data": data[2]["data"],
-                "samples": data[2]["samples"]}
+                "data": data[index]["data"],
+                "samples": data[index]["samples"]}
