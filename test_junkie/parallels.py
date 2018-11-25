@@ -12,22 +12,6 @@ class ParallelProcessor:
 
     def __init__(self, **kwargs):
 
-        multi_threaded_config = {"suites": kwargs.get("suite_multithreading", False),
-                                 "tests": kwargs.get("test_multithreading", False)}
-
-        multi_processing_config = {"suites": kwargs.get("suite_multiprocessing", False),
-                                   "tests": kwargs.get("test_multiprocessing", False)}
-
-        if True in multi_threaded_config.values():
-            if True in multi_processing_config.values():
-                raise Exception("Cannot use multi-threading and multi-processing at the same time!")
-        elif True in multi_processing_config.values():
-            if True in multi_threaded_config.values():
-                raise Exception("Cannot use multi-processing and multi-threading at the same time!")
-
-        self.__multi_processing_config = multi_processing_config
-        self.__multi_threaded_config = multi_threaded_config
-
         self.__test_limit = kwargs.get("test_multithreading_limit", 1)
         if self.__test_limit == 0:
             LogJunkie.warn("Thread limit for tests cannot be 0, falling back to limit of 1 thread per test case.")
@@ -44,21 +28,14 @@ class ParallelProcessor:
         LogJunkie.debug(">> Test level multi-threading enabled: {}".format(self.test_multithreading()))
         LogJunkie.debug(">> Test level multi-threading limit: {}".format(self.__test_limit))
         LogJunkie.debug("===============================================================================")
+
     def suite_multithreading(self):
 
-        return self.__multi_threaded_config.get("suites")
+        return self.__suite_limit > 1
 
     def test_multithreading(self):
 
-        return self.__multi_threaded_config.get("tests")
-
-    def suite_multiprocessing(self):
-
-        return self.__multi_processing_config.get("suites")
-
-    def test_multiprocessing(self):
-
-        return self.__multi_processing_config.get("tests")
+        return self.__test_limit > 1
 
     def test_limit_reached(self, parallels):
 

@@ -41,3 +41,9 @@ class TestListener(Listener):
 
     def on_class_cancel(self, properties):
         pass
+
+    def on_class_complete(self, **kwargs):
+        pass
+
+    def on_class_in_progress(self, **kwargs):
+        pass

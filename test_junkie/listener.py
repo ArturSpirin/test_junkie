@@ -49,3 +49,9 @@ class Listener:
 
     def on_class_cancel(self, **kwargs):
         Listener.__process_event(**kwargs)
+
+    def on_class_in_progress(self, **kwargs):
+        Listener.__process_event(**kwargs)
+
+    def on_class_complete(self, **kwargs):
+        Listener.__process_event(**kwargs)

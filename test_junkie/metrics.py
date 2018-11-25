@@ -145,12 +145,12 @@ class Aggregator:
         return report
 
     @staticmethod
-    def _update_report(report, metrics, category, subcategory=None):
+    def _update_report(report, metrics, category, subcategory=0):
 
         for class_param, class_param_data in metrics.items():
             for param, data in class_param_data.items():
                 for entry in data["performance"]:
-                    if subcategory is None:
+                    if subcategory == 0:
                         report[category]["performance"].append(entry)
                         report["_totals_"]["performance"].append(entry)
                     else:
@@ -158,13 +158,13 @@ class Aggregator:
                         report[category]["_totals_"]["performance"].append(entry)
                 for entry in data["exceptions"]:
                     if entry is not None:
-                        if subcategory is None:
+                        if subcategory == 0:
                             report[category]["exceptions"].append(entry)
                             report["_totals_"]["exceptions"].append(entry)
                         else:
                             report[category][subcategory]["exceptions"].append(entry)
                             report[category]["_totals_"]["exceptions"].append(entry)
-                if subcategory is None:
+                if subcategory == 0:
                     report[category]["retries"].append(data["retry"])
                     report["_totals_"]["retries"].append(data["retry"])
                     report[category]["total"] += 1

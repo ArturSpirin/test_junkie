@@ -15,6 +15,10 @@ tests to optimize so you can test more in less time.
 
 _Still in ALFA, documentation may be incomplete and functionality of features is subject to change._
 
+Like this project? Support it by sharing it on your social media or through 
+[PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=FJPYWX5B776YS&currency_code=USD&source=url) 
+or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
+
 ## Table of  content
 
 * [Installation](#installation)
@@ -42,12 +46,14 @@ _Still in ALFA, documentation may be incomplete and functionality of features is
     * [On Ignore](#on-ignore)
     * [On Cancel](#on-cancel)
     * [On Skip](#on-skip)
+    * [On Class In Progress](#on-class-in-progress)
     * [On Class Skip](#on-class-skip)
     * [On Class Cancel](#on-class-cancel)
     * [On Before Class Fail](#on-before-class-failure)
     * [On Before Class Error](#on-before-class-error)
     * [On After Class Fail](#on-after-class-failure)
     * [On After Class Error](#on-after-class-error)
+    * [On Class Complete](#on-class-complete)
   * [Meta](#meta)
   * [Assignees](#suite--test-assignees)
   * [Rules](#rules)
@@ -376,16 +382,18 @@ with will be [retried](#retrying-testssuites) - yes this applies to the suite le
 
 ### Parallel Test Execution
 Test Junkie supports parallel execution out of the box. Two modes are available and both can be used at the same time:
-+ `suite_multithreading`: Allows to run `N` number of suites in parallel. Default is 1.
-+ `test_multithreading`: Allows to run `N` number of test cases in parallel. Default is 1.
++ Suite level multi threading: Allows to run `N` number of suites in parallel.
++ Test level multi threading: Allows to run `N` number of test cases in parallel (in total, not per suite).
 
 `N` is the limit of threads that you want to use, it can be defined using arguments that are passed to the `run()` 
 function of the `Runner` instance.
-+ `suite_multithreading_limit`: Use to define max number of suites to run in parallel. By default it will use one 
-thread, which means suites wont be running in parallel until you set value greater than 1.
-+ `test_multithreading_limit`: Use to define max number of test to run in parallel. By default it will use one 
-thread, which means tests wont be running in parallel until you set value greater than 1. 
-This limit applies to parallelized parameterized tests as well.
++ `suite_multithreading_limit`: Use to define max number of suites to run in parallel. 
+Value has to be greater than 1 to enable multi threading.
++ `test_multithreading_limit`: Use to define max number of test to run in parallel. 
+Value has to be greater than 1 to enable multi threading. 
+This limit applies to [parallelized parameterized](#controlling-parallel-execution-at-test-level) tests as well.
+
+See example for [kicking off threaded test execution](#using-parallel-test-execution).
 
 #### Controlling Parallel Execution at Suite level
 
@@ -532,18 +540,6 @@ On ignore event can also be triggered when incorrect arguments are passed to the
     ...
 ```
 
-#### On Skip
-On skip event is triggered, well, when tests are skipped. Skip is supported by [@test](#test) & [@Suite](#suite) 
-function decorators. See [Skipping Tests/Suites](#skipping-testssuites) for examples. 
-Skip event can also be triggered when [Using Runner with tags](#executing-with-tags).
-```python
-...
-    def on_skip(self, properties):
-        # Write your own code here
-        print(properties)
-    ...
-```
-
 #### On Cancel
 On Cancel event is triggered _sometime_* after `cancel()` is called on the active `Runner` object.
 See [Canceling test execution](#canceling-test-execution) for more info. 
@@ -557,6 +553,31 @@ all of the suites.
     def on_cancel(self, properties):
         # Write your own code here
         print(properties)
+    ...
+```
+
+#### On Skip
+On skip event is triggered, well, when tests are skipped. Skip is supported by [@test](#test) & [@Suite](#suite) 
+function decorators. See [Skipping Tests/Suites](#skipping-testssuites) for examples. 
+Skip event can also be triggered when [Using Runner with tags](#executing-with-tags).
+```python
+...
+    def on_skip(self, properties):
+        # Write your own code here
+        print(properties)
+    ...
+```
+
+#### On Class In Progress
+On Class In Progress event is triggered when Test Junkie is starting to run the class(Suite).
+If class was [skipped](#skipping-testssuites) or [canceled](#canceling-test-execution), this even wont fire. 
+This event can only be fired once per suite, no matter the number of [suite parameters](#parameterized-suites) 
+or [suite retries](#retrying-testssuites).
+```python
+...
+    def on_class_complete(self, properties):
+        # Write your own code here
+        print(properties) 
     ...
 ```
 
@@ -635,6 +656,18 @@ Exception object will be accessible through this argument. No test level event l
     ...
 ```
 
+#### On Class Complete
+On Class Complete event is triggered when Test Junkie is done running all of the tests within the class(Suite).
+If class was [skipped](#skipping-testssuites) or [canceled](#canceling-test-execution), this even wont fire. 
+This event can only be fired once per suite, no matter the number of [suite parameters](#parameterized-suites) 
+or [suite retries](#retrying-testssuites).
+```python
+...
+    def on_class_complete(self, properties):
+        # Write your own code here
+        print(properties) 
+    ...
+```
 
 ### Meta
 All of the TestListener class instance functions have access to the test's and suite's meta information if such 
@@ -973,11 +1006,7 @@ class ExampleTestSuite(object):
 Use the `run()` function from the `Runner` instance to start running tests. `run()` supports a number of properties:
 + `tag_config`: allows to run tests that conforms to the tags, 
 see [Executing with Tags](#executing-with-tags) for more info.
-+ `suite_multithreading`: Enables multithreading at suite level, 
-see [Using Parallel Test Execution](#using-parallel-test-execution) for more info.
 + `suite_multithreading_limit`: Sets thread limit for multithreading at suite level, 
-see [Using Parallel Test Execution](#using-parallel-test-execution) for more info.
-+ `test_multithreading`: Enables multithreading at test level, 
 see [Using Parallel Test Execution](#using-parallel-test-execution) for more info.
 + `test_multithreading_limit`: Sets thread limit for multithreading at test level, 
 see [Using Parallel Test Execution](#using-parallel-test-execution) for more info.
@@ -1017,21 +1046,11 @@ runner.run(tag_config={"skip_on_match_any": ["trivial", "known_failure"]})
 ```
 
 #### Using Parallel Test Execution
-Will enable multithreading for suites and tests, but by default both will use 1 thread each:
 ```python
 runner = Runner([ExampleTestSuite, ExampleTestSuite2])
-runner.run(suite_multithreading=True, test_multithreading=True)
+runner.run(suite_multithreading_limit=5, test_multithreading=5)
 ```
 
-Will enable multithreading for suites and tests but allows to run maximum of 5 suites and up to 2 tests per suite 
-in parallel:
-```python
-runner = Runner([ExampleTestSuite, ExampleTestSuite2])
-runner.run(suite_multithreading=True, suite_multithreading_limit=5, 
-           test_multithreading=True, test_multithreading_limit=2)
-```
-Of course, you can set any limits that your system can handle or that otherwise make sense.
- 
 For more info,  see [Parallel Test/Suite Execution](#parallel-test-execution).
 
 #### Canceling Test Execution

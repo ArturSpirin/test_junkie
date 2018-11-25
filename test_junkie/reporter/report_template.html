@@ -9,6 +9,7 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.3/Chart.bundle.min.js"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/css/materialize.min.css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/js/materialize.min.js"></script>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     </head>
 <body style="background-color: #3d4f58;">
 
@@ -304,6 +305,28 @@ var by_owners_chart = new Chart(by_owners, {
     transition: all .3s ease-in;
 }
 </style>
+
+<div class="fixed-action-btn horizontal">
+  <a class="btn-floating btn-large deep-orange">
+    <i class="large material-icons">monetization_on</i>
+  </a>
+  <ul>
+    <li>
+        <a href="https://www.patreon.com/join/arturspirin/"
+           id="become_patreon" class="btn-floating green tooltipped" data-position="top"
+           data-tooltip="Support Test Junkie by backing it's creator on Patreon">
+            <i class="material-icons">people</i>
+        </a>
+    </li>
+    <li aria-disabled="true">
+        <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=FJPYWX5B776YS&currency_code=USD&source=url"
+           id="donate" class="btn-floating light-blue darken-1 tooltipped" data-position="top"
+           data-tooltip="Support Test Junkie by donating to it's creator through PayPal">
+            <i class="material-icons">payment</i>
+        </a>
+    </li>
+  </ul>
+</div>
 
 </body>
 </html>

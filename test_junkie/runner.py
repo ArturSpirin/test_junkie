@@ -291,6 +291,7 @@ class Runner:
         unsuccessful_tests = None
         self.__validate_parameters(suite)
         if not suite.can_skip(self.__run_config.get("features", None)) and not self.__cancel:
+            Runner.__process_event(Event.ON_CLASS_IN_PROGRESS, suite=suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
 
@@ -364,6 +365,7 @@ class Runner:
                     suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
                                                        start_time=suite_start_time)
+            Runner.__process_event(Event.ON_CLASS_COMPLETE, suite=suite)
         elif self.__cancel:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(Event.ON_CLASS_CANCEL, suite=suite)
@@ -538,7 +540,12 @@ class Runner:
                          Event.ON_AFTER_CLASS_ERROR: {"custom": suite.get_listener().on_after_class_error,
                                                       "native": Listener().on_after_class_error},
                          Event.ON_AFTER_CLASS_FAIL: {"custom": suite.get_listener().on_after_class_failure,
-                                                     "native": Listener().on_after_class_failure}}
+                                                     "native": Listener().on_after_class_failure},
+                         Event.ON_CLASS_IN_PROGRESS: {"custom": suite.get_listener().on_class_in_progress,
+                                                      "native": Listener().on_class_in_progress},
+                         Event.ON_CLASS_COMPLETE: {"custom": suite.get_listener().on_class_complete,
+                                                   "native": Listener().on_class_complete}
+                         }
 
         native_function = event_mapping[event]["native"]
         custom_function = event_mapping[event]["custom"]
