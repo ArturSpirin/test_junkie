@@ -74,6 +74,7 @@ or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
     * [Using parallel execution](#using-parallel-test-execution)
     * [Canceling test execution](#canceling-test-execution)
 * [Found an issue](#bug-report)?
+* [Want more features](https://github.com/ArturSpirin/test_junkie/issues/new?template=enhancement.md)?
 
 ## Installation
 `pip install test_junkie`
@@ -1070,7 +1071,8 @@ runner.cancel()
 ```
 
 ## Bug report
-If you found an issue with Test Junkie, please [file](https://github.com/ArturSpirin/test_junkie/issues/new) a bug report.
+If you found an issue with Test Junkie, please 
+[file](https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md) a bug report.
 
 All bug reports must have:
 1. Python version `python --version`

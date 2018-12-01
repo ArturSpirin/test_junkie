@@ -13,5 +13,5 @@ about: Create a report to help us improve
 ### Actual behaviour
 
 ---
-*If attaching logs, make sure to remove any personal information, credentials, tokens, keys - anything that you don't 
+*If attaching logs, make sure to remove any personal information, credentials, tokens, keys - anything that you don't
 want to become public.*
