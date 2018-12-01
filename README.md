@@ -4,18 +4,19 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/ArturSpirin/test_junkie/graphs/commit-activity) 
 [![PyPI version shields.io](https://img.shields.io/pypi/v/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/) 
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/)
+[![Known Vulnerabilities](https://snyk.io/test/github/ArturSpirin/test_junkie/badge.svg?targetFile=requirements.txt)](https://snyk.io/test/github/ArturSpirin/test_junkie?targetFile=requirements.txt)
 ##
 
 ## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
 
-Test Junkie is the most advanced test runner for Python. Its highly configurable and feature rich framework designed 
+Test Junkie is advanced test runner for Python. Its highly configurable and feature rich framework designed 
 to cater to larger QA teams. It aims to provide simple out of the box test management solution and give visibility on 
 how the test are performing. Test Junkie's [reporting capabilities](#reporting) will help you make decisions on which 
 tests to optimize so you can test more in less time.
 
 _Still in ALFA, documentation may be incomplete and functionality of features is subject to change._
 
-Like this project? Support it by sharing it on your social media or through 
+Like this project? Support it by sharing it on your social media or donate through 
 [PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=FJPYWX5B776YS&currency_code=USD&source=url) 
 or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
 
@@ -72,6 +73,7 @@ or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
     * [Using Runner with Tags](#executing-with-tags)
     * [Using parallel execution](#using-parallel-test-execution)
     * [Canceling test execution](#canceling-test-execution)
+* [Found an issue](#bug-report)?
 
 ## Installation
 `pip install test_junkie`
@@ -1066,3 +1068,14 @@ any of the resources on the machine where it runs.
 ```python
 runner.cancel()
 ```
+
+## Bug report
+If you found an issue with Test Junkie, please [file](https://github.com/ArturSpirin/test_junkie/issues/new) a bug report.
+
+All bug reports must have:
+1. Python version `python --version`
+2. Test Junkie version `pip show test_junkie` 
+3. Command used, if running via terminal
+4. Smallest code snippet that can reproduce the issue
+5. Expected behaviour
+6. Actual behaviour
