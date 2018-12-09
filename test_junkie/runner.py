@@ -3,7 +3,7 @@ import inspect
 import threading
 import time
 import traceback
-
+import sys
 from test_junkie.constants import SuiteCategory, TestCategory, Event
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType, synchronized
@@ -633,7 +633,22 @@ class Runner:
 
         # Run only tests that were requested
         if val is False and tests is not None:
-            val = not test.get_function_object() in tests
+            if sys.version_info[0] < 3:
+                """
+                While both in Python 2 and 3 function objects look like, tests.junkie_suites.SkipSuites
+                in Python 2 the list gets stored as:
+                    [<unbound method SkipTests.test_1>, <unbound method SkipTests.test_2>]
+                and in Python 3 its stored as:
+                    [<function SkipTests.test_1 at 0x0438A780>, <function SkipTests.test_2 at 0x0438A7C8>]
+                So oddly enough in Python 2 the regular check did not work, thus this hack
+                """
+                val = True
+                for t in tests:
+                    if inspect.getsource(test.get_function_object()) == inspect.getsource(t):
+                        val = False
+                        break
+            else:
+                val = not test.get_function_object() in tests
 
         # Run only components that were requested
         if val is False and components is not None:
