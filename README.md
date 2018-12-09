@@ -5,6 +5,13 @@
 [![PyPI version shields.io](https://img.shields.io/pypi/v/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/) 
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/)
 [![Known Vulnerabilities](https://snyk.io/test/github/ArturSpirin/test_junkie/badge.svg?targetFile=requirements.txt)](https://snyk.io/test/github/ArturSpirin/test_junkie?targetFile=requirements.txt)
+
+
+| Download Stats  |
+| --- |
+| [![Downloads](https://pepy.tech/badge/test-junkie)](https://pepy.tech/project/test-junkie)  |
+| [![Downloads](https://pepy.tech/badge/test-junkie/month)](https://pepy.tech/project/test-junkie)  |
+| [![Downloads](https://pepy.tech/badge/test-junkie/week)](https://pepy.tech/project/test-junkie)  |
 ##
 
 ## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
