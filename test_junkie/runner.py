@@ -314,16 +314,18 @@ class Runner:
                         tests = list(suite.get_test_objects())
                         while tests:
                             for test in list(tests):
-                                if not test.is_parallelized():
-                                    LogJunkie.debug("Cant run test: {} in parallel with any other tests"
-                                                    .format(test.get_function_object()))
-                                    ParallelProcessor.wait_for_parallels_to_finish(parallels)
-                                while self.__processor.test_limit_reached(parallels):
-                                    time.sleep(1)
+
                                 test_start_time = time.time()  # will use in case of a failure in context of this loop
 
                                 if not Runner.__positive_skip_condition(test=test, run_config=self.__run_config) and \
                                         Runner.__runnable_tags(test=test, run_config=self.__run_config):
+
+                                    if not test.is_parallelized():
+                                        LogJunkie.debug("Cant run test: {} in parallel with any other tests"
+                                                        .format(test.get_function_object()))
+                                        ParallelProcessor.wait_for_parallels_to_finish(parallels)
+                                    while self.__processor.test_limit_reached(parallels):
+                                        time.sleep(1)
 
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None:
@@ -626,6 +628,18 @@ class Runner:
         """
         val = test.can_skip()
         components = run_config.get("components", None)
+        owners = run_config.get("owners", None)
+        tests = run_config.get("tests", None)
+
+        # Run only tests that were requested
+        if val is False and tests is not None:
+            val = not test.get_function_object() in tests
+
+        # Run only components that were requested
         if val is False and components is not None:
             val = not test.get_component() in components
+
+        # Run only tests that belong to the owners requested
+        if val is False and owners is not None:
+            val = not test.get_owner() in owners
         return val

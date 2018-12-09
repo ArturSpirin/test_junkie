@@ -68,9 +68,11 @@ or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
 * [Examples](#examples)
   * [Test Suite](#test-suite)
   * [Running Test Suite(s)](#executing-test-suites)
-    * [Run tests for certain features](#run-tests-for-certain-features)
-    * [Run tests for certain components](#run-tests-for-certain-components)
-    * [Using Runner with Tags](#executing-with-tags)
+    * [Run regression on a specific feature](#run-tests-for-certain-features)
+    * [Run regression on a specific component](#run-tests-for-certain-components)
+    * [Run tests matching specific tags](#executing-with-tags)
+    * [Run tests assigned to specific owners](#run-tests-assigned-to-specific-owners)
+    * [Run specific test cases](#run-specific-test-cases)
     * [Using parallel execution](#using-parallel-test-execution)
     * [Canceling test execution](#canceling-test-execution)
 * [Found an issue](#bug-report)?
@@ -1046,6 +1048,18 @@ runner.run(tag_config={"run_on_match_all": ["component_a", "critical"]})
 ```
 ```python
 runner.run(tag_config={"skip_on_match_any": ["trivial", "known_failure"]})
+```
+
+#### Run tests assigned to specific owners 
+If you want to run test cases that are assigned to specific team members:
+```python
+runner.run(owners=["John Doe", "Jane Doe"])
+```
+
+#### Run specific test cases
+If you want to run specific test cases:
+```python
+runner.run(tests=[ExampleSuiteA.test_a, ExampleSuiteB.test_b])
 ```
 
 #### Using Parallel Test Execution

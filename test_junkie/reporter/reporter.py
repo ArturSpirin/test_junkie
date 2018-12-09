@@ -28,7 +28,10 @@ class Reporter:
     def generate_html_report(self, write_file):
 
         def __round(value):
-            return str(float("{0:.2f}".format(float(mean(value)))))
+            if value:
+                return str(float("{0:.2f}".format(float(mean(value)))))
+            else:
+                return "0"
 
         with open(self.html_template, "r") as f:
             html = f.read()
