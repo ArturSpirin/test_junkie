@@ -7,7 +7,7 @@
 [![Known Vulnerabilities](https://snyk.io/test/github/ArturSpirin/test_junkie/badge.svg?targetFile=requirements.txt)](https://snyk.io/test/github/ArturSpirin/test_junkie?targetFile=requirements.txt)
 
 
-| Download Stats  |
+| Downloads from [PyPi](https://pypi.org/project/test-junkie/)  |
 | --- |
 | [![Downloads](https://pepy.tech/badge/test-junkie)](https://pepy.tech/project/test-junkie)  |
 | [![Downloads](https://pepy.tech/badge/test-junkie/month)](https://pepy.tech/project/test-junkie)  |
@@ -175,6 +175,7 @@ def b_test():
 + [No Retry On](#no-retry-on-specific-exception): `@test(no_retry_on=[TimeoutError])`
 + [Component](#features--components): `@test(component="Authentication")`
 + [Owner](#suite--test-assignees): `@test(owner="John Doe")`
++ [Tags](#tags): `@test(tags=["critical", "pre-deploy", "post-deploy"])`
 
 #### @afterTest
 This decorator will de-prioritize execution of a decorated function for the end of each test case in the suite.
@@ -856,8 +857,9 @@ which touches only code path for OAuth - Now you can have Test Junkie only run t
 `component="OAuth"`.
 
 ### Tags
-Test Junkie allows you to tag your test scenarios. You can use the tags to run or skip test cases that match the tags 
-when you run your tests. Following tag configurations are supported:
+Test Junkie allows you to tag test scenarios at the [@test](#test) decorator level. 
+You can use the tags to run or skip test cases that match the tags 
+when you run your tests. Following tag configurations are supported by the `Runner`'s `run()` function:
 + `run_on_match_all` - Will run test cases that match all of the tags in the list. 
                        Will trigger [On Skip](#on-skip) event for all of the tests that do not match the tags 
                        or do not have tags.
