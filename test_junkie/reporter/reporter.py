@@ -1,5 +1,7 @@
+import copy
 import time
 from test_junkie.constants import TestCategory
+from test_junkie.reporter.reporter_template import ReportTemplate
 
 
 class Reporter:
@@ -20,9 +22,10 @@ class Reporter:
         self.owners = aggregator.get_report_by_owner()
         self.runtime = runtime
         self.average_runtime = aggregator.get_average_test_runtime()
-        self.html_template = __file__.replace("reporter.py", "report_template.html")
-        if self.html_template.endswith("c"):
-            self.html_template = self.html_template.split("c")[0]
+        self.html_template = ReportTemplate.get_html_template()
+        # self.html_template = __file__.replace("reporter.py", "report_template.html")
+        # if self.html_template.endswith("c"):
+        #     self.html_template = self.html_template.split("c")[0]
         self.__processed_resources = {}
 
     def generate_html_report(self, write_file):
@@ -33,41 +36,41 @@ class Reporter:
             else:
                 return "0"
 
-        with open(self.html_template, "r") as f:
-            html = f.read()
-            html = html.replace("{total_test_executed}", str(self.totals["total"]))
-            html = html.replace("{absolute_passing_rate}", str(self.totals[TestCategory.SUCCESS] /
-                                                               self.totals["total"] * 100)
-                                if self.totals[TestCategory.SUCCESS] > 0 else 0)
+        # with open(self.html_template, "r") as f:
+        html = copy.deepcopy(self.html_template)
+        html = html.replace("{total_test_executed}", str(self.totals["total"]))
+        html = html.replace("{absolute_passing_rate}", str(self.totals[TestCategory.SUCCESS] /
+                                                           self.totals["total"] * 100)
+                            if self.totals[TestCategory.SUCCESS] > 0 else 0)
 
-            if self.monitoring_file is not None:
-                from statistics import mean
-                html = html.replace("<span>Resource monitoring disabled</span>", "")
-                for resource in [{"key": "cpu", "id": 1}, {"key": "mem", "id": 2}]:
-                    resource_data = self.__get_source_dataset(resource.get("id"))
-                    html = html.replace("{{{key}_labels}}".format(key=resource.get("key")),
-                                        str(resource_data["labels"]))
-                    html = html.replace("{{{key}_data}}".format(key=resource.get("key")),
-                                        str(resource_data["data"]))
-                    html = html.replace("{{average_{key}}}".format(key=resource.get("key")),
-                                        __round(resource_data["samples"]))
-            else:
-                html = html.replace("{average_cpu}", "Unknown ")
-                html = html.replace("{average_mem}", "Unknown ")
+        if self.monitoring_file is not None:
+            from statistics import mean
+            html = html.replace("<span>Resource monitoring disabled</span>", "")
+            for resource in [{"key": "cpu", "id": 1}, {"key": "mem", "id": 2}]:
+                resource_data = self.__get_source_dataset(resource.get("id"))
+                html = html.replace("{{{key}_labels}}".format(key=resource.get("key")),
+                                    str(resource_data["labels"]))
+                html = html.replace("{{{key}_data}}".format(key=resource.get("key")),
+                                    str(resource_data["data"]))
+                html = html.replace("{{average_{key}}}".format(key=resource.get("key")),
+                                    __round(resource_data["samples"]))
+        else:
+            html = html.replace("{average_cpu}", "Unknown ")
+            html = html.replace("{average_mem}", "Unknown ")
 
-            html = html.replace("{absolute_data}", str(self.__get_absolute_results_dataset()))
+        html = html.replace("{absolute_data}", str(self.__get_absolute_results_dataset()))
 
-            html = html.replace("{features_data}", str(self.__get_dataset_per_feature()))
-            html = html.replace("{tags_data}", str(self.__get_dataset_per_tag()))
-            html = html.replace("{owners_data}", str(self.__get_dataset_per_owner()))
+        html = html.replace("{features_data}", str(self.__get_dataset_per_feature()))
+        html = html.replace("{tags_data}", str(self.__get_dataset_per_tag()))
+        html = html.replace("{owners_data}", str(self.__get_dataset_per_owner()))
 
-            runtime = time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime))
-            html = html.replace("{total_runtime}", str(runtime))
-            average_runtime = time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.average_runtime))
-            html = html.replace("{average_test_runtime}", str(average_runtime))
+        runtime = time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime))
+        html = html.replace("{total_runtime}", str(runtime))
+        average_runtime = time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.average_runtime))
+        html = html.replace("{average_test_runtime}", str(average_runtime))
 
-            with open(write_file, "w+") as output:
-                output.write(html)
+        with open(write_file, "w+") as output:
+            output.write(html)
 
     @staticmethod
     def __get_template():

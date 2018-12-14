@@ -1,3 +1,11 @@
+
+
+class ReportTemplate:
+
+    @staticmethod
+    def get_html_template():
+
+        return """
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -329,4 +337,5 @@ var by_owners_chart = new Chart(by_owners, {
 </div>
 
 </body>
-</html>
+</html> 
+"""

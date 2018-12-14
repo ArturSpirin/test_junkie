@@ -558,10 +558,10 @@ class Runner:
         def __create_properties():
             properties = {"suite_meta": suite.get_meta(),
                           "test_meta": test.get_meta(param, class_param) if test else None,
-                          "jm": {}}
+                          "jm": {"jso": suite}}
             if test:
                 properties["test_meta"].update({"parameter": param})
-                properties["jm"].update({"jto": test, "jso": suite})
+                properties["jm"].update({"jto": test})
             properties["suite_meta"].update({"parameter": class_param})
             return copy.deepcopy(properties)
         try:
