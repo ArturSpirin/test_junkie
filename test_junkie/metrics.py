@@ -2,6 +2,7 @@ import multiprocessing
 import os
 import threading
 import time
+from datetime import datetime
 
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import SuiteCategory, TestCategory
@@ -228,9 +229,9 @@ class ResourceMonitor(threading.Thread):
             records.write("")
         while not self.exit.is_set():
             time.sleep(1)
-            data = "{timestamp} {cpu} {memory}\n".format(timestamp=time.time(),
-                                                         cpu=psutil.cpu_percent(),
-                                                         memory=psutil.virtual_memory().percent)
+            data = "{timestamp}, {cpu}, {memory}\n".format(timestamp=datetime.now(),
+                                                           cpu=psutil.cpu_percent(),
+                                                           memory=psutil.virtual_memory().percent)
             with open(self.file_path, "a+") as records:
                 records.write(data)
 

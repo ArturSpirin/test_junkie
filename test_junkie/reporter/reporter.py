@@ -23,9 +23,6 @@ class Reporter:
         self.runtime = runtime
         self.average_runtime = aggregator.get_average_test_runtime()
         self.html_template = ReportTemplate.get_html_template()
-        # self.html_template = __file__.replace("reporter.py", "report_template.html")
-        # if self.html_template.endswith("c"):
-        #     self.html_template = self.html_template.split("c")[0]
         self.__processed_resources = {}
 
     def generate_html_report(self, write_file):
@@ -36,11 +33,10 @@ class Reporter:
             else:
                 return "0"
 
-        # with open(self.html_template, "r") as f:
         html = copy.deepcopy(self.html_template)
         html = html.replace("{total_test_executed}", str(self.totals["total"]))
-        html = html.replace("{absolute_passing_rate}", str(self.totals[TestCategory.SUCCESS] /
-                                                           self.totals["total"] * 100)
+        html = html.replace("{absolute_passing_rate}", " {:0.2f}"
+                            .format((self.totals[TestCategory.SUCCESS] / self.totals["total"]) * 100)
                             if self.totals[TestCategory.SUCCESS] > 0 else 0)
 
         if self.monitoring_file is not None:
@@ -159,8 +155,8 @@ class Reporter:
             with open(self.monitoring_file, "r") as f:
                 for line in f.readlines():
                     line = line.replace("\n", "")
-                    li = line.split(" ")
-                    labels.append(float(li[0]))
+                    li = line.split(",")
+                    labels.append(li[0])
 
                     cpu_data["data"].append(li[cpu])
                     cpu_samples.append(round(float(li[cpu]), 2))

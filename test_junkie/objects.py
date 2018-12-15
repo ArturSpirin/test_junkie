@@ -122,13 +122,15 @@ class SuiteObject:
     def get_parameters(self, process_functions=False):
         if process_functions:
             parameters = self.__suite_definition["class_parameters"]
-            if inspect.isfunction(parameters):
-                try:
+            try:
+                if inspect.isfunction(parameters):
                     self.__suite_definition["class_parameters"] = parameters()
-                except Exception:
-                    traceback.print_exc()
-                    raise TestJunkieExecutionError("Encountered error while processing parameters "
-                                                   "passed in via function: {}".format(parameters))
+                elif inspect.ismethod(parameters):
+                    self.__suite_definition["class_parameters"] = getattr(parameters.__self__, parameters.__name__)()
+            except Exception:
+                traceback.print_exc()
+                raise TestJunkieExecutionError("Encountered error while processing parameters "
+                                               "passed in via function: {}".format(parameters))
         return self.__suite_definition["class_parameters"]
 
     def get_kwargs(self):
@@ -223,13 +225,15 @@ class TestObject:
     def get_parameters(self, process_functions=False):
         if process_functions:
             parameters = self.get_kwargs().get("parameters", [None])
-            if inspect.isfunction(parameters):
-                try:
+            try:
+                if inspect.isfunction(parameters):
                     self.get_kwargs()["parameters"] = parameters()
-                except Exception:
-                    traceback.print_exc()
-                    raise TestJunkieExecutionError("Encountered error while processing parameters "
-                                                   "passed in via function: {}".format(parameters))
+                elif inspect.ismethod(parameters):
+                    self.get_kwargs()["parameters"] = getattr(parameters.__self__, parameters.__name__)()
+            except Exception:
+                traceback.print_exc()
+                raise TestJunkieExecutionError("Encountered error while processing parameters "
+                                               "passed in via function: {}".format(parameters))
         return self.get_kwargs().get("parameters", [None])
 
     def get_retry_limit(self):

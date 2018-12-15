@@ -109,7 +109,7 @@ var cpu = document.getElementById('CPUChart').getContext('2d');
 var cpu_labels = {cpu_labels}
 var labels = []
 for(var label in cpu_labels){
-    labels.push(new Date(label * 1000))
+    labels.push(new Date(""+cpu_labels[label]+""))
 }
 var data = {
     labels: labels,
@@ -119,6 +119,11 @@ const cpu_options = {
     type: 'line',
     data: data,
     options: {
+        legend: {
+            labels: {
+                fontColor: '#e5e5e5'
+            }
+        },
         fill: false,
         responsive: true,
         scales: {
@@ -156,7 +161,7 @@ var mem = document.getElementById('MEMChart').getContext('2d');
 var mem_labels = {mem_labels}
 var labels = []
 for(var label in mem_labels){
-    labels.push(new Date(label * 1000))
+    labels.push(new Date(""+mem_labels[label]+""))
 }
 var data = {
     // Labels should be Date objects new Date(unix_timestamp  * 1000)
@@ -167,6 +172,11 @@ const mem_options = {
     type: 'line',
     data: data,
     options: {
+        legend: {
+            labels: {
+                fontColor: '#e5e5e5'
+            }
+        },
         fill: false,
         responsive: true,
         scales: {
@@ -204,7 +214,14 @@ const mem_chart = new Chart(mem, mem_options);
 var totals = document.getElementById('totals').getContext('2d');
 var myPieChart = new Chart(totals,{
     type: 'pie',
-    data: {absolute_data}
+    data: {absolute_data},
+    options: {
+        legend: {
+            labels: {
+                fontColor: '#e5e5e5'
+            }
+        }
+    }
 });
 
 </script>
@@ -245,6 +262,11 @@ var by_features_chart = new Chart(by_features, {
     type: 'bar',
     data: {features_data},
     options: {
+        legend: {
+            labels: {
+                fontColor: '#e5e5e5'
+            }
+        },
         scales: {
             xAxes: [{
                 stacked: true
@@ -265,6 +287,11 @@ var by_tags_chart = new Chart(by_tags, {
     type: 'bar',
     data: {tags_data},
     options: {
+        legend: {
+            labels: {
+                fontColor: '#e5e5e5'
+            }
+        },
         scales: {
             xAxes: [{
                 stacked: true
@@ -285,6 +312,11 @@ var by_owners_chart = new Chart(by_owners, {
     type: 'bar',
     data: {owners_data},
     options: {
+        legend: {
+            labels: {
+                fontColor: '#e5e5e5'
+            }
+        },
         scales: {
             xAxes: [{
                 stacked: true
