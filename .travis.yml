@@ -18,6 +18,6 @@ script:
                                                   --ignore=tests/test_advanced_features.py
                                                   --ignore=tests/reporting/test_reporting.py
                                                   --ignore=tests/on_class/test_cancel.py
-                                                  --ignore=tests/threading); fi
+                                                  --ignore=tests/threading/test_threading.py); fi
 after_success:
   - codecov -t $CODECOV_TOKEN

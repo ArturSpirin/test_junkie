@@ -1,8 +1,5 @@
 import pprint
-
-from test_junkie.debugger import LogJunkie
 from test_junkie.runner import Runner
-LogJunkie.enable_logging(10)
 from tests.QualityManager import QualityManager
 from tests.junkie_suites.parallels.ParallelSuiteA import ParallelSuiteA
 from tests.junkie_suites.parallels.ParallelSuiteB import ParallelSuiteB
@@ -44,8 +41,6 @@ def test_class_metrics2():
 
     assert results[1].get_class_name() == "ParallelSuiteB"
     metrics = results[1].metrics.get_metrics()
-    assert int(metrics["runtime"]) <= int(results[2].metrics.get_metrics()["runtime"])
-    assert int(metrics["runtime"]) > int(results[0].metrics.get_metrics()["runtime"])
     QualityManager.check_class_metrics(metrics,
                                        expected_status="success",
                                        expected_retry_count=1)
@@ -67,8 +62,6 @@ def test_class_metrics3():
 
     assert results[2].get_class_name() == "ParallelSuiteC"
     metrics = results[2].metrics.get_metrics()
-    assert int(metrics["runtime"]) >= int(results[1].metrics.get_metrics()["runtime"])
-    assert int(metrics["runtime"]) > int(results[0].metrics.get_metrics()["runtime"])
     QualityManager.check_class_metrics(metrics,
                                        expected_status="success",
                                        expected_retry_count=1)
