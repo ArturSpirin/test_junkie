@@ -1,8 +1,8 @@
 import time
 
 from test_junkie.decorators import Suite, test
-from tests.junkie_suites.parallels.ParallelSuiteB import ParallelSuiteB
-from tests.junkie_suites.parallels.ParallelSuiteC import ParallelSuiteC
+from tests.junkie_suites.ParallelSuiteB import ParallelSuiteB
+from tests.junkie_suites.ParallelSuiteC import ParallelSuiteC
 
 
 @Suite(pr=[ParallelSuiteC])

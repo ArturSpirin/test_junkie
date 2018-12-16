@@ -1,9 +1,11 @@
 import pprint
+import sys
+sys.path.insert(1, __file__.split("tests")[0])
 from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
-from tests.junkie_suites.parallels.ParallelSuiteA import ParallelSuiteA
-from tests.junkie_suites.parallels.ParallelSuiteB import ParallelSuiteB
-from tests.junkie_suites.parallels.ParallelSuiteC import ParallelSuiteC
+from tests.junkie_suites.ParallelSuiteA import ParallelSuiteA
+from tests.junkie_suites.ParallelSuiteB import ParallelSuiteB
+from tests.junkie_suites.ParallelSuiteC import ParallelSuiteC
 
 runner = Runner([ParallelSuiteA, ParallelSuiteB, ParallelSuiteC])
 runner.run(test_multithreading_limit=2, suite_multithreading_limit=2)

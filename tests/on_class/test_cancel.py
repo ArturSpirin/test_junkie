@@ -1,7 +1,6 @@
 import pprint
 import threading
 import sys
-
 sys.path.insert(1, __file__.split("tests")[0])
 from tests.QualityManager import QualityManager
 from test_junkie.runner import Runner
