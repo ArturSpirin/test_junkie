@@ -121,13 +121,16 @@ const cpu_options = {
     options: {
         legend: {
             labels: {
-                fontColor: '#e5e5e5'
+                fontColor: '#aebac4'
             }
         },
         fill: false,
         responsive: true,
         scales: {
             xAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 type: 'time',
                 time: {
                     unit: 'second'
@@ -140,6 +143,7 @@ const cpu_options = {
             }],
             yAxes: [{
                 ticks: {
+                    fontColor: "#aebac4",
                     beginAtZero: true,
                 },
                 display: true,
@@ -174,13 +178,16 @@ const mem_options = {
     options: {
         legend: {
             labels: {
-                fontColor: '#e5e5e5'
+                fontColor: '#aebac4'
             }
         },
         fill: false,
         responsive: true,
         scales: {
             xAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 type: 'time',
                 time: {
                     unit: 'second'
@@ -193,6 +200,7 @@ const mem_options = {
             }],
             yAxes: [{
                 ticks: {
+                    fontColor: "#aebac4",
                     beginAtZero: true,
                 },
                 display: true,
@@ -218,7 +226,7 @@ var myPieChart = new Chart(totals,{
     options: {
         legend: {
             labels: {
-                fontColor: '#e5e5e5'
+                fontColor: '#aebac4'
             }
         }
     }
@@ -264,14 +272,20 @@ var by_features_chart = new Chart(by_features, {
     options: {
         legend: {
             labels: {
-                fontColor: '#e5e5e5'
+                fontColor: '#aebac4'
             }
         },
         scales: {
             xAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 stacked: true
             }],
             yAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 stacked: true
             }]
         }
@@ -289,14 +303,20 @@ var by_tags_chart = new Chart(by_tags, {
     options: {
         legend: {
             labels: {
-                fontColor: '#e5e5e5'
+                fontColor: '#aebac4'
             }
         },
         scales: {
             xAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 stacked: true
             }],
             yAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 stacked: true
             }]
         }
@@ -314,14 +334,20 @@ var by_owners_chart = new Chart(by_owners, {
     options: {
         legend: {
             labels: {
-                fontColor: '#e5e5e5'
+                fontColor: '#aebac4'
             }
         },
         scales: {
             xAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 stacked: true
             }],
             yAxes: [{
+                ticks: {
+                    fontColor: "#aebac4"
+                },
                 stacked: true
             }]
         }

@@ -26,7 +26,7 @@ class ClassMetrics:
     def update_suite_metrics(self, status, start_time):
 
         self.__stats["status"] = status
-        if status not in [SuiteCategory.CANCEL, SuiteCategory.SKIP]:
+        if status not in [SuiteCategory.CANCEL, SuiteCategory.SKIP, SuiteCategory.IGNORE]:
             self.__stats["retry"] += 1
         self.__stats["start"] = start_time
         self.__stats["end"] = time.time()

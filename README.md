@@ -57,6 +57,7 @@ or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
     * [On Class In Progress](#on-class-in-progress)
     * [On Class Skip](#on-class-skip)
     * [On Class Cancel](#on-class-cancel)
+    * [On Class Ignore](#on-class-ignore)
     * [On Before Class Fail](#on-before-class-failure)
     * [On Before Class Error](#on-before-class-error)
     * [On After Class Fail](#on-after-class-failure)
@@ -392,6 +393,8 @@ class ExampleSuite:
 + Suite level parameters can be used at the same time with [test level parameters](#parameterized-tests).
 + If parameterized test fails and [retry](#retrying-testssuites) is used, only the parameter(s) that test failed 
 with will be [retried](#retrying-testssuites) - yes this applies to the suite level parameters as well.
++ If wrong parameters are passed in, suite will be [ignored](#on-class-ignore) and [Retry](#retrying-testssuites) 
+wont be applicable in this case.
 
 ### Parallel Test Execution
 Test Junkie supports parallel execution out of the box. Two modes are available and both can be used at the same time:
@@ -457,7 +460,7 @@ ran at the very end, unless, they have a [Priority](#priority) set.
 
 - Tests have an additional threaded mode - by default this mode is disabled and only applies to parameterized tests.
 If test case is parameterized, you can choose to test those parameters in parallel. To do that, use 
-`paralellized_parameters` property of [@test](#test) decorator and set it to `True`. 
+`parallelized_parameters` property of [@test](#test) decorator and set it to `True`. 
 `test_multithreading_limit` will apply - each test executed with a parameter will consume a thread slot.
 
 For usage examples see [Using Parallel Execution](#using-parallel-test-execution). 
@@ -490,6 +493,8 @@ Following class(suite) functions can be overwritten:
 + [On After Class Error](#on-after-class-error) 
 + [On Class Skip](#on-class-skip)
 + [On Class Cancel](#on-class-cancel)
++ [On Class Complete](#on-class-complete)
++ [On Class Ignore](#on-class-ignore)
 
 ```python
 from test_junkie.listener import Listener
@@ -620,6 +625,23 @@ see [Running Test Suite(s)](#executing-test-suites) for more info.
     ...
 ```
 
+#### On Class Ignore
+On Class Ignore event is triggered when Test Junkie detects bad arguments being used for [@Suite](#suite) properties.
+For example, if you pass in empty parameters list, it does not make sense to run any tests in the suite becuase its 
+it assumed that either the setup functions or the tests rely on those parameters and sense they are empty the test 
+scenarios will not be accurate thus Test Junkie will ignore the suite.
+
+Make sure to include `exception` argument in the method signature, Exception object will be 
+accessible through this argument.
+
+```python
+...
+    def on_class_ignore(self, properties, exception):
+        # Write your own code here
+        print(properties) 
+    ...
+```
+
 #### On Before Class Failure
 On Before Class Failure event is triggered only when a function decorated with [@beforeClass](#beforeclass) 
 produces `AssertionError`. Make sure to include `exception` argument in the method signature, Exception object will be 
@@ -692,6 +714,7 @@ to the test cases and further integrations can be implemented from there
 + Bug ticket IDs - if you have a bug tracking system, leverage it to link your test case with issues that are already 
 known and allow you to process failures in a different manner and/or allow for other integrations with the 
 tracking system
++ Or anything else you may need, metadata has no effect on how Test Junkie runs
 ```python
 from test_junkie.decorators import Suite, test
 
@@ -709,7 +732,7 @@ class ExampleSuite:
     
         assert True is True
 ```
-Metadata that was set in the code above can be accessed in any of the event listeners like so:
+Metadata that was set in the code above can be accessed in any of the [Test Listeners](#test-listeners) like so:
 ```python
 from test_junkie.listener import Listener
 
@@ -748,19 +771,19 @@ from test_junkie.meta import Meta
 @test()
 def a_test(self):
     ...
-    Meta.update(name="new test name", expected="updated expectation")
+    Meta.update(self, name="new test name", expected="updated expectation")
     ...
 
 @test(parameters=[1, 2, 3])
 def b_test(self, parameter):
     ...
-    Meta.update(parameter=parameter, name="new test name", expected="updated expectation")
+    Meta.update(self, parameter=parameter, name="new test name", expected="updated expectation")
     ...
 
 @test(parameters=[1, 2, 3])
 def c_test(self, parameter, suite_parameter):
     ...
-    Meta.update(parameter=parameter, suite_parameter=suite_parameter,
+    Meta.update(self, parameter=parameter, suite_parameter=suite_parameter,
                 name="new test name", expected="updated expectation") 
     ...
 ```

@@ -7,7 +7,7 @@ import sys
 from test_junkie.constants import SuiteCategory, TestCategory, Event
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType, synchronized
-from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError
+from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
 from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.parallels import ParallelProcessor
@@ -259,38 +259,37 @@ class Runner:
         return aggregator
 
     @staticmethod
-    def __validate_parameters(suite_object):
-        """
-        Validates the inputs for the parameter properties of tests and suites
-        If parameters were passed in as an un-used function both to @Suites & to @tests,
-        those functions will be executed when this function is called
-        :param suite_object: test_junkie.objects.SuiteObject
-        :return: None
-        """
-        def __validate(_parameters, _suite, _test=None):
-            if not _parameters or not isinstance(_parameters, list):  # Validating parameters
-                # If parameters are invalid, will raise a meaningful exception
-                if isinstance(_parameters, list):
-                    raise Exception("Empty parameters list in Class: {} {}"
-                                    .format(_suite.get_class_module(),
-                                            "Test: {}()".format(_test.get_function_name())
-                                            if _test is not None else ""))
-                else:
-                    raise Exception("Wrong data type used for parameters. Expected: {}. Found: {} in "
-                                    "Class: {} {}".format(list, type(_parameters),
-                                                          _suite.get_class_module(),
-                                                          " Test: {}()".format(_test.get_function_name())
-                                                          if _test is not None else ""))
+    def __validate_suite_parameters(suite):
+        parameters = suite.get_parameters(process_functions=True)
+        if not parameters or not isinstance(parameters, list):
+            if isinstance(parameters, list):
+                error = BadParameters("Empty parameters list in Class: {}".format(suite.get_class_module()))
+            else:
+                error = BadParameters("Wrong data type used for parameters. Expected: {}. Found: {} in Class: {}"
+                                      .format(list, type(parameters), suite.get_class_module()))
+            # for test in suite.get_test_objects():
+            #     Runner.__process_event(Event.ON_IGNORE, suite=suite, test=test, error=error)
+            return error
+        return False
 
-        __validate(suite_object.get_parameters(process_functions=True), suite_object)
-        for test in suite_object.get_test_objects():
-            __validate(test.get_parameters(process_functions=True), suite_object, test)
+    @staticmethod
+    def __validate_test_parameters(test, suite):
+        parameters = test.get_parameters(process_functions=True)
+        if not parameters or not isinstance(parameters, list):
+            if isinstance(parameters, list):
+                error = BadParameters("Empty parameters list in Class: {} {}"
+                                      .format(suite.get_class_module(), "Test: {}()".format(test.get_function_name())))
+            else:
+                error = BadParameters("Wrong data type used for parameters. Expected: {}. Found: {} in "
+                                      "Class: {} Test: {}()".format(list, type(parameters), suite.get_class_module(),
+                                                                    test.get_function_name()))
+            return error
 
     def __run_suite(self, suite):
         suite_start_time = time.time()
         unsuccessful_tests = None
-        self.__validate_parameters(suite)
-        if not suite.can_skip(self.__run_config.get("features", None)) and not self.__cancel:
+        bad_params = Runner.__validate_suite_parameters(suite)
+        if not suite.can_skip(self.__run_config.get("features", None)) and not self.__cancel and not bad_params:
             Runner.__process_event(Event.ON_CLASS_IN_PROGRESS, suite=suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
@@ -326,7 +325,14 @@ class Runner:
                                         ParallelProcessor.wait_for_parallels_to_finish(parallels)
                                     while self.__processor.test_limit_reached(parallels):
                                         time.sleep(1)
-
+                                    bad_params = Runner.__validate_test_parameters(test, suite)
+                                    if bad_params is not None:
+                                        tests.remove(test)
+                                        test.metrics.update_metrics(status=TestCategory.IGNORE,
+                                                                    start_time=test_start_time)
+                                        Runner.__process_event(Event.ON_IGNORE, suite=suite, test=test,
+                                                               class_param=class_param, error=bad_params)
+                                        continue
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None:
                                             if not test.is_qualified_for_retry(param, class_param=class_param):
@@ -338,6 +344,8 @@ class Runner:
                                                                     and param is not None)):
                                             while True:
                                                 if self.__processor.test_qualifies(suite, test):
+                                                    while self.__processor.test_limit_reached(parallels):
+                                                        time.sleep(1)
                                                     parallels.append(
                                                         self.__processor.run_test_in_a_thread(Runner.__run_test,
                                                                                               suite, test, param,
@@ -371,6 +379,9 @@ class Runner:
         elif self.__cancel:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(Event.ON_CLASS_CANCEL, suite=suite)
+        elif bad_params:
+            suite.metrics.update_suite_metrics(status=SuiteCategory.IGNORE, start_time=suite_start_time)
+            Runner.__process_event(Event.ON_CLASS_IGNORE, suite=suite)
         else:
             suite.metrics.update_suite_metrics(status=SuiteCategory.SKIP, start_time=suite_start_time)
             Runner.__process_event(Event.ON_CLASS_SKIP, suite=suite)
@@ -488,6 +499,7 @@ class Runner:
                                        class_param=class_parameter)
 
     @staticmethod
+    # @synchronized(threading.Lock())
     def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None):
         start_time = time.time()
         if DecoratorType.TEST_CASE != decorator_type:
@@ -539,6 +551,8 @@ class Runner:
                                                        "native": Listener().on_before_class_error},
                          Event.ON_BEFORE_CLASS_FAIL: {"custom": suite.get_listener().on_before_class_failure,
                                                       "native": Listener().on_before_class_failure},
+                         Event.ON_CLASS_IGNORE: {"custom": suite.get_listener().on_class_ignore,
+                                                 "native": Listener().on_class_ignore},
                          Event.ON_AFTER_CLASS_ERROR: {"custom": suite.get_listener().on_after_class_error,
                                                       "native": Listener().on_after_class_error},
                          Event.ON_AFTER_CLASS_FAIL: {"custom": suite.get_listener().on_after_class_failure,

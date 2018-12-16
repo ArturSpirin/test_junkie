@@ -264,7 +264,10 @@ class TestObject:
 
         string_param = str(parameter)
         string_class_param = str(class_parameter)
-        meta = self.get_kwargs().get("meta", {})
+
+        if not self.get_kwargs().get("meta", {}):  # does not require meta to be defined in order to Meta.update it
+            self.get_kwargs().update({"meta": {}})
+        meta = self.get_kwargs()["meta"]
 
         if "original" not in meta:
             meta.update({"original": copy.deepcopy(meta)})

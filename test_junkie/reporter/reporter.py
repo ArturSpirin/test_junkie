@@ -36,8 +36,8 @@ class Reporter:
         html = copy.deepcopy(self.html_template)
         html = html.replace("{total_test_executed}", str(self.totals["total"]))
         html = html.replace("{absolute_passing_rate}", " {:0.2f}"
-                            .format((self.totals[TestCategory.SUCCESS] / self.totals["total"]) * 100)
-                            if self.totals[TestCategory.SUCCESS] > 0 else 0)
+                            .format(float(self.totals[TestCategory.SUCCESS]) / float(self.totals["total"]) * 100)
+                            if self.totals[TestCategory.SUCCESS] > 0 else "0")
 
         if self.monitoring_file is not None:
             from statistics import mean

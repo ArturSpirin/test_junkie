@@ -17,6 +17,7 @@ script:
   - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then (py.test --cov=test_junkie tests/
                                                   --ignore=tests/test_advanced_features.py
                                                   --ignore=tests/reporting/test_reporting.py
-                                                  --ignore=tests/on_class/test_cancel.py); fi
+                                                  --ignore=tests/on_class/test_cancel.py
+                                                  --ignore=tests/threading); fi
 after_success:
   - codecov -t $CODECOV_TOKEN

@@ -55,3 +55,6 @@ class Listener:
 
     def on_class_complete(self, **kwargs):
         Listener.__process_event(**kwargs)
+
+    def on_class_ignore(self, **kwargs):
+        Listener.__process_event(**kwargs)

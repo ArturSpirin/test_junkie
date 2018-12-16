@@ -17,3 +17,9 @@ class ConfigError(TestJunkieExecutionError):
 
     def __init__(self, message):
         TestJunkieExecutionError.__init__(self, message)
+
+
+class BadParameters(TestJunkieExecutionError):
+
+    def __init__(self, message):
+        TestJunkieExecutionError.__init__(self, message)

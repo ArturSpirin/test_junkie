@@ -33,29 +33,29 @@ class AdvancedSuite:
     def no_retry(self, parameter, suite_parameter):
         assert parameter is not None
         assert suite_parameter is not None
-        Meta.update(parameter=parameter, suite_parameter=suite_parameter,
+        Meta.update(self, parameter=parameter, suite_parameter=suite_parameter,
                     name="No Retry 1", expected="updated")
 
     @test(retry=2, parameters=[10, 20], tags=["critical", "v1"], parallalized_parameters=True,
           meta=meta(name="No Retry", expected="Test must pass on 1st go, thus should not be retried"))
     def no_retry2(self, parameter):
         assert parameter is not None
-        Meta.update(parameter=parameter, name="No Retry 2", expected="updated")
+        Meta.update(self, parameter=parameter, name="No Retry 2", expected="updated")
 
     @test(retry=2, tags=["critical", "v1"],
           meta=meta(name="No Retry", expected="Test must pass on 1st go, thus should not be retried"))
     def no_retry3(self, suite_parameter):
         assert suite_parameter is not None
-        Meta.update(suite_parameter=suite_parameter, name="No Retry 3", expected="updated")
+        Meta.update(self, suite_parameter=suite_parameter, name="No Retry 3", expected="updated")
 
     @test(retry=2, tags=["critical2"])
     def retry(self):
-        Meta.update(name="Retry", expected="Updated for Retry")
+        Meta.update(self, name="Retry", expected="Updated for Retry")
         assert True is False, "Expected Assertion Error"
 
     @test(retry=2, tags=["trivial"])
     def retry2(self):
-        Meta.update(name="new test name", expected="updated expectation")
+        Meta.update(self, name="new test name", expected="updated expectation")
         assert True is False, "Expected Assertion Error 2"
 
     @test(retry=2, parameters=[10, 20], tags=["critical", "v1"],
@@ -63,7 +63,7 @@ class AdvancedSuite:
     def retry3(self, parameter, suite_parameter):
         assert parameter is not None
         assert suite_parameter is not None
-        Meta.update(parameter=parameter, suite_parameter=suite_parameter,
+        Meta.update(self, parameter=parameter, suite_parameter=suite_parameter,
                     name="new test name", expected="updated expectation")
         if suite_parameter == 1 and parameter == 10:
             raise Exception("On purpose")
@@ -72,7 +72,7 @@ class AdvancedSuite:
           meta=meta(name="Retry 3", expected="Test must fail and be retried"))
     def retry4(self, parameter):
         assert parameter is not None
-        Meta.update(parameter=parameter, name="new test name", expected="updated expectation")
+        Meta.update(self, parameter=parameter, name="new test name", expected="updated expectation")
         if parameter == 10:
             raise Exception("On purpose")
 
@@ -80,11 +80,11 @@ class AdvancedSuite:
           meta=meta(name="Retry 3", expected="Test must fail and be retried"))
     def retry5(self, suite_parameter):
         assert suite_parameter is not None
-        Meta.update(suite_parameter=suite_parameter, name="new test name", expected="updated expectation")
+        Meta.update(self, suite_parameter=suite_parameter, name="new test name", expected="updated expectation")
         if suite_parameter == 1:
             raise Exception("On purpose")
 
     @test(tags=["skip", "v2"])
     def skip(self):
 
-        Meta.update(name="new test name", expected="updated expectation")
+        Meta.update(self, name="new test name", expected="updated expectation")

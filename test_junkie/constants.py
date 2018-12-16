@@ -16,8 +16,9 @@ class SuiteCategory:
     FAIL = "fail"
     SKIP = "skip"
     CANCEL = "cancel"
-    ALL = [SUCCESS, FAIL, SKIP, CANCEL]
-    ALL_UN_SUCCESSFUL = [FAIL]
+    IGNORE = "ignore"
+    ALL = [SUCCESS, FAIL, SKIP, CANCEL, IGNORE]
+    ALL_UN_SUCCESSFUL = [FAIL, IGNORE]
 
 
 class DecoratorType:
@@ -46,3 +47,4 @@ class Event:
     ON_AFTER_CLASS_FAIL = 12
     ON_CLASS_IN_PROGRESS = 13
     ON_CLASS_COMPLETE = 14
+    ON_CLASS_IGNORE = 15
