@@ -267,8 +267,6 @@ class Runner:
             else:
                 error = BadParameters("Wrong data type used for parameters. Expected: {}. Found: {} in Class: {}"
                                       .format(list, type(parameters), suite.get_class_module()))
-            # for test in suite.get_test_objects():
-            #     Runner.__process_event(Event.ON_IGNORE, suite=suite, test=test, error=error)
             return error
         return False
 

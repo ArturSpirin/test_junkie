@@ -4,8 +4,49 @@ import traceback
 
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import TestCategory
-from test_junkie.errors import TestJunkieExecutionError
+from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
+
+
+class _FuncEval:
+
+    @staticmethod
+    def eval_skip(obj):
+
+        val = obj.get_skip()
+        try:
+            if not isinstance(val, bool):
+                if inspect.isfunction(val):
+                    val = val(meta=obj.get_meta()) if "meta" in inspect.getargspec(val).args else val()
+                elif inspect.ismethod(val):
+                    val = getattr(val.__self__, val.__name__)(meta=obj.get_meta()) \
+                        if "meta" in inspect.getargspec(val).args \
+                        else getattr(val.__self__, val.__name__)()
+                else:
+                    raise BadParameters("Unsupported data type used to pass parameters to the skip property in test: "
+                                        "{}.{}".format(obj.get_function_module(), obj.get_function_name()))
+                assert isinstance(val, bool), "You were using a function/unbound method to pass parameters to the skip"\
+                                              " property in test {}.{} which must return a boolean value. "\
+                                              "Got: {} instead of a boolean".format(obj.get_function_module(),
+                                                                                    obj.get_function_name(), type(val))
+        except Exception:
+            traceback.print_exc()
+            raise TestJunkieExecutionError("Encountered error while processing skip condition")
+        return val
+
+    @staticmethod
+    def eval_params(params):
+
+        try:
+            if inspect.isfunction(params):
+                return params()
+            elif inspect.ismethod(params):
+                return getattr(params.__self__, params.__name__)()
+        except Exception:
+            traceback.print_exc()
+            raise TestJunkieExecutionError("Encountered error while processing parameters "
+                                           "passed in via function or unbound method: {}".format(params))
+        return params
 
 
 class SuiteObject:
@@ -63,9 +104,12 @@ class SuiteObject:
 
         return self.__tests
 
+    def get_skip(self):
+        return self.__suite_definition.get("class_skip", False)
+
     def can_skip(self, features=None):
 
-        can_skip = self.__suite_definition.get("class_skip", False)
+        can_skip = _FuncEval.eval_skip(self)
         if features is not None and can_skip is False:
             return not self.get_feature() in features
         return can_skip
@@ -122,15 +166,9 @@ class SuiteObject:
     def get_parameters(self, process_functions=False):
         if process_functions:
             parameters = self.__suite_definition["class_parameters"]
-            try:
-                if inspect.isfunction(parameters):
-                    self.__suite_definition["class_parameters"] = parameters()
-                elif inspect.ismethod(parameters):
-                    self.__suite_definition["class_parameters"] = getattr(parameters.__self__, parameters.__name__)()
-            except Exception:
-                traceback.print_exc()
-                raise TestJunkieExecutionError("Encountered error while processing parameters "
-                                               "passed in via function: {}".format(parameters))
+            eval_result = _FuncEval.eval_params(parameters)
+            if eval_result is not None:
+                self.__suite_definition["class_parameters"] = eval_result
         return self.__suite_definition["class_parameters"]
 
     def get_kwargs(self):
@@ -200,19 +238,11 @@ class TestObject:
 
         self.metrics = TestMetrics()
 
-    def can_skip(self):
-        val = self.get_kwargs().get("skip", False)
-        if inspect.isfunction(val):
-            try:
-                if "meta" in inspect.getargspec(val).args:  # deprecated but supports Python 2
-                    val = val(meta=self.get_meta())
-                else:
-                    val = val()
-                assert isinstance(val, bool), "Function: {} must return a boolean. Got: {}".format(val, type(val))
-            except Exception:
-                traceback.print_exc()
-                raise TestJunkieExecutionError("Encountered error while processing skip condition")
+    def get_skip(self):
         return self.get_kwargs().get("skip", False)
+
+    def can_skip(self):
+        return _FuncEval.eval_skip(self)
 
     def get_owner(self):
 
@@ -225,15 +255,9 @@ class TestObject:
     def get_parameters(self, process_functions=False):
         if process_functions:
             parameters = self.get_kwargs().get("parameters", [None])
-            try:
-                if inspect.isfunction(parameters):
-                    self.get_kwargs()["parameters"] = parameters()
-                elif inspect.ismethod(parameters):
-                    self.get_kwargs()["parameters"] = getattr(parameters.__self__, parameters.__name__)()
-            except Exception:
-                traceback.print_exc()
-                raise TestJunkieExecutionError("Encountered error while processing parameters "
-                                               "passed in via function: {}".format(parameters))
+            eval_result = _FuncEval.eval_params(parameters)
+            if eval_result is not None:
+                self.get_kwargs()["parameters"] = eval_result
         return self.get_kwargs().get("parameters", [None])
 
     def get_retry_limit(self):

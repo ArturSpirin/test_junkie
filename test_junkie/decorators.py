@@ -31,44 +31,56 @@ class test(object):
         return decorated_function
 
 
-def beforeTest(**decorator_kwargs):
-    def decorator(decorated_function):
-        def wrapped_function():
-            Builder.build_suite_definitions(decorated_function=decorated_function,
-                                            decorator_kwargs=decorator_kwargs,
-                                            decorator_type=DecoratorType.BEFORE_TEST)
-        return wrapped_function()
-    return decorator
+class beforeTest(object):
+
+    def __init__(self, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+
+    def __call__(self, decorated_function):
+
+        Builder.build_suite_definitions(decorated_function=decorated_function,
+                                        decorator_kwargs=self.decorator_kwargs,
+                                        decorator_type=DecoratorType.BEFORE_TEST)
+        return decorated_function
 
 
-def beforeClass(**decorator_kwargs):
-    def decorator(decorated_function):
-        def wrapped_function():
-            Builder.build_suite_definitions(decorated_function=decorated_function,
-                                            decorator_kwargs=decorator_kwargs,
-                                            decorator_type=DecoratorType.BEFORE_CLASS)
-        return wrapped_function()
-    return decorator
+class beforeClass(object):
+
+    def __init__(self, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+
+    def __call__(self, decorated_function):
+
+        Builder.build_suite_definitions(decorated_function=decorated_function,
+                                        decorator_kwargs=self.decorator_kwargs,
+                                        decorator_type=DecoratorType.BEFORE_CLASS)
+        return decorated_function
 
 
-def afterTest(**decorator_kwargs):
-    def decorator(decorated_function):
-        def wrapped_function():
-            Builder.build_suite_definitions(decorated_function=decorated_function,
-                                            decorator_kwargs=decorator_kwargs,
-                                            decorator_type=DecoratorType.AFTER_TEST)
-        return wrapped_function()
-    return decorator
+class afterTest(object):
+
+    def __init__(self, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+
+    def __call__(self, decorated_function):
+
+        Builder.build_suite_definitions(decorated_function=decorated_function,
+                                        decorator_kwargs=self.decorator_kwargs,
+                                        decorator_type=DecoratorType.AFTER_TEST)
+        return decorated_function
 
 
-def afterClass(**decorator_kwargs):
-    def decorator(decorated_function):
-        def wrapped_function():
-            Builder.build_suite_definitions(decorated_function=decorated_function,
-                                            decorator_kwargs=decorator_kwargs,
-                                            decorator_type=DecoratorType.AFTER_CLASS)
-        return wrapped_function()
-    return decorator
+class afterClass(object):
+
+    def __init__(self, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+
+    def __call__(self, decorated_function):
+
+        Builder.build_suite_definitions(decorated_function=decorated_function,
+                                        decorator_kwargs=self.decorator_kwargs,
+                                        decorator_type=DecoratorType.AFTER_CLASS)
+        return decorated_function
 
 
 def synchronized(lock=threading.Lock()):

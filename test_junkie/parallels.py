@@ -140,7 +140,7 @@ class ParallelProcessor:
 
         if suite.get_parallel_restrictions():
             for restriction in suite.get_parallel_restrictions():
-                if inspect.isfunction(restriction):
+                if not inspect.isclass(restriction):
                     raise Exception("Parallel suite restrictions must be class objects. "
                                     "Instead suite: {} was restricted by a function: {}"
                                     .format(suite.get_class_object(), restriction))
@@ -203,9 +203,10 @@ class ParallelProcessor:
 
         if test.get_parallel_restrictions():
             for restriction in test.get_parallel_restrictions():
-                if not inspect.isfunction(restriction):
-                    raise Exception("Parallel test restrictions must be function objects."
-                                    .format(test.get_function_object()))
+                if not inspect.isfunction(restriction) and not inspect.ismethod(restriction):
+                    raise Exception("Parallel test restrictions must be function objects. "
+                                    "Instead test: {} was restricted by: {}"
+                                    .format(test.get_function_name(), restriction))
                 _build_reverse_restriction()
                 if not _passes_restriction():
                     return False

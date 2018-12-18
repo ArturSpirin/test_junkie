@@ -1,6 +1,8 @@
+from test_junkie.constants import TestCategory
 from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
 from tests.junkie_suites.BasicSuite import BasicSuite
+from tests.junkie_suites.ParametersSuite import ParametersSuite
 
 runner = Runner(BasicSuite)
 runner.run()
@@ -114,3 +116,14 @@ def test_parameters():
             tested = True
     if not tested:
         raise Exception("Test did not run")
+
+
+def test_parameters_plus_plus():
+    runner = Runner([ParametersSuite])
+    aggregator = runner.run()
+    metrics = aggregator.get_basic_report()
+    assert metrics[TestCategory.SUCCESS] == 36
+    assert metrics[TestCategory.IGNORE] == 4
+    suites = runner.get_executed_suites()
+    metrics = suites[0].metrics.get_metrics()
+    QualityManager.check_class_metrics(metrics, expected_status="fail")
