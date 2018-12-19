@@ -21,6 +21,8 @@ to cater to larger QA teams. It aims to provide simple out of the box test manag
 how the test are performing. Test Junkie's [reporting capabilities](#reporting) will help you make decisions on which 
 tests to optimize so you can test more in less time.
 
+See live demo of [HTML report here](https://test-junkie-demo-report.herokuapp.com/).
+
 _Still in ALFA, documentation may be incomplete and functionality of features is subject to change._
 
 Like this project? Support it by sharing it on your social media or donate through 
@@ -903,6 +905,7 @@ See [Using Runner with Tags](#executing-with-tags) for usage examples.
 
 ### Reporting
 #### Test Junkie's HTML Report
+[Live Demo](https://test-junkie-demo-report.herokuapp.com/)
 
 Test Junkie is tracking a number of metrics during test execution:
 + Absolute KPIs (# of tests executed, % of passed tests, total runtime, average time per test etc)
