@@ -7,8 +7,8 @@ from test_junkie.reporter.reporter_template import ReportTemplate
 class Reporter:
 
     __COLOR_MAPPING = {TestCategory.SUCCESS: "#D6E9C6",
-                       TestCategory.FAIL: "#FAEBCC",
-                       TestCategory.ERROR: "#ebcccc",
+                       TestCategory.FAIL: "#fcd75f",
+                       TestCategory.ERROR: "#ff7651",
                        TestCategory.IGNORE: "#ebd3cc",
                        TestCategory.SKIP: "#cce4eb",
                        TestCategory.CANCEL: "#ebcce9"}
@@ -22,49 +22,57 @@ class Reporter:
         self.owners = aggregator.get_report_by_owner()
         self.runtime = runtime
         self.average_runtime = aggregator.get_average_test_runtime()
-        self.html_template = ReportTemplate.get_html_template()
         self.__processed_resources = {}
 
     def generate_html_report(self, write_file):
 
         def __round(value):
+            from statistics import mean
             if value:
                 return str(float("{0:.2f}".format(float(mean(value)))))
             else:
                 return "0"
 
-        html = copy.deepcopy(self.html_template)
-        html = html.replace("{total_test_executed}", str(self.totals["total"]))
-        html = html.replace("{absolute_passing_rate}", " {:0.2f}"
-                            .format(float(self.totals[TestCategory.SUCCESS]) / float(self.totals["total"]) * 100)
-                            if self.totals[TestCategory.SUCCESS] > 0 else "0")
+        html = copy.deepcopy(ReportTemplate.get_body_template())
+
+        row_one_html = "<div class='row'>"
+        row_two_html = "<div class='row'>"
+
+        tiny = [{"label": "Tests Executed:", "value": str(self.totals["total"])},
+                {"label": "Passing Rate:", "value": "{:0.2f}%".format(float(self.totals[TestCategory.SUCCESS]) /
+                                                                     float(self.totals["total"]) * 100)
+                if self.totals[TestCategory.SUCCESS] > 0 else "0"},
+                {"label": "Runtime:", "value": time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime))},
+                {"label": "Average Test Runtime:", "value": str(time.strftime('%Hh:%Mm:%Ss',
+                                                                              time.gmtime(self.average_runtime)))}]
+        for card in tiny:
+            row_one_html += ReportTemplate.get_tiny_card_template(card["label"], card["value"])
+
+        for resource in [{"key": "cpu", "id": 1}, {"key": "mem", "id": 2}]:
+            if self.monitoring_file is not None:
+                resource_data = self.__get_source_dataset(resource.get("id"))
+                avg, data, labels = "{}%".format(__round(resource_data["samples"])), \
+                                    str(resource_data["data"]), \
+                                    str(resource_data["labels"])
+            else:
+                avg, data, labels = "Unknown", "", ""
+            row_two_html += ReportTemplate.get_resource_chart_template(resource.get("key"), data, labels)
+            row_one_html += ReportTemplate.get_tiny_card_template("Average {}:".format(resource.get("key")), avg)
 
         if self.monitoring_file is not None:
-            from statistics import mean
-            html = html.replace("<span>Resource monitoring disabled</span>", "")
-            for resource in [{"key": "cpu", "id": 1}, {"key": "mem", "id": 2}]:
-                resource_data = self.__get_source_dataset(resource.get("id"))
-                html = html.replace("{{{key}_labels}}".format(key=resource.get("key")),
-                                    str(resource_data["labels"]))
-                html = html.replace("{{{key}_data}}".format(key=resource.get("key")),
-                                    str(resource_data["data"]))
-                html = html.replace("{{average_{key}}}".format(key=resource.get("key")),
-                                    __round(resource_data["samples"]))
-        else:
-            html = html.replace("{average_cpu}", "Unknown ")
-            html = html.replace("{average_mem}", "Unknown ")
+            row_two_html = row_two_html.replace("<span>Resource monitoring disabled</span>", "")
 
-        html = html.replace("{absolute_data}", str(self.__get_absolute_results_dataset()))
+        row_two_html += ReportTemplate.get_absolute_results_template(str(self.__get_absolute_results_dataset()))
+        cards = [{"label": "Feature", "value": self.__get_dataset_per_feature(), "id": "feature"},
+                 {"label": "Tag", "value": self.__get_dataset_per_tag(), "id": "tag"},
+                 {"label": "Owner", "value": self.__get_dataset_per_owner(), "id": "owner"}]
 
-        html = html.replace("{features_data}", str(self.__get_dataset_per_feature()))
-        html = html.replace("{tags_data}", str(self.__get_dataset_per_tag()))
-        html = html.replace("{owners_data}", str(self.__get_dataset_per_owner()))
+        for card in cards:
+            row_two_html += ReportTemplate.get_stacked_bar_results_template(
+                card["id"], str(card["value"]), card["label"])
 
-        runtime = time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime))
-        html = html.replace("{total_runtime}", str(runtime))
-        average_runtime = time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.average_runtime))
-        html = html.replace("{average_test_runtime}", str(average_runtime))
-
+        body = "{}</div>{}</div>".format(row_one_html, row_two_html)
+        html = html.format(body=body)
         with open(write_file, "w+") as output:
             output.write(html)
 
