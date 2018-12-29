@@ -88,19 +88,26 @@ class Builder(object):
     @staticmethod
     def __validation_failed(kwargs, suite=True):
 
+        def validation_failed(actual, expected):
+            if expected == "<type 'function'>":
+                if inspect.isfunction(actual) or inspect.ismethod(actual):
+                    return False
+            else:
+                if inspect.isclass(actual) and issubclass(actual, expected):
+                    return False
+                if type(actual) is expected or isinstance(actual, expected):
+                    return False
+            return True
+
         args = Builder.__SUITE_VALIDATION_ARGS if suite else Builder.__TEST_VALIDATION_ARGS
         for arg, expected_types in args.items():
+            failed = True
             if arg in kwargs:
                 for expected_type in expected_types:
-                    if expected_type == "<type 'function'>":
-                        if inspect.isfunction(kwargs.get(arg)) or inspect.ismethod(kwargs.get(arg)):
-                            return False
-                    else:
-                        if inspect.isclass(kwargs.get(arg)) and issubclass(kwargs.get(arg), expected_type):
-                            return False
-                        if type(kwargs.get(arg)) is expected_type or isinstance(kwargs.get(arg), expected_type):
-                            return False
-                return {"expected": expected_types, "actual": type(kwargs.get(arg)), "arg": arg}
+                    if failed:
+                        failed = validation_failed(kwargs.get(arg), expected_type)
+                if failed:
+                    return {"expected": expected_types, "actual": type(kwargs.get(arg)), "arg": arg}
         return False
 
     @staticmethod

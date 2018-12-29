@@ -55,11 +55,3 @@ class IgnoreSuiteClassic3:
     @test()
     def pass_1(self):
         pass
-
-
-@Suite(listener=TestListener, parameters={1, 2}, retry=2)
-class IgnoreSuiteWrongDatatype:
-
-    @test()
-    def pass_1(self):
-        pass
