@@ -138,9 +138,12 @@ class SuiteObject:
 
         return self.__listener
 
-    def get_meta(self):
+    def get_meta(self, copy_of_meta=False):
 
-        return self.__suite_definition.get("class_meta", {})
+        if copy_of_meta:
+            return copy.deepcopy(self.__suite_definition.get("class_meta", {}))
+        else:
+            return self.__suite_definition.get("class_meta", {})
 
     def get_unsuccessful_tests(self):
 
@@ -296,7 +299,7 @@ class TestObject:
 
         return self.get_kwargs().get("tags", [])
 
-    def get_meta(self, parameter=None, class_parameter=None):
+    def get_meta(self, parameter=None, class_parameter=None, copy_of_meta=False):
 
         string_param = str(parameter)
         string_class_param = str(class_parameter)
@@ -313,8 +316,10 @@ class TestObject:
 
         if string_param not in meta[string_class_param]:
             meta[string_class_param].update({string_param: copy.deepcopy(meta["original"])})
-
-        return meta[string_class_param][string_param]
+        if copy_of_meta:
+            return copy.deepcopy(meta[string_class_param][string_param])
+        else:
+            return meta[string_class_param][string_param]
 
     def get_kwargs(self):
 
