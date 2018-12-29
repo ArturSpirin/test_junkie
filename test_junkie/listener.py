@@ -1,6 +1,6 @@
 
 
-class Listener:
+class Listener(object):
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs

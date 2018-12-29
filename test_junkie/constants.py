@@ -48,3 +48,9 @@ class Event:
     ON_CLASS_IN_PROGRESS = 13
     ON_CLASS_COMPLETE = 14
     ON_CLASS_IGNORE = 15
+
+
+class DocumentationLinks:
+
+    SUITE_DECORATOR = "https://github.com/ArturSpirin/test_junkie#suite"
+    TEST_DECORATOR = "https://github.com/ArturSpirin/test_junkie#test"

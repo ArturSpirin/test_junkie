@@ -1,4 +1,3 @@
-import copy
 import inspect
 import threading
 import time
@@ -383,6 +382,7 @@ class Runner:
         else:
             suite.metrics.update_suite_metrics(status=SuiteCategory.SKIP, start_time=suite_start_time)
             Runner.__process_event(Event.ON_CLASS_SKIP, suite=suite)
+        # TODO add configurable processing for tests when we hit this on_class events
 
     @staticmethod
     def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
