@@ -54,3 +54,9 @@ class DocumentationLinks:
 
     SUITE_DECORATOR = "https://github.com/ArturSpirin/test_junkie#suite"
     TEST_DECORATOR = "https://github.com/ArturSpirin/test_junkie#test"
+    ON_CLASS_IGNORE = "https://github.com/ArturSpirin/test_junkie#on-class-ignore"
+    ON_TEST_IGNORE = "https://github.com/ArturSpirin/test_junkie#on-ignore"
+    PARAMETERIZED_TESTS = "https://github.com/ArturSpirin/test_junkie#parameterized-tests"
+    LISTENERS = "https://github.com/ArturSpirin/test_junkie#test-listeners"
+    TAGS = "https://github.com/ArturSpirin/test_junkie#tags"
+    SPONSOR_PATREON = "https://www.patreon.com/join/arturspirin"

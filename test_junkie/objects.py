@@ -154,6 +154,7 @@ class SuiteObject:
                 for value in metrics.values():
                     if value["status"] in TestCategory.ALL_UN_SUCCESSFUL:
                         unsuccessful_tests.append(test)
+        unsuccessful_tests = list(set(unsuccessful_tests))
         return unsuccessful_tests
 
     def has_unsuccessful_tests(self):

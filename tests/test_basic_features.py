@@ -121,7 +121,7 @@ def test_parameters():
 def test_parameters_plus_plus():
     runner = Runner([ParametersSuite])
     aggregator = runner.run()
-    metrics = aggregator.get_basic_report()
+    metrics = aggregator.get_basic_report()["tests"]
     assert metrics[TestCategory.SUCCESS] == 36
     assert metrics[TestCategory.IGNORE] == 4
     suites = runner.get_executed_suites()

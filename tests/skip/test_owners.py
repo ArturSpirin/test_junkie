@@ -8,7 +8,7 @@ def test_component():
 
     runner = Runner([SkipOwner])
     aggregator = runner.run(owners=["Jane Doe"])
-    metrics = aggregator.get_basic_report()
+    metrics = aggregator.get_basic_report()["tests"]
 
     assert metrics[TestCategory.SUCCESS] == 1
     assert metrics[TestCategory.SKIP] == 2

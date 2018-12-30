@@ -16,18 +16,17 @@
 
 ## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
 
-Test Junkie is advanced test runner for Python. Its highly configurable and feature rich framework designed 
-to cater to larger QA teams. It aims to provide simple out of the box test management solution and give visibility on 
-how the test are performing. Test Junkie's [reporting capabilities](#reporting) will help you make decisions on which 
-tests to optimize so you can test more in less time.
+Test Junkie is advanced test [runner](#runner-object) for Python. Its highly configurable and packed with feature, 
+Designed for large QA teams but because of its flexibility it can adopted by any one with ease. 
+Test Junkie was designed with reporting in mind, and you can see its reporting capabilities just by looking the 
+[demo console output](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/console_out.jpg) 
+or the [demo HTML report](https://goo.gl/F5b1tr)
 
-See live demo of [HTML report here](https://test-junkie-demo-report.herokuapp.com/).
-
-_Still in ALFA, documentation may be incomplete and functionality of features is subject to change._
+_Still in ALFA, documentation may be incomplete and functionality of features is subject to change. 
+If you find bugs, please [report them](#bug-report)._
 
 Like this project? Support it by sharing it on your social media or donate through 
-[PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=FJPYWX5B776YS&currency_code=USD&source=url) 
-or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
+[PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=FJPYWX5B776YS&currency_code=USD&source=url) / back me on [Patreon](https://www.patreon.com/join/arturspirin?).
 
 ## Table of  content
 
@@ -75,6 +74,7 @@ or back me on [Patreon](https://www.patreon.com/join/arturspirin?).
     * [HTML Report](#test-junkies-html-report)
     * [JSON Report](#json-reports)
     * [Jenkins Report](#jenkins-xml-report)
+  * [Runner Object](#runner-object)
 * [Examples](#examples)
   * [Test Suite](#test-suite)
   * [Running Test Suite(s)](#executing-test-suites)
@@ -547,11 +547,9 @@ Exception object will be accessible through this argument.
 
 #### On Ignore
 On ignore event is triggered when a function decorated with [@beforeClass](#beforeclass) 
-produces an exception. In this unfortunate event, all of the tests under that particular test suite will be marked 
-ignored. Make sure to include `exception` argument in the method signature, Exception object will be accessible 
-through this argument. 
+produces an exception or when incorrect arguments are passed to the [@test](#test) decorator. Make sure to include 
+`exception` argument in the method signature, Exception object will be accessible through this argument.
 
-On ignore event can also be triggered when incorrect arguments are passed to the [@test](#test) decorator.
 ```python
 ...
     def on_ignore(self, properties, exception):
@@ -629,8 +627,8 @@ see [Running Test Suite(s)](#executing-test-suites) for more info.
 
 #### On Class Ignore
 On Class Ignore event is triggered when Test Junkie detects bad arguments being used for [@Suite](#suite) properties.
-For example, if you pass in empty parameters list, it does not make sense to run any tests in the suite becuase its 
-it assumed that either the setup functions or the tests rely on those parameters and sense they are empty the test 
+For example, if you pass in empty parameters list, it does not make sense to run any tests in the suite because its 
+assumed that either the setup functions or the tests rely on those parameters and sense they are empty the test 
 scenarios will not be accurate thus Test Junkie will ignore the suite.
 
 Make sure to include `exception` argument in the method signature, Exception object will be 
@@ -864,7 +862,8 @@ To set priority use `priority` property of the [@Suite](#suite) or [@test](#test
 prioritised above those that do not have any priority
 
 ### Features & Components
-Execution of tests can be initiated based on features and/or components, similar to [Tags](#tags). 
+Execution of tests can be [initiated based on features](#run-tests-for-certain-components) and/or components, 
+similar to [Tags](#tags). 
 - Suites can be labeled with a `feature` property
 - Tests can be labeled with a `component` property
 
@@ -985,6 +984,47 @@ test name, this is OK if that test is parameterized. For example, test `a` is pa
     </testsuite>
 </root>
 ```
+### Runner Object
+Runner object is what you will use to run the test suites. At this point Runner is supporting a number of 
+different configurations that it deserves its own section. As shown in the [Examples](#examples) section, in order 
+to run tests, you need to create an instance of the `Runner` and then call `run()` on it. The constructor of the 
+`Runner` accepts the following properties:
++ [Suites](#test-suite): `runner = Runner(suites=[Login, AuthMicroServices, Registration])`, this is the only required property, 
+because Test Junkie needs to know what you want to run. Make sure you are supplying a list of class objects that were 
+decorated with [@Suite](#suite) decorator.
++ Monitor Resources: `runner = Runner(suites=[...], monitor_resources=True)`, this enables Test Junkie to track memory 
+and cpu usage on the machine where and while its running tests (disabled by default). This data can be used 
+by the [HTML Reporting](#test-junkies-html-report).
++ [HTML Report](#test-junkies-html-report): `runner = Runner(suites=[...], html_report="path/to/report.html")`, 
+this enables Test Junkie HTML report. Once the tests complete, Test Junkie will process all of the 
+available data (if you enabled `monitor_resources`, memory and cpu information will be included into the 
+[HTML report](#test-junkies-html-report)) and save the report to the location that you provided.
++ [XML report](#jenkins-xml-report): `runner = Runner(suites=[...], xml_report="path/to/report.xml")`, similar to the HTML report, but 
+instead creates very basic, Jenkins friendly, XML report.   
+
+##### Exposed methods
+[Runner](#runner-object) instance has 3 exposed methods:
++ `run()`: This method is special. Not only, as the name suggests, it initiates the actual test cycle but it, also, 
+allows to define more configurations for running your tests, such as:
+    +  [Features](#features--components): `runner.run(features=["Login"])`, you can tag suites based on features that 
+    they are testing, and you can choose to run tests only for those features.
+    +  [Components](#features--components): `runner.run(components=["2FactorAuth"])`, you can tag tests based on components 
+    of a feature that they are testing, and you can choose to run tests only for those components.
+    +  [Owners](#suite--test-assignees): `runner.run(owners=["John Cena"])`, you can tag tests based on who owns the 
+    feature/component, and you can choose to run tests only that belong to a particular member(s) of your team.
+    +  [Tag Config](#tags): `runner.run(tag_config={"run_on_match_all": ["pre_deploy", "critical"]})`, a single test can 
+    have many tags, you can use `tag_config` to run tests only for the tag or collection of tags that you care about at 
+    the moment. You can also use it in order to skip tests with certain tags.
+    +  [Tests](#run-specific-test-cases): `runner.run(tests=[LoginSuite.positive_login, LoginSuite.negative_login])`, and 
+    of course you can just pass the test objects that you want to run.
+    +  [Suite Multi-threading](#parallel-test-execution): `runner.run(suite_multithreading_limit=5)`, 
+    enables multi-threading for suites.
+    +  [Test Multi-threading](#parallel-test-execution): `runner.run(test_multithreading_limit=5)`, 
+    enables multi-threading for tests.
++ `cancel()`: This will trigger a graceful exit for the currently active test cycle. 
+Read more about it [here](#canceling-test-execution).
++ `get_executed_suites()`: This will return a list of `test_junkie.objects.SuiteObject`s. 
+This `SuiteObject` can be used to analyze anything from test results to performance of tests in great detail.
 
 ## Examples
 ### Test Suite
@@ -1100,7 +1140,7 @@ runner.run(tests=[ExampleSuiteA.test_a, ExampleSuiteB.test_b])
 #### Using Parallel Test Execution
 ```python
 runner = Runner([ExampleTestSuite, ExampleTestSuite2])
-runner.run(suite_multithreading_limit=5, test_multithreading=5)
+runner.run(suite_multithreading_limit=5, test_multithreading_limit=5)
 ```
 
 For more info,  see [Parallel Test/Suite Execution](#parallel-test-execution).

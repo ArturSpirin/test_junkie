@@ -47,7 +47,7 @@ def test_advanced_aggregation_metrics():
 
 
 def test_basic_aggregation_metrics():
-    metrics = runner_metrics.get_basic_report()
+    metrics = runner_metrics.get_basic_report()["tests"]
     assert metrics["total"] == 8
     assert metrics[TestCategory.SUCCESS] == 8
     assert metrics[TestCategory.FAIL] == 0

@@ -3,10 +3,10 @@ import threading
 import time
 import traceback
 import sys
-from test_junkie.constants import SuiteCategory, TestCategory, Event
+from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType, synchronized
-from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
+from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, BadSignature
 from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.parallels import ParallelProcessor
@@ -238,16 +238,9 @@ class Runner:
                 resource_monitor.shutdown()
 
         runtime = time.time() - initial_start_time
-        print("----- done in {} seconds -----".format(runtime))
+        print("========== Test Junkie finished in {:0.2f} seconds ==========".format(runtime))
         aggregator = Aggregator(self.get_executed_suites())
-        report = aggregator.get_basic_report()
-        print("-- {} total tests".format(report["total"]))
-        print("-- {} successful".format(report[TestCategory.SUCCESS]))
-        print("-- {} failed".format(report[TestCategory.FAIL]))
-        print("-- {} errors".format(report[TestCategory.ERROR]))
-        print("-- {} ignored".format(report[TestCategory.IGNORE]))
-        print("-- {} skipped".format(report[TestCategory.SKIP]))
-        print("-- {} canceled".format(report[TestCategory.CANCEL]))
+        Aggregator.present_console_output(aggregator)
         if self.__kwargs.get("html_report", False):
             reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
                                 if resource_monitor is not None else None,
@@ -262,24 +255,27 @@ class Runner:
         parameters = suite.get_parameters(process_functions=True)
         if not parameters or not isinstance(parameters, list):
             if isinstance(parameters, list):
-                error = BadParameters("Empty parameters list in Class: {}".format(suite.get_class_module()))
+                error = BadParameters("Argument: \"parameters\" in @Suite() decorator returned empty: <class 'list'>. "
+                                      "For more info, see this explanation: {}"
+                                      .format(DocumentationLinks.ON_CLASS_IGNORE))
             else:
-                error = BadParameters("Wrong data type used for parameters. Expected: {}. Found: {} in Class: {}"
-                                      .format(list, type(parameters), suite.get_class_module()))
+                error = BadParameters("Argument: \"parameters\" in @Suite() decorator must be of type: <class 'list'> "
+                                      "but found: {}. For more info, see @Suite() decorator documentation: {}"
+                                      .format(type(parameters), DocumentationLinks.SUITE_DECORATOR))
             return error
         return False
 
     @staticmethod
-    def __validate_test_parameters(test, suite):
+    def __validate_test_parameters(test):
         parameters = test.get_parameters(process_functions=True)
         if not parameters or not isinstance(parameters, list):
             if isinstance(parameters, list):
-                error = BadParameters("Empty parameters list in Class: {} {}"
-                                      .format(suite.get_class_module(), "Test: {}()".format(test.get_function_name())))
+                error = BadParameters("Argument: \"parameters\" in @test() decorator returned empty: <class 'list'>. "
+                                      "For more info, see: {}".format(DocumentationLinks.ON_TEST_IGNORE))
             else:
-                error = BadParameters("Wrong data type used for parameters. Expected: {}. Found: {} in "
-                                      "Class: {} Test: {}()".format(list, type(parameters), suite.get_class_module(),
-                                                                    test.get_function_name()))
+                error = BadParameters("Argument: \"parameters\" in @test() decorator must be of type: <class 'list'> "
+                                      "but found: {}. For more info, see @test() decorator documentation: {}"
+                                      .format(type(parameters), DocumentationLinks.TEST_DECORATOR))
             return error
 
     def __run_suite(self, suite):
@@ -322,11 +318,11 @@ class Runner:
                                         ParallelProcessor.wait_for_parallels_to_finish(parallels)
                                     while self.__processor.test_limit_reached(parallels):
                                         time.sleep(1)
-                                    bad_params = Runner.__validate_test_parameters(test, suite)
+                                    bad_params = Runner.__validate_test_parameters(test)
                                     if bad_params is not None:
                                         tests.remove(test)
                                         test.metrics.update_metrics(status=TestCategory.IGNORE,
-                                                                    start_time=test_start_time)
+                                                                    start_time=test_start_time, exception=bad_params)
                                         Runner.__process_event(Event.ON_IGNORE, suite=suite, test=test,
                                                                class_param=class_param, error=bad_params)
                                         continue
@@ -377,12 +373,12 @@ class Runner:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(Event.ON_CLASS_CANCEL, suite=suite)
         elif bad_params:
-            suite.metrics.update_suite_metrics(status=SuiteCategory.IGNORE, start_time=suite_start_time)
+            suite.metrics.update_suite_metrics(status=SuiteCategory.IGNORE, start_time=suite_start_time,
+                                               initiation_error=bad_params)
             Runner.__process_event(Event.ON_CLASS_IGNORE, suite=suite)
         else:
             suite.metrics.update_suite_metrics(status=SuiteCategory.SKIP, start_time=suite_start_time)
             Runner.__process_event(Event.ON_CLASS_SKIP, suite=suite)
-        # TODO add configurable processing for tests when we hit this on_class events
 
     @staticmethod
     def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
@@ -432,9 +428,10 @@ class Runner:
                                         retry_attempt, test.get_retry_limit()))
                 try:
                     if not test.accepts_test_parameters() and parameter is not None:
-                        raise Exception("parameters=[...] property was used on: {}.{} but parameter is not "
-                                        "accepted as part of the function's signature"
-                                        .format(test.get_function_module(), test.get_function_name()))
+                        raise BadSignature("When using \"parameters\" argument for @test() decorator, "
+                                           "you must accept \"parameter\" in the function's signature. "
+                                           "For more info, see documentation: {}"
+                                           .format(DocumentationLinks.PARAMETERIZED_TESTS))
                     suite.get_rules().before_test()
                     Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST, suite=suite,
                                                class_parameter=class_parameter)
@@ -587,8 +584,9 @@ class Runner:
                                 properties=__create_properties())
         except Exception:
             traceback.print_exc()
-            raise TestListenerError("Exception occurred while processing custom event listener with: {}"
-                                    .format(custom_function))
+            raise TestListenerError("Exception occurred while processing custom event listener for function: {}. "
+                                    "For help on defining custom event listeners, see documentation: {}"
+                                    .format(custom_function, DocumentationLinks.LISTENERS))
 
     @staticmethod
     def __runnable_tags(test, run_config):
@@ -627,7 +625,8 @@ class Runner:
                     return True
             except Exception:
                 traceback.print_exc()
-                raise ConfigError("Error occurred while trying to parse `tag_config`")
+                raise ConfigError("Error occurred while trying to parse `tag_config`. For help on defining the config, "
+                                  "see documentation: {}".format(DocumentationLinks.TAGS))
         return True
 
     @staticmethod

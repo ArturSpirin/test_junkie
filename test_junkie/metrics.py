@@ -2,10 +2,11 @@ import multiprocessing
 import os
 import threading
 import time
+import traceback
 from datetime import datetime
 
 from test_junkie.decorators import DecoratorType
-from test_junkie.constants import SuiteCategory, TestCategory
+from test_junkie.constants import SuiteCategory, TestCategory, DocumentationLinks
 
 
 class ClassMetrics:
@@ -23,7 +24,7 @@ class ClassMetrics:
         self.__stats[decorator]["performance"].append(time.time() - start_time)
         self.__stats[decorator]["exceptions"].append(exception)
 
-    def update_suite_metrics(self, status, start_time):
+    def update_suite_metrics(self, status, start_time, initiation_error=None):
 
         self.__stats["status"] = status
         if status not in [SuiteCategory.CANCEL, SuiteCategory.SKIP, SuiteCategory.IGNORE]:
@@ -31,6 +32,8 @@ class ClassMetrics:
         self.__stats["start"] = start_time
         self.__stats["end"] = time.time()
         self.__stats["runtime"] = self.__stats["end"] - self.__stats["start"]
+        if status in [SuiteCategory.IGNORE] and initiation_error is not None:
+            self.__stats.update({"initiation_error": initiation_error})
 
     def get_metrics(self):
 
@@ -78,21 +81,30 @@ class Aggregator:
 
     def get_basic_report(self):
 
-        report = {"total": 0,
-                  TestCategory.SUCCESS: 0,
-                  TestCategory.FAIL: 0,
-                  TestCategory.ERROR: 0,
-                  TestCategory.IGNORE: 0,
-                  TestCategory.SKIP: 0,
-                  TestCategory.CANCEL: 0}
+        def get_template():
+
+            return {"total": 0,
+                    TestCategory.SUCCESS: 0,
+                    TestCategory.FAIL: 0,
+                    TestCategory.ERROR: 0,
+                    TestCategory.IGNORE: 0,
+                    TestCategory.SKIP: 0,
+                    TestCategory.CANCEL: 0}
+
+        report = {"tests": get_template(),
+                  "suites": {}}
 
         for suite in self.__executed_suites:
+            if suite not in report["suites"]:
+                report["suites"].update({suite: get_template()})
             for test in suite.get_test_objects():
                 test_metrics = test.metrics.get_metrics()
                 for class_param, class_param_data in test_metrics.items():
                     for param, param_data in class_param_data.items():
-                        report["total"] += 1
-                        report[param_data["status"]] += 1
+                        report["tests"]["total"] += 1
+                        report["tests"][param_data["status"]] += 1
+                        report["suites"][suite]["total"] += 1
+                        report["suites"][suite][param_data["status"]] += 1
         return report
 
     def get_report_by_features(self):
@@ -181,6 +193,68 @@ class Aggregator:
                     report[category]["_totals_"][data["status"]] += 1
 
         return report
+
+    @staticmethod
+    def present_console_output(aggregator):
+
+        def percentage(total, part):
+            if part > 0:
+                return "{:0.2f}".format(float(part) / float(total) * 100)
+            else:
+                return "0"
+
+        def parse_exception(value):
+            if isinstance(value, Exception):
+                error = ""
+                try:
+                    raise value
+                except:
+                    value = traceback.format_exc()
+                    for line in value.split("\n"):
+                        error += "\n\t\t\t\t\t\t{}".format(line)
+                    return error
+            return value
+
+        report = aggregator.get_basic_report()
+        test_report = report["tests"]
+        suite_report = report["suites"]
+        for status in TestCategory.ALL:
+            print("[{part}/{total} {percent}%] {status}"
+                  .format(part=test_report[status], total=test_report["total"], status=status.upper(),
+                          percent=percentage(test_report["total"], test_report[status])))
+        print()
+        for suite, stats in suite_report.items():
+            status = suite.metrics.get_metrics()["status"]
+            print(">> [{status}] [{passed}/{total} {rate}%] [{runtime:0.2f}s] {module}.{name}"
+                  .format(module=suite.get_class_module(),
+                          name=suite.get_class_name(),
+                          status=status.upper(),
+                          runtime=suite.get_runtime(),
+                          rate=percentage(stats["total"], stats[TestCategory.SUCCESS]),
+                          passed=stats[TestCategory.SUCCESS],
+                          total=stats["total"]))
+            if status == SuiteCategory.IGNORE:
+                print("\t|__ reason: {error}".format(error=suite.metrics.get_metrics()["initiation_error"]))
+            if status != SuiteCategory.SUCCESS:
+                tests = suite.get_unsuccessful_tests()
+                for test in tests:
+                    test_metrics = test.metrics.get_metrics()
+                    print("\t|__ test: {name}()".format(name=test.get_function_name()))
+                    for class_param, class_param_data in test_metrics.items():
+                        if class_param != "None":
+                            print("\t\t|__ class parameter: {class_parameter}".format(class_parameter=class_param))
+                        for param, param_data in class_param_data.items():
+                            if param != "None":
+                                print("\t\t\t|__ parameter: {parameter}".format(parameter=param))
+                            for index in range(param_data["retry"]):
+                                print("\t\t\t\t|__ run #{num} [{status}] [{runtime:0.2f}s] :: Error msg: {exception}"
+                                      .format(num=index + 1, exception=parse_exception(param_data["exceptions"][index]),
+                                              runtime=param_data["performance"][index],
+                                              status=param_data["status"].upper()))
+
+        print("\nHi, I'm Artur, the developer of Test Junkie. If you like this framework, consider backing me: {}"
+              .format(DocumentationLinks.SPONSOR_PATREON))
+        print("============================================================\n\n\n")
 
     @staticmethod
     def get_template():

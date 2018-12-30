@@ -18,7 +18,7 @@ class Reporter:
         self.monitoring_file = monitoring_file
         self.features = aggregator.get_report_by_features()
         self.tags = aggregator.get_report_by_tags()
-        self.totals = aggregator.get_basic_report()
+        self.test_totals = aggregator.get_basic_report()["tests"]
         self.owners = aggregator.get_report_by_owner()
         self.runtime = runtime
         self.average_runtime = aggregator.get_average_test_runtime()
@@ -38,10 +38,10 @@ class Reporter:
         row_one_html = "<div class='row'>"
         row_two_html = "<div class='row'>"
 
-        tiny = [{"label": "Tests Executed:", "value": str(self.totals["total"])},
-                {"label": "Passing Rate:", "value": "{:0.2f}%".format(float(self.totals[TestCategory.SUCCESS]) /
-                                                                     float(self.totals["total"]) * 100)
-                if self.totals[TestCategory.SUCCESS] > 0 else "0"},
+        tiny = [{"label": "Tests Executed:", "value": str(self.test_totals["total"])},
+                {"label": "Passing Rate:", "value": "{:0.2f}%".format(float(self.test_totals[TestCategory.SUCCESS]) /
+                                                                      float(self.test_totals["total"]) * 100)
+                if self.test_totals[TestCategory.SUCCESS] > 0 else "0"},
                 {"label": "Runtime:", "value": time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime))},
                 {"label": "Average Test Runtime:", "value": str(time.strftime('%Hh:%Mm:%Ss',
                                                                               time.gmtime(self.average_runtime)))}]
@@ -138,7 +138,7 @@ class Reporter:
         colors = []
         labels = []
 
-        for status, value in self.totals.items():
+        for status, value in self.test_totals.items():
             if status != "total":
                 labels.append(status)
                 colors.append(Reporter.__COLOR_MAPPING[status])

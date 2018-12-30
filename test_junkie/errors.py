@@ -23,3 +23,9 @@ class BadParameters(TestJunkieExecutionError):
 
     def __init__(self, message):
         TestJunkieExecutionError.__init__(self, message)
+
+
+class BadSignature(Exception):
+
+    def __init__(self, message):
+        Exception.__init__(self, message)
