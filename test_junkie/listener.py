@@ -13,7 +13,7 @@ class Listener(object):
             else:
                 kwargs.get("custom_function")(properties=kwargs.get("properties", None),
                                               exception=kwargs.get("error", None),
-                                              trace=kwargs.get("error", None))
+                                              trace=kwargs.get("trace", None))
 
     def on_cancel(self, **kwargs):
         Listener.__process_event(**kwargs)

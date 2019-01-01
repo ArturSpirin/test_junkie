@@ -474,11 +474,16 @@ seamless integration for reporting, post processing of errors, calculation of te
 artifact collection etc.
 
 Listeners that you want to use are defined at the suite level and are supported by the [@Suite](#suite) decorator. 
-This allows flexibility to support different types of tests without having to add complexity every time 
-you need to support a new type of test.
+This allows flexibility to support different types of tests with appropriate listener object without having to add 
+complexity to one single listener to support all types of tests. 
+For example if you are doing UI testing, you may have a listener that can take screenshots on specific events, 
+but if you are doing API testing, you can use a different listener object which does not have any 
+logic for taking screenshots. This helps to avoid complexity that would otherwise be added by the nested if statements.
 
-In order to create a test listener you need to create a new class and inherit from `TestListener`. 
+In order to create a test listener you need to create a new class and inherit from `Listener`. 
 After that, you can overwrite functions that you wish to support. 
+
+Every function that you override, must take `**kwargs` in its function's signature, take a look at the examples bellow. 
 
 Following test functions can be overwritten: 
 + [On Success](#on-success)
@@ -513,25 +518,26 @@ On success event is triggered after test has successfully executed, that means [
 [@test](#test), and [@afterTest](#aftertest) (if any) decorated functions have ran without producing an exception.
 ```python
 ...
-    def on_success(self, properties):
+    def on_success(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
 #### On Fail
 On failure event is triggered after test has produced `AssertionError`. `AssertionError` must be unhandled and  
 thrown during the code execution in functions decorated with [@beforeTest](#beforetest) (if any), [@test](#test), 
-or [@afterTest](#aftertest) (if any). 
-+ Make sure to include `exception` argument in the method signature, Exception 
-object will be accessible through this argument. 
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+or [@afterTest](#aftertest) (if any).
+
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
 ```python
 ...
-    def on_failure(self, properties, exception, trace):
+    def on_failure(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
@@ -539,31 +545,34 @@ Full traceback as string will be accessible through this argument.
 On error event is triggered after test has produced any exception other than `AssertionError`. Exception must be 
 unhandled and thrown during the code execution in functions decorated with [@beforeTest](#beforetest) (if any), 
 [@test](#test), or [@afterTest](#aftertest) (if any). 
-+ Make sure to include `exception` argument in the method signature, 
-Exception object will be accessible through this argument.
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
 ```python
 ...
-    def on_error(self, properties, exception, trace):
+    def on_error(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
 #### On Ignore
 On ignore event is triggered when a function decorated with [@beforeClass](#beforeclass) 
 produces an exception or when incorrect arguments are passed to the [@test](#test) decorator. 
-+ Make sure to include `exception` argument in the method signature, Exception object will be accessible 
-through this argument.
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+
+
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
 
 ```python
 ...
-    def on_ignore(self, properties, exception, trace):
+    def on_ignore(self, **kwargs):
         # Write your own code here
-        print(properties)
+        print(kwargs)
     ...
 ```
 
@@ -577,9 +586,9 @@ canceled neither, the suites will be "skipped" if you will but [On Class Cancel]
 all of the suites.
 ```python
 ...
-    def on_cancel(self, properties):
+    def on_cancel(self, **kwargs):
         # Write your own code here
-        print(properties)
+        print(kwargs)
     ...
 ```
 
@@ -589,9 +598,9 @@ function decorators. See [Skipping Tests/Suites](#skipping-testssuites) for exam
 Skip event can also be triggered when [Using Runner with tags](#executing-with-tags).
 ```python
 ...
-    def on_skip(self, properties):
+    def on_skip(self, **kwargs):
         # Write your own code here
-        print(properties)
+        print(kwargs)
     ...
 ```
 
@@ -602,9 +611,9 @@ This event can only be fired once per suite, no matter the number of [suite para
 or [suite retries](#retrying-testssuites).
 ```python
 ...
-    def on_class_complete(self, properties):
+    def on_class_complete(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
@@ -613,9 +622,9 @@ On Class Skip event is triggered, when test suites are skipped. Skip is supporte
 function decorators. See [Skipping Tests/Suites](#skipping-testssuites) for examples.
 ```python
 ...
-    def on_class_skip(self, properties):
+    def on_class_skip(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
@@ -628,9 +637,9 @@ see [Running Test Suite(s)](#executing-test-suites) for more info.
 
 ```python
 ...
-    def on_class_cancel(self, properties):
+    def on_class_cancel(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
@@ -640,33 +649,34 @@ For example, if you pass in empty parameters list, it does not make sense to run
 assumed that either the setup functions or the tests rely on those parameters and sense they are empty the test 
 scenarios will not be accurate thus Test Junkie will ignore the suite.
 
-+ Make sure to include `exception` argument in the method signature, Exception object will be 
-accessible through this argument.
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
 
 ```python
 ...
-    def on_class_ignore(self, properties, exception, trace):
+    def on_class_ignore(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
 #### On Before Class Failure
 On Before Class Failure event is triggered only when a function decorated with [@beforeClass](#beforeclass) 
-produces `AssertionError`. 
+produces `AssertionError`. [On Ignore](#on-ignore) will also fire.
 
-+ Make sure to include `exception` argument in the method signature, Exception object will be 
-accessible through this argument. [On Ignore](#on-ignore) will also fire.
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
 
 ```python
 ...
-    def on_before_class_failure(self, properties, exception, trace):
+    def on_before_class_failure(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
@@ -674,15 +684,16 @@ Full traceback as string will be accessible through this argument.
 On Before Class Error event is triggered only when a function decorated with [@beforeClass](#beforeclass) 
 produces exception other than `AssertionError`. [On Ignore](#on-ignore) will also fire.
 
-+ Make sure to include `exception` argument in the method signature, 
-Exception object will be accessible through this argument.
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
+
 ```python
 ...
-    def on_before_class_error(self, properties, exception, trace):
+    def on_before_class_error(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
@@ -691,31 +702,32 @@ Full traceback as string will be accessible through this argument.
 On After Class Failure event is triggered only when a function decorated with [@afterClass](#afterclass) 
 produces `AssertionError`. No test level event listeners will be fired.
 
-+ Make sure to include `exception` argument in the method signature, Exception object will be 
-accessible through this argument.
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
 
 ```python
 ...
-    def on_after_class_failure(self, properties, exception, trace):
+    def on_after_class_failure(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
 #### On After Class Error
 On After Class Error event is triggered only when a function decorated with [@afterClass](#afterclass) 
 produces exception other than `AssertionError`. No test level event listeners will be fired.
-+ Make sure to include `exception` argument in the method signature, 
-Exception object will be accessible through this argument.
-+ Make sure to include `trace` argument in the method signature. 
-Full traceback as string will be accessible through this argument.
+
+Worth noting that this event will provide:
++ `exception` as part of the `kwargs`, this is the actual exception that was thrown during the test. 
++ `trace` as part of the `kwargs`, this is the actual full traceback for the exception 
+(aka `traceback.format_exc()`).
 ```python
 ...
-    def on_after_class_error(self, properties, exception, trace):
+    def on_after_class_error(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 
@@ -726,9 +738,9 @@ This event can only be fired once per suite, no matter the number of [suite para
 or [suite retries](#retrying-testssuites).
 ```python
 ...
-    def on_class_complete(self, properties):
+    def on_class_complete(self, **kwargs):
         # Write your own code here
-        print(properties) 
+        print(kwargs) 
     ...
 ```
 

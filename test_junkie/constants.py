@@ -20,6 +20,15 @@ class SuiteCategory:
     ALL = [SUCCESS, FAIL, SKIP, CANCEL, IGNORE]
     ALL_UN_SUCCESSFUL = [FAIL, IGNORE]
 
+    """
+    This status means something failed outside of Test Junkie,
+    like custom event listener function was missing required arguments in the signature.
+    This status is used as fallback and is not set by Test Junkie during test execution.
+    Tests that error out, suite should be marked with the FAIL status.
+    Thus, this status is not part of the ALL nor ALL_UN_SUCCESSFUL list and should stay that way
+    """
+    ERROR = "error"
+
 
 class DecoratorType:
 

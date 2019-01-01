@@ -226,9 +226,11 @@ class Aggregator:
             print("[{part}/{total} {percent}%] {status}"
                   .format(part=test_report[status], total=test_report["total"], status=status.upper(),
                           percent=percentage(test_report["total"], test_report[status])))
-        print()
+        print("")
         for suite, stats in suite_report.items():
             status = suite.metrics.get_metrics()["status"]
+            if status is None:  # this means that something went wrong with custom event processing
+                status = "*"+SuiteCategory.ERROR
             print(">> [{status}] [{passed}/{total} {rate}%] [{runtime:0.2f}s] {module}.{name}"
                   .format(module=suite.get_class_module(),
                           name=suite.get_class_name(),
