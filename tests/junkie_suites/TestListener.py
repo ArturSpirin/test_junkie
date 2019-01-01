@@ -12,28 +12,28 @@ class TestListener(Listener):
     def on_success(self, properties):
         pass
 
-    def on_failure(self, properties, exception):
+    def on_failure(self, properties, exception, trace):
         pass
 
     def on_skip(self, properties):
         pass
 
-    def on_error(self, properties, exception):
+    def on_error(self, properties, exception, trace):
         pass
 
-    def on_ignore(self, properties, exception):
+    def on_ignore(self, properties, exception, trace):
         pass
 
-    def on_before_class_error(self, properties, exception):
+    def on_before_class_error(self, properties, exception, trace):
         pass
 
-    def on_before_class_failure(self, properties, exception):
+    def on_before_class_failure(self, properties, exception, trace):
         pass
 
-    def on_after_class_error(self, properties, exception):
+    def on_after_class_error(self, properties, exception, trace):
         pass
 
-    def on_after_class_failure(self, properties, exception):
+    def on_after_class_failure(self, properties, exception, trace):
         pass
 
     def on_class_skip(self, properties):

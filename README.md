@@ -16,8 +16,8 @@
 
 ## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
 
-Test Junkie is advanced test [runner](#runner-object) for Python. Its highly configurable and packed with feature, 
-Designed for large QA teams but because of its flexibility it can adopted by any one with ease. 
+Test Junkie is advanced test [runner](#runner-object) for Python. Its highly configurable and packed with features, 
+Designed for large QA teams but because of its flexibility it can be adopted by anyone with ease. 
 Test Junkie was designed with reporting in mind, and you can see its reporting capabilities just by looking the 
 [demo console output](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/console_out.jpg) 
 or the [demo HTML report](https://goo.gl/F5b1tr)
@@ -522,11 +522,14 @@ On success event is triggered after test has successfully executed, that means [
 #### On Fail
 On failure event is triggered after test has produced `AssertionError`. `AssertionError` must be unhandled and  
 thrown during the code execution in functions decorated with [@beforeTest](#beforetest) (if any), [@test](#test), 
-or [@afterTest](#aftertest) (if any). Make sure to include `exception` argument in the method signature, Exception 
-object will be accessible through this argument.
+or [@afterTest](#aftertest) (if any). 
++ Make sure to include `exception` argument in the method signature, Exception 
+object will be accessible through this argument. 
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
 ```python
 ...
-    def on_failure(self, properties, exception):
+    def on_failure(self, properties, exception, trace):
         # Write your own code here
         print(properties) 
     ...
@@ -535,11 +538,14 @@ object will be accessible through this argument.
 #### On Error
 On error event is triggered after test has produced any exception other than `AssertionError`. Exception must be 
 unhandled and thrown during the code execution in functions decorated with [@beforeTest](#beforetest) (if any), 
-[@test](#test), or [@afterTest](#aftertest) (if any). Make sure to include `exception` argument in the method signature, 
+[@test](#test), or [@afterTest](#aftertest) (if any). 
++ Make sure to include `exception` argument in the method signature, 
 Exception object will be accessible through this argument.
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
 ```python
 ...
-    def on_error(self, properties, exception):
+    def on_error(self, properties, exception, trace):
         # Write your own code here
         print(properties) 
     ...
@@ -547,12 +553,15 @@ Exception object will be accessible through this argument.
 
 #### On Ignore
 On ignore event is triggered when a function decorated with [@beforeClass](#beforeclass) 
-produces an exception or when incorrect arguments are passed to the [@test](#test) decorator. Make sure to include 
-`exception` argument in the method signature, Exception object will be accessible through this argument.
+produces an exception or when incorrect arguments are passed to the [@test](#test) decorator. 
++ Make sure to include `exception` argument in the method signature, Exception object will be accessible 
+through this argument.
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
 
 ```python
 ...
-    def on_ignore(self, properties, exception):
+    def on_ignore(self, properties, exception, trace):
         # Write your own code here
         print(properties)
     ...
@@ -631,12 +640,14 @@ For example, if you pass in empty parameters list, it does not make sense to run
 assumed that either the setup functions or the tests rely on those parameters and sense they are empty the test 
 scenarios will not be accurate thus Test Junkie will ignore the suite.
 
-Make sure to include `exception` argument in the method signature, Exception object will be 
++ Make sure to include `exception` argument in the method signature, Exception object will be 
 accessible through this argument.
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
 
 ```python
 ...
-    def on_class_ignore(self, properties, exception):
+    def on_class_ignore(self, properties, exception, trace):
         # Write your own code here
         print(properties) 
     ...
@@ -644,11 +655,16 @@ accessible through this argument.
 
 #### On Before Class Failure
 On Before Class Failure event is triggered only when a function decorated with [@beforeClass](#beforeclass) 
-produces `AssertionError`. Make sure to include `exception` argument in the method signature, Exception object will be 
+produces `AssertionError`. 
+
++ Make sure to include `exception` argument in the method signature, Exception object will be 
 accessible through this argument. [On Ignore](#on-ignore) will also fire.
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
+
 ```python
 ...
-    def on_before_class_failure(self, properties, exception):
+    def on_before_class_failure(self, properties, exception, trace):
         # Write your own code here
         print(properties) 
     ...
@@ -656,11 +672,15 @@ accessible through this argument. [On Ignore](#on-ignore) will also fire.
 
 #### On Before Class Error
 On Before Class Error event is triggered only when a function decorated with [@beforeClass](#beforeclass) 
-produces exception other than `AssertionError`. Make sure to include `exception` argument in the method signature, 
-Exception object will be accessible through this argument. [On Ignore](#on-ignore) will also fire.
+produces exception other than `AssertionError`. [On Ignore](#on-ignore) will also fire.
+
++ Make sure to include `exception` argument in the method signature, 
+Exception object will be accessible through this argument.
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
 ```python
 ...
-    def on_before_class_error(self, properties, exception):
+    def on_before_class_error(self, properties, exception, trace):
         # Write your own code here
         print(properties) 
     ...
@@ -669,11 +689,16 @@ Exception object will be accessible through this argument. [On Ignore](#on-ignor
 
 #### On After Class Failure
 On After Class Failure event is triggered only when a function decorated with [@afterClass](#afterclass) 
-produces `AssertionError`. Make sure to include `exception` argument in the method signature, Exception object will be 
-accessible through this argument. No test level event listeners will be fired.
+produces `AssertionError`. No test level event listeners will be fired.
+
++ Make sure to include `exception` argument in the method signature, Exception object will be 
+accessible through this argument.
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
+
 ```python
 ...
-    def on_after_class_failure(self, properties, exception):
+    def on_after_class_failure(self, properties, exception, trace):
         # Write your own code here
         print(properties) 
     ...
@@ -681,11 +706,14 @@ accessible through this argument. No test level event listeners will be fired.
 
 #### On After Class Error
 On After Class Error event is triggered only when a function decorated with [@afterClass](#afterclass) 
-produces exception other than `AssertionError`. Make sure to include `exception` argument in the method signature, 
-Exception object will be accessible through this argument. No test level event listeners will be fired.
+produces exception other than `AssertionError`. No test level event listeners will be fired.
++ Make sure to include `exception` argument in the method signature, 
+Exception object will be accessible through this argument.
++ Make sure to include `trace` argument in the method signature. 
+Full traceback as string will be accessible through this argument.
 ```python
 ...
-    def on_after_class_error(self, properties, exception):
+    def on_after_class_error(self, properties, exception, trace):
         # Write your own code here
         print(properties) 
     ...

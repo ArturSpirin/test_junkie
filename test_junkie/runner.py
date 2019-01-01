@@ -255,14 +255,13 @@ class Runner:
         parameters = suite.get_parameters(process_functions=True)
         if not parameters or not isinstance(parameters, list):
             if isinstance(parameters, list):
-                error = BadParameters("Argument: \"parameters\" in @Suite() decorator returned empty: <class 'list'>. "
-                                      "For more info, see this explanation: {}"
-                                      .format(DocumentationLinks.ON_CLASS_IGNORE))
+                return BadParameters("Argument: \"parameters\" in @Suite() decorator returned empty: <class 'list'>. "
+                                     "For more info, see this explanation: {}"
+                                     .format(DocumentationLinks.ON_CLASS_IGNORE))
             else:
-                error = BadParameters("Argument: \"parameters\" in @Suite() decorator must be of type: <class 'list'> "
-                                      "but found: {}. For more info, see @Suite() decorator documentation: {}"
-                                      .format(type(parameters), DocumentationLinks.SUITE_DECORATOR))
-            return error
+                return BadParameters("Argument: \"parameters\" in @Suite() decorator must be of type: <class 'list'> "
+                                     "but found: {}. For more info, see @Suite() decorator documentation: {}"
+                                     .format(type(parameters), DocumentationLinks.SUITE_DECORATOR))
         return False
 
     @staticmethod
@@ -270,13 +269,12 @@ class Runner:
         parameters = test.get_parameters(process_functions=True)
         if not parameters or not isinstance(parameters, list):
             if isinstance(parameters, list):
-                error = BadParameters("Argument: \"parameters\" in @test() decorator returned empty: <class 'list'>. "
-                                      "For more info, see: {}".format(DocumentationLinks.ON_TEST_IGNORE))
+                return BadParameters("Argument: \"parameters\" in @test() decorator returned empty: <class 'list'>. "
+                                     "For more info, see: {}".format(DocumentationLinks.ON_TEST_IGNORE))
             else:
-                error = BadParameters("Argument: \"parameters\" in @test() decorator must be of type: <class 'list'> "
-                                      "but found: {}. For more info, see @test() decorator documentation: {}"
-                                      .format(type(parameters), DocumentationLinks.TEST_DECORATOR))
-            return error
+                return BadParameters("Argument: \"parameters\" in @test() decorator must be of type: <class 'list'> "
+                                     "but found: {}. For more info, see @test() decorator documentation: {}"
+                                     .format(type(parameters), DocumentationLinks.TEST_DECORATOR))
 
     def __run_suite(self, suite):
         suite_start_time = time.time()
@@ -361,7 +359,8 @@ class Runner:
                                 else:
                                     tests.remove(test)
                                     test.metrics.update_metrics(status=TestCategory.SKIP, start_time=test_start_time)
-                                    Runner.__process_event(Event.ON_SKIP, suite=suite, test=test, class_param=class_param)
+                                    Runner.__process_event(Event.ON_SKIP, suite=suite, test=test,
+                                                           class_param=class_param)
 
                         ParallelProcessor.wait_for_parallels_to_finish(parallels)
                         Runner.__run_after_class(suite, class_param)
@@ -390,9 +389,11 @@ class Runner:
                                         start_time=test_start_time,
                                         param=parameter,
                                         class_param=class_parameter,
-                                        exception=before_class_error)
-            Runner.__process_event(_event, error=before_class_error, suite=suite, test=test,
-                                   class_param=class_parameter, param=parameter)
+                                        exception=before_class_error["exception"],
+                                        formatted_traceback=before_class_error["traceback"])
+            Runner.__process_event(_event, error=before_class_error["exception"], suite=suite, test=test,
+                                   class_param=class_parameter, param=parameter,
+                                   formatted_traceback=before_class_error["traceback"])
             return
 
         if not test.accepts_suite_parameters():
@@ -446,38 +447,38 @@ class Runner:
                 except Exception as error:
 
                     if not isinstance(error, TestJunkieExecutionError):
+                        trace = traceback.format_exc()
                         traceback.print_exc()
-                        __category = TestCategory.ERROR
-                        __event = Event.ON_ERROR
+                        __category, __event = TestCategory.ERROR, Event.ON_ERROR
                         if isinstance(error, AssertionError):
-                            __category = TestCategory.FAIL
-                            __event = Event.ON_FAILURE
+                            __category, __event = TestCategory.FAIL, Event.ON_FAILURE
                         test.metrics.update_metrics(status=__category,
                                                     start_time=test_start_time,
                                                     param=parameter,
                                                     class_param=class_parameter,
-                                                    exception=error)
+                                                    exception=error,
+                                                    formatted_traceback=trace)
                         Runner.__process_event(__event, suite=suite, test=test, error=error,
-                                               class_param=class_parameter, param=parameter)
+                                               class_param=class_parameter, param=parameter, formatted_traceback=trace)
                     else:
                         raise error
 
     @staticmethod
     def __run_before_class(suite, class_parameter=None):
-        before_class_error = None
         try:
             suite.get_rules().before_class()
             Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_CLASS, suite=suite,
                                        class_parameter=class_parameter)
+            return
         except Exception as error:
+            trace = traceback.format_exc()
             if isinstance(error, AssertionError):
                 Runner.__process_event(Event.ON_BEFORE_CLASS_FAIL, suite=suite, error=error,
-                                       class_param=class_parameter)
+                                       class_param=class_parameter, formatted_traceback=trace)
             else:
                 Runner.__process_event(Event.ON_BEFORE_CLASS_ERROR, suite=suite, error=error,
-                                       class_param=class_parameter)
-            before_class_error = error
-        return before_class_error
+                                       class_param=class_parameter, formatted_traceback=trace)
+            return {"exception": error, "traceback": trace}
 
     @staticmethod
     def __run_after_class(suite, class_parameter=None):
@@ -486,12 +487,13 @@ class Runner:
                                        class_parameter=class_parameter)
             suite.get_rules().after_class()
         except Exception as error:
+            trace = traceback.format_exc()
             if isinstance(error, AssertionError):
                 Runner.__process_event(Event.ON_AFTER_CLASS_FAIL, suite=suite, error=error,
-                                       class_param=class_parameter)
+                                       class_param=class_parameter, formatted_traceback=trace)
             else:
                 Runner.__process_event(Event.ON_AFTER_CLASS_ERROR, suite=suite, error=error,
-                                       class_param=class_parameter)
+                                       class_param=class_parameter, formatted_traceback=trace)
 
     @staticmethod
     # @synchronized(threading.Lock())
@@ -508,7 +510,8 @@ class Runner:
                         func["decorated_function"](suite.get_class_object()())
                     suite.metrics.update_decorator_metrics(decorator_type, start_time)
                 except Exception as error:
-                    suite.metrics.update_decorator_metrics(decorator_type, start_time, error)
+                    trace = traceback.format_exc()
+                    suite.metrics.update_decorator_metrics(decorator_type, start_time, error, trace)
                     raise error
         else:
             if test.accepts_test_and_suite_parameters():
@@ -524,7 +527,7 @@ class Runner:
                                         param=parameter, class_param=class_parameter)
 
     @staticmethod
-    def __process_event(event, suite, test=None, param=None, class_param=None, error=None):
+    def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None):
 
         event_mapping = {Event.ON_SUCCESS: {"custom": suite.get_listener().on_success,
                                             "native": Listener().on_success},
@@ -578,7 +581,8 @@ class Runner:
             if error is not None:
                 native_function(custom_function=custom_function,
                                 properties=__create_properties(),
-                                error=error)
+                                error=error,
+                                trace=formatted_traceback)
             else:
                 native_function(custom_function=custom_function,
                                 properties=__create_properties())

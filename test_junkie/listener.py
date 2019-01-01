@@ -12,7 +12,8 @@ class Listener(object):
                 kwargs.get("custom_function")(properties=kwargs.get("properties"))
             else:
                 kwargs.get("custom_function")(properties=kwargs.get("properties", None),
-                                              exception=kwargs.get("error", None))
+                                              exception=kwargs.get("error", None),
+                                              trace=kwargs.get("error", None))
 
     def on_cancel(self, **kwargs):
         Listener.__process_event(**kwargs)

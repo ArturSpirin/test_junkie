@@ -14,15 +14,16 @@ class ClassMetrics:
     def __init__(self):
 
         self.__stats = {"status": None, "retry": 0, "runtime": 0, "start": None, "end": None,
-                        DecoratorType.BEFORE_CLASS: {"performance": [], "exceptions": []},
-                        DecoratorType.BEFORE_TEST: {"performance": [], "exceptions": []},
-                        DecoratorType.AFTER_TEST: {"performance": [], "exceptions": []},
-                        DecoratorType.AFTER_CLASS: {"performance": [], "exceptions": []}}
+                        DecoratorType.BEFORE_CLASS: {"performance": [], "exceptions": [], "tracebacks": []},
+                        DecoratorType.BEFORE_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
+                        DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
+                        DecoratorType.AFTER_CLASS: {"performance": [], "exceptions": [], "tracebacks": []}}
 
-    def update_decorator_metrics(self, decorator, start_time, exception=None):
+    def update_decorator_metrics(self, decorator, start_time, exception=None, trace=None):
 
         self.__stats[decorator]["performance"].append(time.time() - start_time)
         self.__stats[decorator]["exceptions"].append(exception)
+        self.__stats[decorator]["tracebacks"].append(trace)
 
     def update_suite_metrics(self, status, start_time, initiation_error=None):
 
@@ -46,14 +47,16 @@ class TestMetrics:
 
         self.__stats = {}
 
-    def update_metrics(self, status, start_time, param=None, class_param=None, exception=None):
+    def update_metrics(self, status, start_time, param=None, class_param=None, exception=None,
+                       formatted_traceback=None):
 
         def __get_template():
 
             return {"status": None,
                     "retry": 0,
                     "performance": [],
-                    "exceptions": []}
+                    "exceptions": [],
+                    "tracebacks": []}
 
         string_param = str(param)
         string_class_param = str(class_param)
@@ -63,6 +66,7 @@ class TestMetrics:
             self.__stats[string_class_param].update({string_param: __get_template()})
         self.__stats[string_class_param][string_param]["performance"].append(time.time() - start_time)
         self.__stats[string_class_param][string_param]["exceptions"].append(exception)
+        self.__stats[string_class_param][string_param]["tracebacks"].append(formatted_traceback)
         self.__stats[string_class_param][string_param]["retry"] += 1
         self.__stats[string_class_param][string_param]["status"] = status
         self.__stats[string_class_param][string_param]["param"] = param
@@ -204,16 +208,16 @@ class Aggregator:
                 return "0"
 
         def parse_exception(value):
-            if isinstance(value, Exception):
+            if value is not None:
                 error = ""
-                try:
-                    raise value
-                except:
-                    value = traceback.format_exc()
-                    for line in value.split("\n"):
-                        error += "\n\t\t\t\t\t\t{}".format(line)
-                    return error
-            return value
+                if isinstance(value, Exception):
+                    try:
+                        raise value
+                    except:
+                        value = traceback.format_exc()
+                for line in value.split("\n"):
+                    error += "\n\t\t\t\t\t\t{}".format(line)
+                return error
 
         report = aggregator.get_basic_report()
         test_report = report["tests"]
@@ -247,8 +251,14 @@ class Aggregator:
                             if param != "None":
                                 print("\t\t\t|__ parameter: {parameter}".format(parameter=param))
                             for index in range(param_data["retry"]):
+                                exception = param_data["exceptions"][index]
+                                if len(param_data["tracebacks"]) == index + 1:
+                                    trace = param_data["tracebacks"][index]
+                                    if trace is not None:
+                                        exception = trace
                                 print("\t\t\t\t|__ run #{num} [{status}] [{runtime:0.2f}s] :: Error msg: {exception}"
-                                      .format(num=index + 1, exception=parse_exception(param_data["exceptions"][index]),
+                                      .format(num=index + 1,
+                                              exception=parse_exception(exception),
                                               runtime=param_data["performance"][index],
                                               status=param_data["status"].upper()))
 
