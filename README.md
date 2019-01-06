@@ -16,11 +16,20 @@
 
 ## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
 
-Test Junkie is advanced test [runner](#runner-object) for Python. Its highly configurable and packed with features, 
-Designed for large QA teams but because of its flexibility it can be adopted by anyone with ease. 
-Test Junkie was designed with reporting in mind, and you can see its reporting capabilities just by looking the 
-[demo console output](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/console_out.jpg) 
-or the [demo HTML report](https://goo.gl/F5b1tr)
+Test Junkie is an advanced test [runner](#runner-object) for Python with built in reporting and analytics. 
+Its packed with tons of configurable features.
+
+Test Junkie is for:
++ QA Managers & Project Mangers, the [reports](https://goo.gl/F5b1tr) that Test Junkie generates will be extremely useful at identifying 
+risks and poor performers on your team. This is especially useful if you have a large team.
++ QA engineers,  SDETs, and automation architects! Test Junkie has so much built in that to create a framework with 
+Test Junkie, all you need to do is just create a wrapper that will pass settings and test suites to Test Junkie. 
+You no longer need to worry about third party packages to run parameterized tests or the need to implement threading, 
+its all built in! 
+
+Test Junkie was designed with reporting in mind, and you can see its reporting 
+capabilities just by looking the demo [console output](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/console_out.jpg) 
+or the demo [HTML report](https://goo.gl/F5b1tr)
 
 _Still in ALFA, documentation may be incomplete and functionality of features is subject to change. 
 If you find bugs, please [report them](#bug-report)._
@@ -89,7 +98,8 @@ Like this project? Support it by sharing it on your social media or donate throu
 * [Want more features](https://github.com/ArturSpirin/test_junkie/issues/new?template=enhancement.md)?
 
 ## Installation
-`pip install test_junkie`
++ If you don't have Test Junkie installed: `pip install test_junkie`
++ If you have Test Junkie installed but want to install the latest: `pip install test_junkie --upgrade`
 ##
 ## Features
 ### Decorators
@@ -745,8 +755,12 @@ or [suite retries](#retrying-testssuites).
 ```
 
 ### Meta
-All of the TestListener class instance functions have access to the test's and suite's meta information if such 
-was passed in to the [@Suite](#suite) or [@test](#test) decorator. Metadata can be of any data type. 
+Functions of classes that are assigned as [Listeners](#test-listeners) and inherit from `Listener`, 
+have access to the test's and suite's meta information if such was passed in to the [@Suite](#suite) or [@test](#test) 
+decorator. Metadata can be of any data type and has no effect on how Test Junkie runs the tests. Metadata is 
+simply here for you, so you can associate additional details with the test case and use it in your testing process 
+if necessary. 
+
 You can use meta to set properties such as:
 + Test name, suite name, description, expected results etc - anything that can be useful in reporting
 + Test case IDs - if you have a test management system, leverage it to link test scripts directly 
@@ -754,20 +768,19 @@ to the test cases and further integrations can be implemented from there
 + Bug ticket IDs - if you have a bug tracking system, leverage it to link your test case with issues that are already 
 known and allow you to process failures in a different manner and/or allow for other integrations with the 
 tracking system
-+ Or anything else you may need, metadata has no effect on how Test Junkie runs
 ```python
 from test_junkie.decorators import Suite, test
+from test_junkie.meta import meta
 
 
 @Suite(listener=MyTestListener, 
-       meta={"name": "Your suite name", 
-             "id": 123444})
+       meta=meta(name="Your suite name", id=123444))
 class ExampleSuite:
 
-    @test(meta={"name": "You test name", 
-                "id": 344123, 
-                "known_bugs": [11111, 22222, 33333], 
-                "expected": "Assertion must pass"})
+    @test(meta=meta(name="You test name", 
+                    id=344123, 
+                    known_bugs=[11111, 22222, 33333],
+                    expected="Assertion must pass"))
     def a_test(self):
     
         assert True is True
@@ -783,45 +796,52 @@ class MyTestListener(Listener):
 
         Listener.__init__(self, **kwargs)
 
-    def on_success(self, properties):
+    def on_success(self, **kwargs):
+    
+        class_meta = kwargs.get("properties").get("class_meta")
+        test_meta = kwargs.get("properties").get("test_meta")
         
-        print("Suite name: {name}".format(name=properties["class_meta"]["name"]))
-        print("Suite ID: {id}".format(id=properties["class_meta"]["id"]))
-        print("Test name: {name}".format(name=properties["test_meta"]["name"]))
-        print("Test ID: {id}".format(id=properties["test_meta"]["id"]))
-        print("Expected result: {expected}".format(expected=properties["test_meta"]["expected"]))
-        print("Known bugs: {bugs}".format(bugs=properties["test_meta"]["known_bugs"]))
+        print("Suite name: {name}".format(name=class_meta["name"]))
+        print("Suite ID: {id}".format(id=class_meta["id"]))
+        print("Test name: {name}".format(name=test_meta["name"]))
+        print("Test ID: {id}".format(id=test_meta["id"]))
+        print("Expected result: {expected}".format(expected=test_meta["expected"]))
+        print("Known bugs: {bugs}".format(bugs=test_meta["known_bugs"]))
 ```
 Meta information can be updated and/or added from within your test cases using the `Meta.update()` function.
 Keep in mind, only test level meta can be updated - suite level meta should never change.
-`Meta.update()` takes 2 positional arguments:
+`Meta.update()` takes 3 positional arguments, those arguments are required in order to locate correct TestObject:
+- `self`, the class instance of the current test.
 - `parameter`: (optional) this is the current parameter that the test is running with. 
 If test case is not parameterized, do not pass anything.
 - `suite_parameter`: (optional) this is the current [suite parameter](#parameterized-suites) that the test is running 
 with. If test case is not parameterized with suite level parameters, do not pass anything.
 
-Any other arguments that are passed in to the function, will be pushed to the meta definition.
+Any other arguments that are passed in to the `Meta.update()` function, will be pushed to the test's meta definition 
+and will be available in the [Test Listeners](#test-listeners) as shown in the example above. 
+If you call update on a key that already exists in the meta definition, the value for that key will be overwritten.
 
-All of the meta updates will be available from the [listeners](#test-listeners) just like the rest of the meta 
-definition if such was hard coded within the [@test](#test) decorator.
 ```python
 from test_junkie.decorators import test
 from test_junkie.meta import Meta
 ...
 @test()
 def a_test(self):
+    # this test does not have any parameters, thus you only have to pass self to the Meta.update() function
     ...
     Meta.update(self, name="new test name", expected="updated expectation")
     ...
 
 @test(parameters=[1, 2, 3])
 def b_test(self, parameter):
+    # this test is running with test parameters, thus you have to pass it to the Meta.update() function
     ...
     Meta.update(self, parameter=parameter, name="new test name", expected="updated expectation")
     ...
 
 @test(parameters=[1, 2, 3])
 def c_test(self, parameter, suite_parameter):
+    # this test is running with test and suite parameters, thus you have to pass those to the Meta.update() function
     ...
     Meta.update(self, parameter=parameter, suite_parameter=suite_parameter,
                 name="new test name", expected="updated expectation") 

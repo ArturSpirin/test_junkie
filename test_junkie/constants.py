@@ -69,3 +69,4 @@ class DocumentationLinks:
     LISTENERS = "https://github.com/ArturSpirin/test_junkie#test-listeners"
     TAGS = "https://github.com/ArturSpirin/test_junkie#tags"
     SPONSOR_PATREON = "https://www.patreon.com/join/arturspirin"
+    RUNNER_OBJECT = "https://github.com/ArturSpirin/test_junkie#runner-object"

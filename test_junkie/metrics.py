@@ -83,6 +83,17 @@ class Aggregator:
 
         self.__executed_suites = executed_suites
 
+    @property
+    def executed_suites(self):
+        return self.__executed_suites
+
+    @staticmethod
+    def percentage(total, part):
+        if part > 0:
+            return "{:0.2f}".format(float(part) / float(total) * 100)
+        else:
+            return "0"
+
     def get_basic_report(self):
 
         def get_template():
@@ -159,6 +170,18 @@ class Aggregator:
                     report.update({owner: Aggregator.get_template()})
                 test_metrics = test.metrics.get_metrics()
                 Aggregator._update_report(report, test_metrics, owner)
+        return report
+
+    def get_report_by_suite(self):
+
+        report = {"_totals_": Aggregator.get_template()}
+        for suite in self.__executed_suites:
+            suite_name = suite.get_class_name()
+            for test in suite.get_test_objects():
+                if suite_name not in report:
+                    report.update({suite_name: Aggregator.get_template()})
+                test_metrics = test.metrics.get_metrics()
+                Aggregator._update_report(report, test_metrics, suite_name)
         return report
 
     @staticmethod
