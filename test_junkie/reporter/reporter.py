@@ -56,44 +56,34 @@ class Reporter:
         for card in tiny:
             row_one_html += ReportTemplate.get_tiny_card_template(card["label"], card["value"])
 
-        row_two_html += ReportTemplate.get_health_of_features(self.__get_health_of_features_v2())
-        absolute_metrics = self.__get_absolute_results_dataset_v2()
+        row_two_html += ReportTemplate.get_health_of_features(self.__get_health_of_features())
+        absolute_metrics = self.__get_absolute_results_dataset()
         row_two_html += ReportTemplate.get_absolute_results_template(absolute_metrics["data"],
                                                                      absolute_metrics["colors"])
         row_two_html += ReportTemplate.get_suggestions(None)
 
         resource_data = None
         if self.monitoring_file is not None:
-            resource_data = self.__process_resource_data_v2()
+            resource_data = self.__get_resources_data()
         row_two_html += ReportTemplate.get_resource_chart_template(resource_data)
         row_one_html += ReportTemplate.get_tiny_card_template("Average CPU:", "{}%".format(self.__cpu_average))
         row_one_html += ReportTemplate.get_tiny_card_template("Average Mem:", "{}%".format(self.__mem_average))
 
         row_two_html += ReportTemplate.get_stacked_bar_results_template(
-            features_data=self.__get_features_data_v2(),
-            components_data=self.__get_components_data_v2(),
-            team_data=self.__get_owner_data_v2(),
-            suites_data=self.__get_suites_data_v2(),
-            tags_data=self.__get_tags_data_v2())
+            features_data=self.__get_features_data(),
+            components_data=self.__get_components_data(),
+            team_data=self.__get_owner_data(),
+            suites_data=self.__get_suites_data(),
+            tags_data=self.__get_tags_data())
 
-        row_two_html += ReportTemplate.get_table(self.get_table_data_v2())
+        row_two_html += ReportTemplate.get_table(self.__get_table_data())
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
         html = html.format(body=body)
         with open(write_file, "w+") as output:
             output.write(html)
 
-    @staticmethod
-    def __get_template():
-
-        return {TestCategory.SUCCESS: {"values": []},
-                TestCategory.FAIL: {"values": []},
-                TestCategory.ERROR: {"values": []},
-                TestCategory.IGNORE: {"values": []},
-                TestCategory.SKIP: {"values": []},
-                TestCategory.CANCEL: {"values": []}}
-
-    def __process_resource_data_v2(self):
+    def __get_resources_data(self):
 
         data = []
         cpu_samples = []
@@ -110,7 +100,7 @@ class Reporter:
         self.__mem_average = Reporter.round(mem_samples)
         return data
 
-    def __get_absolute_results_dataset_v2(self):
+    def __get_absolute_results_dataset(self):
 
         data = []
         colors = []
@@ -121,7 +111,7 @@ class Reporter:
 
         return {"data": data, "colors": colors}
 
-    def __get_health_of_features_v2(self):
+    def __get_health_of_features(self):
 
         data = []
         for feature, components in self.features.items():
@@ -130,7 +120,7 @@ class Reporter:
                                                         components["_totals_"][TestCategory.SUCCESS])})
         return data
 
-    def __get_features_data_v2(self):  # for the stacked bar
+    def __get_features_data(self):  # for the stacked bar
         data = []
         for feature, components in self.features.items():
             data_point = {"duration": Reporter.round(components["_totals_"]["performance"]),
@@ -140,7 +130,7 @@ class Reporter:
             data.append(data_point)
         return data
 
-    def __get_components_data_v2(self):  # for the stacked bar
+    def __get_components_data(self):  # for the stacked bar
         data = []
         not_defined = {"measure": "Not Defined", "duration": []}
         for feature, components in self.features.items():
@@ -163,7 +153,7 @@ class Reporter:
             data.append(not_defined)
         return data
 
-    def __get_owner_data_v2(self):  # for the stacked bar
+    def __get_owner_data(self):  # for the stacked bar
         data = []
         for owner, metrics in self.owners.items():
             if owner != "_totals_":
@@ -174,7 +164,7 @@ class Reporter:
                 data.append(data_point)
         return data
 
-    def __get_tags_data_v2(self):  # for the stacked bar
+    def __get_tags_data(self):  # for the stacked bar
         data = []
         for tag, metrics in self.tags.items():
             data_point = {"duration": Reporter.round(metrics["performance"]),
@@ -184,7 +174,7 @@ class Reporter:
             data.append(data_point)
         return data
 
-    def __get_suites_data_v2(self):  # for the stacked bar
+    def __get_suites_data(self):  # for the stacked bar
         data = []
         for suite, metrics in self.suites.items():
             if suite != "_totals_":
@@ -195,7 +185,9 @@ class Reporter:
                 data.append(data_point)
         return data
 
-    def get_table_data_v2(self):  # for data table
+    def __get_table_data(self):  # for data table
+        status_priority = [TestCategory.CANCEL, TestCategory.IGNORE, TestCategory.ERROR,
+                           TestCategory.FAIL, TestCategory.SKIP, TestCategory.SUCCESS]
         data = []
         executed_suites = self.aggregator.executed_suites
         for suite in executed_suites:
@@ -209,6 +201,7 @@ class Reporter:
                 feature = "Not Defined" if feature is None else feature
                 test_name = test.get_function_name()
                 suite_name = suite.get_class_name()
+                status = "unknown"  # Should never happen
                 for class_param, class_param_data in test_metrics.items():
                     for param, param_data in class_param_data.items():
                         duration += param_data["performance"]
@@ -217,21 +210,10 @@ class Reporter:
                 set(statuses)
                 if len(statuses) == 1:
                     status = statuses[0]
-                else:
-                    if len(statuses) == 1:
-                        status = statuses[0]
-                    elif TestCategory.CANCEL in statuses:
-                        status = TestCategory.CANCEL
-                    elif TestCategory.IGNORE in statuses:
-                        status = TestCategory.IGNORE
-                    elif TestCategory.ERROR in statuses:
-                        status = TestCategory.ERROR
-                    elif TestCategory.FAIL in statuses:
-                        status = TestCategory.FAIL
-                    elif TestCategory.SKIP in statuses:
-                        status = TestCategory.SKIP
-                    else:
-                        status = TestCategory.SUCCESS
+                else:  # tests are parameterized but table will show only parent test, thus have to give priority to one
+                    for preferred_status in status_priority:
+                        if preferred_status in statuses:
+                            status = preferred_status
                 data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
                              "duration": duration, "status": status})
         return data

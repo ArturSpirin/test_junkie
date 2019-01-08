@@ -252,6 +252,7 @@ class ReportTemplate:
         :return: STRING, HTML for the CPU & MEM chart
         """
         doc_link = "<span>Resource monitoring disabled. See <a href=\"{link}\">documentation</a> to enabled it.</span>"
+        data = [] if data is None else data
 
         def css():
 
@@ -279,11 +280,7 @@ class ReportTemplate:
                         
                         // format data
                         var data = {data};
-                        for(dict in data){
-                            console.log(data[dict].date)
-                            data[dict].date = new Date(data[dict].date)
-                            console.log(data[dict].date)
-                        }
+                        for(dict in data) data[dict].date = new Date(data[dict].date)
                         
                         chart.data = data;
     
@@ -464,6 +461,8 @@ class ReportTemplate:
                         var categoryAxis_{chart_id} = chart_{chart_id}.xAxes.push(new am4charts.CategoryAxis());
                         categoryAxis_{chart_id}.dataFields.category = "measure";
                         categoryAxis_{chart_id}.renderer.grid.template.location = 0;
+                        categoryAxis_{chart_id}.renderer.labels.template.wrap = true;
+                        categoryAxis_{chart_id}.renderer.labels.template.maxWidth = 120;
                         
                         var valueAxis_{chart_id} = chart_{chart_id}.yAxes.push(new am4charts.ValueAxis());
                         valueAxis_{chart_id}.renderer.inside = true;
@@ -519,16 +518,17 @@ class ReportTemplate:
                         durationSeries_{chart_id}.tooltip.background.fill = am4core.color("#03a2cd");
                         durationSeries_{chart_id}.tooltipText = "{valueY.formatDuration()}";
                         
+                        var bullet_{chart_id} = durationSeries_{chart_id}.bullets.push(new am4charts.Bullet());
+                        var circle_{chart_id} = bullet_{chart_id}.createChild(am4core.Circle);
+                        circle_{chart_id}.radius = 4;
+                        circle_{chart_id}.fill = am4core.color("#fff");
+                        circle_{chart_id}.strokeWidth = 3;
+                        
                         // Legend
                         chart_{chart_id}.legend = new am4charts.Legend();
                         
                         // Add cursor
                         chart_{chart_id}.cursor = new am4charts.XYCursor();
-                        chart_{chart_id}.cursor.fullWidthLineX = true;
-                        chart_{chart_id}.cursor.xAxis = valueAxis_{chart_id};
-                        chart_{chart_id}.cursor.lineX.strokeOpacity = 0;
-                        chart_{chart_id}.cursor.lineX.fill = am4core.color("#000");
-                        chart_{chart_id}.cursor.lineX.fillOpacity = 0.1;
                     });
                    </script>
                    """.replace("{data}", str(chart_data))\
