@@ -82,10 +82,12 @@ Like this project? Support it by sharing it on your social media or donate throu
   * [Reporting](#reporting)
     * [HTML Report](#test-junkies-html-report)
     * [JSON Report](#json-reports)
-    * [Jenkins Report](#jenkins-xml-report)
+    * [XML / Jenkins Report](#jenkins-xml-report)
   * [Runner Object](#runner-object)
 * [Examples](#examples)
   * [Test Suite](#test-suite)
+    * [Classic Test Suite Example](#classic-test-suite-example)
+    * [Advanced Test Suite Example](#advanced-test-suite-example)
   * [Running Test Suite(s)](#executing-test-suites)
     * [Run regression on a specific feature](#run-tests-for-certain-features)
     * [Run regression on a specific component](#run-tests-for-certain-components)
@@ -189,6 +191,10 @@ def b_test():
 + [Component](#features--components): `@test(component="Authentication")`
 + [Owner](#suite--test-assignees): `@test(owner="John Doe")`
 + [Tags](#tags): `@test(tags=["critical", "pre-deploy", "post-deploy"])`
++ [Skip Before Test](#beforetest): `@test(skip_before_test=True)`
++ [Skip Before Test Rule](#rules): `@test(skip_before_test_rule=True)`
++ [Skip After Test](#aftertest): `@test(skip_after_test=True)`
++ [Skip After Test Rule](#rules): `@test(skip_after_test_rule=True)`
 
 #### @afterTest
 This decorator will de-prioritize execution of a decorated function for the end of each test case in the suite.
@@ -1088,58 +1094,186 @@ This `SuiteObject` can be used to analyze anything from test results to performa
 
 ## Examples
 ### Test Suite
+
+#### Classic Test Suite Example
+This snippet shows how to create and run a simple test suite: 
 ```python
-from random import randint
-from test_junkie.decorators import test, Suite, beforeTest, beforeClass, afterTest, afterClass
-from test_junkie.meta import meta
-from example_package.example_listener import ExampleListener
+from test_junkie.decorators import Suite, beforeTest, afterTest, test, beforeClass, afterClass
+from test_junkie.runner import Runner
 
-# Listener here is optional as all of the other parameters
-@Suite(listener=ExampleListener, retry=2, 
-       meta=meta(suite_name="Demo Suite"))
-class ExampleTestSuite(object):
-
+@Suite()
+class ExampleTestSuite:
+    # functions are not restricted to any naming convention
+    
     @beforeClass()
-    def before_class(self):  # Functions are not restricted to any naming conventions
-        print("BEFORE CLASS!")
-        
+    def before_class(self):
+        pass
+
     @beforeTest()
     def before_test(self):
-        print("BEFORE TEST!")
+        pass
 
     @afterTest()
     def after_test(self):
-        print("AFTER TEST!")
+        pass
 
     @afterClass()
     def after_class(self):
-        print("AFTER CLASS!")
+        pass
+
+    @test()
+    def something_to_test1(self):
+        pass
+
+    @test()
+    def something_to_test2(self):
+        pass
+
+    @test()
+    def something_to_test3(self):
+        pass
+        
+
+# and to run this marvel, all you need to do . . .
+if "__main__" == __name__:
+    runner = Runner([ExampleTestSuite])
+    runner.run()
+```
+
+#### Advanced Test Suite Example
+Following snippets show how to leverage decorator options in order to optimize the execution of your tests.
+
+```python
+from test_junkie.decorators import Suite, test, afterTest, beforeTest, beforeClass, afterClass
+from test_junkie.meta import meta, Meta
+
+
+@Suite(parameters=[{"login": "mike@example.com", "password": "example", "admin": True},
+                   {"login": "sally@example.com", "password": "example", "admin": False}])
+class LoginSuite:
+
+    # Test Junkie does not run parameterized suites of the same class in parallel, thus using class variables is safe
+    __CREDENTIALS = None 
+        
+    @beforeClass()
+    def before_class(self, suite_parameter):  # yes, we just parameterized this function, seen that anywhere else?
+        # Lets assume we have some code here to login with
+        # username . . . suite_parameter["login"]
+        # password . . . suite_parameter["password"]
+        # This is our, hypothetical, pre-requirement before we run the tests
+        # If this step were to fail, the tests would have been ignored
+        LoginSuite.__CREDENTIALS = suite_parameter  # so our tests can know what parameters we are working with
+
+    @afterClass()
+    def after_class(self):
+        # Here, generally, we would have clean up logic.
+        # For the sake of this example, lets assume we logout 
+        # from the account that we logged into during @beforeTest()
+        pass
+
+    @test(parameters=["page_url_1", "page_url_2", "page_url_3"])
+    def validate_user_login_in_header(self, parameter):
+        # Lets assume that in this test case we are going to be validating
+        # the header. We need to make sure that email that user logged in with
+        # is displayed on every page so we will make this test parameterized.
+         
+        # By doing so we will know exactly which pages pass/fail without 
+        # writing any extra logic in the test itself to log all the failures 
+        # and complete testing all the pages which would be required if you 
+        # were to use a loop inside the test case for instance. 
+        
+        # Now we would use something like Webdriver to open the parameter in order to land on the page
+        # and assert that LoginSuite.__CREDENTIALS["username"] in the expected place
+        pass
+
+    @test(parameters=["admin_page_url_1", "admin_page_url_2"])
+    def validate_access_rights(self, parameter):
+        # Similar to the above test case, but instead we are validating 
+        # access right privileges for different user groups. 
+        # Using same principal with the parameterized test approach.
+        
+        # Now we would also use Webdriver to open the parameter in order to land on the page 
+        # and assert that the page is accessible if LoginSuite.__CREDENTIALS["admin"] is True
+        
+
+@Suite(pr=[LoginSuite],
+       parameters=[{"login": "mike@example.com", "password": "example", "user_id": 1},
+                   {"login": "sally@example.com", "password": "example", "user_id": 2}])
+class EditAccountCredentialsSuite:
+    """
+    It is risky to run this suite with the LoginSuite above because if 
+    the suites happen to run in parallel and credentials get updated 
+    it can cause the LoginSuite to fail during the login process.
     
-    # meta function is used for metadata, slightly cleaner then using a dict
-    # all parameters are optional
-    @test(parameters=[1, 2, 3, 4, 5], retry=2,
-          meta=meta(name="Test 'A'",
-                    test_id=344941,
-                    known_bugs=[],
-                    expected="Assertion must pass"), 
-          tags=["component_a", "critical"])
-    def a_test(self, parameter):  # Functions are not restricted to any naming conventions
-        print("TEST 'A', param: ", parameter)
-        assert randint(1, 5) == parameter, "your error message"
+    Therefore, we are going to restrict this suite using the `pr` property, this will insure that
+    LoginSuite and EditAccountCredentialsSuite will never run in parallel thus removing any risk 
+    when you run Test Junkie in multi-threaded mode.
+    """
+        
+    @test(priority=1, retry=2)  # this test, in case of failure, will be retried twice
+    def reset_password(self, suite_parameter):  # this test is now parameterised with parameters from the suite
+        # Lets assume in this test we will be resetting password of the
+        # username . . . suite_parameter["login"]
+        # and then validate that the hash value gets updated in the database
+        
+        # We will need to know login when submitting the passowrd reset request, thus we need to make sure that 
+        # we don't run this test in parallel with edit_login() test bellow. 
+        # We will use decorator properties to prioritize this test over anything else in this suite
+        # which means it will get kicked off first and then we will disable parallelized mode for the
+        # edit_login() test so it will have to wait for this test to finish.
+        pass
+        
+    @test(parallelized=False, meta=meta(expected="Able to change account login"))
+    def edit_login(self, suite_parameter):
+        # Lets assume in this test we will be changing login for . . . suite_parameter["login"]
+        # with the current number of tests and settings, this test will run last
+        
+        Meta.update(self, suite_parameter=suite_parameter, name="Edit Login: {}".format(suite_parameter["login"]))
+        # Making this call, gives you option to update meta from within the test case
+        # make sure, when making this call, you did not override suite_parameter with a different value
+        # or update any of its content
+        
+    @afterClass()
+    def after_class(self, suite_parameter):
+        # Will reset everything back to default values for the
+        # user . . . suite_parameter["user_id"]
+        # and we know the original value based on suite_parameter["login"]
+        # This will insure other suites that are using same credentials, wont be at risk
+        pass
 
-    # regular dict is used for metadata
-    @test(meta={"name": "Test 'B'",
-                "test_id": 344123,
-                "known_bugs": [11111, 22222, 33333],
-                "expected": "Assertion must pass"},
-          tags=["component_a", "trivial", "known_failure"])
-    def b_test(self):
-        print("TEST 'B'")
-        assert True is True
 
-    @test(skip=True)
-    def c_test(self):
-        print("TEST 'C'")
+@Suite(listener=MyTestListener,  # This will assign a dedicated listener that you created
+       retry=2,  # Suite will run up to 2 times but only for tests that did not pass
+       owner="Chuck Norris",  # defined the owner of this suite, has effects on the reporting
+       feature="Analytics",  # defines a feature that is being tested by the tests in this suite, 
+                             # has effects on the reporting and can be used by the Runner 
+                             # to run regression only for this feature
+       meta=meta(name="Example",  # sets meta, most usable for custom reporting, accessible in MyTestListener
+                 known_failures_ticket_ids=[1, 2, 3]))  # can use to reference bug tickets for instance in your reporting
+class ExampleTestSuite:
+        
+    @beforeTest()
+    def before_test(self):
+        pass
+
+    @afterTest()
+    def after_test(self):
+        pass
+    
+    @test(component="Datatable",  # defines the component that this test is validating, 
+                                  # has effects on the reporting and can be used by the Runner 
+                                  # to run regression only for this component 
+          tags=["table", "critical", "ui"],  # defines tags that this test is validating, 
+                                             # has effects on the reporting and can be used by the Runner 
+                                             # to run regression only for specific tags
+          )
+    def something_to_test1(self, parameter):
+        pass
+
+    @test(skip_before_test=True,  # if you don't want to run before_test for s specific test in the suite, no problem
+          skip_after_test=True)  # also no problem, you are welcome!
+    def something_to_test2(self):
+        pass
 ```
 
 ### Executing Test Suites

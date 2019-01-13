@@ -214,6 +214,7 @@ class Reporter:
                     for preferred_status in status_priority:
                         if preferred_status in statuses:
                             status = preferred_status
+                            break
                 data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
                              "duration": duration, "status": status})
         return data

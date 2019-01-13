@@ -45,9 +45,9 @@ def test_class_stats():
                                        expected_beforetest_exception_object=None,
                                        expected_beforetest_performance_count=29,
 
-                                       expected_aftertest_exception_count=13,
+                                       expected_aftertest_exception_count=29,
                                        expected_aftertest_exception_object=None,
-                                       expected_aftertest_performance_count=13)
+                                       expected_aftertest_performance_count=29)
 
 
 def test_no_retry():

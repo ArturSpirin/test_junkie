@@ -260,6 +260,18 @@ class TestObject:
     def can_skip(self):
         return _FuncEval.eval_skip(self)
 
+    def skip_before_test_rule(self):
+        return self.get_kwargs().get("skip_before_test_rule", False)
+
+    def skip_before_test(self):
+        return self.get_kwargs().get("skip_before_test", False)
+
+    def skip_after_test_rule(self):
+        return self.get_kwargs().get("skip_after_test_rule", False)
+
+    def skip_after_test(self):
+        return self.get_kwargs().get("skip_after_test", False)
+
     def get_owner(self):
 
         return self.get_kwargs().get("owner", None)

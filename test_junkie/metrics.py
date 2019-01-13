@@ -48,7 +48,7 @@ class TestMetrics:
         self.__stats = {}
 
     def update_metrics(self, status, start_time, param=None, class_param=None, exception=None,
-                       formatted_traceback=None):
+                       formatted_traceback=None, runtime=None, decorator=None):
 
         def __get_template():
 
@@ -56,21 +56,28 @@ class TestMetrics:
                     "retry": 0,
                     "performance": [],
                     "exceptions": [],
-                    "tracebacks": []}
-
+                    "tracebacks": [],
+                    DecoratorType.BEFORE_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
+                    DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []}}
+        runtime = runtime if runtime is not None else time.time() - start_time
         string_param = str(param)
         string_class_param = str(class_param)
         if string_class_param not in self.__stats:
             self.__stats.update({string_class_param: {string_param: __get_template()}})
         elif string_param not in self.__stats[string_class_param]:
             self.__stats[string_class_param].update({string_param: __get_template()})
-        self.__stats[string_class_param][string_param]["performance"].append(time.time() - start_time)
-        self.__stats[string_class_param][string_param]["exceptions"].append(exception)
-        self.__stats[string_class_param][string_param]["tracebacks"].append(formatted_traceback)
-        self.__stats[string_class_param][string_param]["retry"] += 1
-        self.__stats[string_class_param][string_param]["status"] = status
-        self.__stats[string_class_param][string_param]["param"] = param
-        self.__stats[string_class_param][string_param]["class_param"] = class_param
+        if decorator is not None:
+            self.__stats[string_class_param][string_param][decorator]["performance"].append(time.time() - start_time)
+            self.__stats[string_class_param][string_param][decorator]["exceptions"].append(exception)
+            self.__stats[string_class_param][string_param][decorator]["tracebacks"].append(formatted_traceback)
+        else:
+            self.__stats[string_class_param][string_param]["performance"].append(runtime)
+            self.__stats[string_class_param][string_param]["exceptions"].append(exception)
+            self.__stats[string_class_param][string_param]["tracebacks"].append(formatted_traceback)
+            self.__stats[string_class_param][string_param]["retry"] += 1
+            self.__stats[string_class_param][string_param]["status"] = status
+            self.__stats[string_class_param][string_param]["param"] = param
+            self.__stats[string_class_param][string_param]["class_param"] = class_param
 
     def get_metrics(self):
 
@@ -281,7 +288,7 @@ class Aggregator:
                                     trace = param_data["tracebacks"][index]
                                     if trace is not None:
                                         exception = trace
-                                print("\t\t\t\t|__ run #{num} [{status}] [{runtime:0.2f}s] :: Error msg: {exception}"
+                                print("\t\t\t\t|__ run #{num} [{status}] [{runtime:0.2f}s] :: Traceback: {exception}"
                                       .format(num=index + 1,
                                               exception=parse_exception(exception),
                                               runtime=param_data["performance"][index],

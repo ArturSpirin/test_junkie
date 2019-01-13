@@ -281,7 +281,7 @@ class Runner:
         unsuccessful_tests = None
         bad_params = Runner.__validate_suite_parameters(suite)
         if not suite.can_skip(self.__run_config.get("features", None)) and not self.__cancel and not bad_params:
-            Runner.__process_event(Event.ON_CLASS_IN_PROGRESS, suite=suite)
+            Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
 
@@ -321,7 +321,7 @@ class Runner:
                                         tests.remove(test)
                                         test.metrics.update_metrics(status=TestCategory.IGNORE,
                                                                     start_time=test_start_time, exception=bad_params)
-                                        Runner.__process_event(Event.ON_IGNORE, suite=suite, test=test,
+                                        Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test,
                                                                class_param=class_param, error=bad_params)
                                         continue
                                     for param in test.get_parameters(process_functions=True):
@@ -359,7 +359,7 @@ class Runner:
                                 else:
                                     tests.remove(test)
                                     test.metrics.update_metrics(status=TestCategory.SKIP, start_time=test_start_time)
-                                    Runner.__process_event(Event.ON_SKIP, suite=suite, test=test,
+                                    Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
                                                            class_param=class_param)
 
                         ParallelProcessor.wait_for_parallels_to_finish(parallels)
@@ -367,20 +367,65 @@ class Runner:
                     suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
                                                        start_time=suite_start_time)
-            Runner.__process_event(Event.ON_CLASS_COMPLETE, suite=suite)
+            Runner.__process_event(event=Event.ON_CLASS_COMPLETE, suite=suite)
         elif self.__cancel:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
-            Runner.__process_event(Event.ON_CLASS_CANCEL, suite=suite)
+            Runner.__process_event(event=Event.ON_CLASS_CANCEL, suite=suite)
         elif bad_params:
             suite.metrics.update_suite_metrics(status=SuiteCategory.IGNORE, start_time=suite_start_time,
                                                initiation_error=bad_params)
-            Runner.__process_event(Event.ON_CLASS_IGNORE, suite=suite)
+            Runner.__process_event(event=Event.ON_CLASS_IGNORE, suite=suite)
         else:
             suite.metrics.update_suite_metrics(status=SuiteCategory.SKIP, start_time=suite_start_time)
-            Runner.__process_event(Event.ON_CLASS_SKIP, suite=suite)
+            Runner.__process_event(event=Event.ON_CLASS_SKIP, suite=suite)
 
     @staticmethod
     def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
+
+        def run_before_test():
+            try:
+                if not test.skip_before_test_rule():
+                    suite.get_rules().before_test()
+                if not test.skip_before_test():
+                    Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST, suite=suite,
+                                               class_parameter=class_parameter, test=test, parameter=parameter)
+                return True
+            except Exception as before_test_error:
+                process_failure(before_test_error)
+                return False
+
+        def process_failure(error):
+            if not isinstance(error, TestJunkieExecutionError):
+                trace = traceback.format_exc()
+                traceback.print_exc()
+                __category, __event = TestCategory.ERROR, Event.ON_ERROR
+                if isinstance(error, AssertionError):
+                    __category, __event = TestCategory.FAIL, Event.ON_FAILURE
+                test.metrics.update_metrics(status=__category,
+                                            start_time=test_start_time,
+                                            param=parameter,
+                                            class_param=class_parameter,
+                                            exception=error,
+                                            formatted_traceback=trace)
+                Runner.__process_event(event=__event, suite=suite, test=test, error=error,
+                                       class_param=class_parameter, param=parameter, formatted_traceback=trace)
+            else:
+                raise error
+
+        def run_after_test(record_test_failure=True):
+            try:
+                # Running after test functions
+                if not test.skip_after_test():
+                    Runner.__process_decorator(decorator_type=DecoratorType.AFTER_TEST, suite=suite,
+                                               class_parameter=class_parameter, test=test, parameter=parameter)
+                if not test.skip_after_test_rule():
+                    suite.get_rules().after_test()
+                return True
+            except Exception as after_test_error:
+                if record_test_failure:
+                    process_failure(after_test_error)
+                return False
+
         test_start_time = time.time()
         if before_class_error is not None or cancel:
             _status = TestCategory.IGNORE if not cancel else TestCategory.CANCEL
@@ -391,7 +436,7 @@ class Runner:
                                         class_param=class_parameter,
                                         exception=before_class_error["exception"],
                                         formatted_traceback=before_class_error["traceback"])
-            Runner.__process_event(_event, error=before_class_error["exception"], suite=suite, test=test,
+            Runner.__process_event(event=_event, error=before_class_error["exception"], suite=suite, test=test,
                                    class_param=class_parameter, param=parameter,
                                    formatted_traceback=before_class_error["traceback"])
             return
@@ -427,41 +472,32 @@ class Runner:
                                 "============================================="
                                 .format(test.get_function_name(), suite.get_class_name(), parameter, class_parameter,
                                         retry_attempt, test.get_retry_limit()))
+                record_test_failure = True
                 try:
                     if not test.accepts_test_parameters() and parameter is not None:
                         raise BadSignature("When using \"parameters\" argument for @test() decorator, "
                                            "you must accept \"parameter\" in the function's signature. "
                                            "For more info, see documentation: {}"
                                            .format(DocumentationLinks.PARAMETERIZED_TESTS))
-                    suite.get_rules().before_test()
-                    Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST, suite=suite,
-                                               class_parameter=class_parameter)
+                    # TODO add tests for skipping before test function calls
+                    if run_before_test() is False:  # if before test failed, moving on without running the test
+                        continue  # everything recorded at this point in the metrics and flow is solid
+                    # Running actual test
+                    start_time = time.time()
                     Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
                                                test=test, parameter=parameter, class_parameter=class_parameter)
-                    Runner.__process_decorator(decorator_type=DecoratorType.AFTER_TEST, suite=suite,
-                                               class_parameter=class_parameter)
-                    suite.get_rules().after_test()
-                    Runner.__process_event(Event.ON_SUCCESS, suite=suite, test=test,
-                                           class_param=class_parameter, param=parameter)
-                    return
-                except Exception as error:
+                    runtime = time.time() - start_time
+                except Exception as test_error:
+                    process_failure(test_error)
+                    record_test_failure = False  # already recorded the failure just above this
 
-                    if not isinstance(error, TestJunkieExecutionError):
-                        trace = traceback.format_exc()
-                        traceback.print_exc()
-                        __category, __event = TestCategory.ERROR, Event.ON_ERROR
-                        if isinstance(error, AssertionError):
-                            __category, __event = TestCategory.FAIL, Event.ON_FAILURE
-                        test.metrics.update_metrics(status=__category,
-                                                    start_time=test_start_time,
-                                                    param=parameter,
-                                                    class_param=class_parameter,
-                                                    exception=error,
-                                                    formatted_traceback=trace)
-                        Runner.__process_event(__event, suite=suite, test=test, error=error,
-                                               class_param=class_parameter, param=parameter, formatted_traceback=trace)
-                    else:
-                        raise error
+                if run_after_test(record_test_failure=record_test_failure) is True:  # if did not fail, test is OK
+                    if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
+                        Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
+                                               class_param=class_parameter, param=parameter)
+                        test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=None, param=parameter,
+                                                    class_param=class_parameter, runtime=runtime)
+                        return
 
     @staticmethod
     def __run_before_class(suite, class_parameter=None):
@@ -473,10 +509,10 @@ class Runner:
         except Exception as error:
             trace = traceback.format_exc()
             if isinstance(error, AssertionError):
-                Runner.__process_event(Event.ON_BEFORE_CLASS_FAIL, suite=suite, error=error,
+                Runner.__process_event(event=Event.ON_BEFORE_CLASS_FAIL, suite=suite, error=error,
                                        class_param=class_parameter, formatted_traceback=trace)
             else:
-                Runner.__process_event(Event.ON_BEFORE_CLASS_ERROR, suite=suite, error=error,
+                Runner.__process_event(event=Event.ON_BEFORE_CLASS_ERROR, suite=suite, error=error,
                                        class_param=class_parameter, formatted_traceback=trace)
             return {"exception": error, "traceback": trace}
 
@@ -489,15 +525,22 @@ class Runner:
         except Exception as error:
             trace = traceback.format_exc()
             if isinstance(error, AssertionError):
-                Runner.__process_event(Event.ON_AFTER_CLASS_FAIL, suite=suite, error=error,
+                Runner.__process_event(event=Event.ON_AFTER_CLASS_FAIL, suite=suite, error=error,
                                        class_param=class_parameter, formatted_traceback=trace)
             else:
-                Runner.__process_event(Event.ON_AFTER_CLASS_ERROR, suite=suite, error=error,
+                Runner.__process_event(event=Event.ON_AFTER_CLASS_ERROR, suite=suite, error=error,
                                        class_param=class_parameter, formatted_traceback=trace)
 
     @staticmethod
     # @synchronized(threading.Lock())
     def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None):
+
+        def update_metrics(error=None, trace=None):
+            suite.metrics.update_decorator_metrics(decorator_type, start_time, error, trace)
+            if decorator_type in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
+                test.metrics.update_metrics(status=None, start_time=start_time, param=parameter,
+                                            class_param=class_parameter, decorator=decorator_type,
+                                            formatted_traceback=trace)
         start_time = time.time()
         if DecoratorType.TEST_CASE != decorator_type:
             functions_list = suite.get_decorated_definition(decorator_type)
@@ -508,11 +551,10 @@ class Runner:
                         func["decorated_function"](suite.get_class_object()(), suite_parameter=class_parameter)
                     else:
                         func["decorated_function"](suite.get_class_object()())
-                    suite.metrics.update_decorator_metrics(decorator_type, start_time)
-                except Exception as error:
-                    trace = traceback.format_exc()
-                    suite.metrics.update_decorator_metrics(decorator_type, start_time, error, trace)
-                    raise error
+                    update_metrics()
+                except Exception as decorator_error:
+                    update_metrics(decorator_error, traceback.format_exc())
+                    raise decorator_error
         else:
             if test.accepts_test_and_suite_parameters():
                 test.get_function_object()(suite.get_class_object()(),
@@ -523,8 +565,6 @@ class Runner:
                 test.get_function_object()(suite.get_class_object()(), parameter=parameter)
             else:
                 test.get_function_object()(suite.get_class_object()())
-            test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=start_time,
-                                        param=parameter, class_param=class_parameter)
 
     @staticmethod
     def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None):
