@@ -493,10 +493,10 @@ class Runner:
 
                 if run_after_test(record_test_failure=record_test_failure) is True:  # if did not fail, test is OK
                     if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
-                        Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
-                                               class_param=class_parameter, param=parameter)
                         test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=None, param=parameter,
                                                     class_param=class_parameter, runtime=runtime)
+                        Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
+                                               class_param=class_parameter, param=parameter)
                         return
 
     @staticmethod
