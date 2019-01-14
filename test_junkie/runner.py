@@ -113,7 +113,7 @@ class Runner:
     def __create_html_report(self, reporter):
 
         if self.__kwargs.get("html_report", None) is not None:
-            reporter.generate_html_report_v2(self.__kwargs.get("html_report"))
+            reporter.generate_html_report(self.__kwargs.get("html_report"))
 
     @staticmethod
     def __process_owners(suite_object):

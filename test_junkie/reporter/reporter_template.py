@@ -46,8 +46,80 @@ class ReportTemplate:
                             body {{
                                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
                             }}
+                            
+                            .success {{
+                                background: #12d479;
+                            }}
+                            .fail {{
+                                background: #fcd75f;
+                            }}
+                            .error {{
+                                background: #ff7651;
+                            }}
+                            .ignore {{
+                                background: #cce4eb;
+                            }}
+                            .skip {{
+                                background: #34bff5;
+                            }}
+                            .cancel {{
+                                background: #f19def;
+                            }}
+                            .info-badge {{
+                                background: #aac7d2;
+                            }}
+                            
+                            .parent-badge{{
+                                margin-top: 8px;
+                            }}
+                            
+                            .badge {{
+                                border-radius: 3px;
+                                margin-right: 7px;
+                                color: #333 !important;
+                            }}
+                            
+                            .traceback {{
+                                background: #23323a;
+                                border-radius: 3px;
+                                padding: 15px;
+                                color: #fd5858;
+                            }}
+                            
+                            .collapsible-header {{
+                                background: #37474f !important;
+                                border-color: #193746;
+                            }}
+                            
+                            .collapsible.expandable {{
+                                border: 1px #37474f;
+                            }}
+                            
+                            .collapsible-header:hover {{
+                                background: #193746 !important;
+                                transition: all .3s ease-in;
+                                transition: all .3s ease-out;
+                            }}
+                            
+                            .collapsible-body {{
+                                border-color: transparent;
+                            }}
+                            
+                            .attempt-header {{
+                                padding: 5px;
+                                padding-bottom: 0px;
+                                border: 0px;
+                            }}
+                            
+                            .parameter {{
+                              white-space: nowrap;
+                              overflow: hidden;
+                              text-overflow: ellipsis;
+                              font-size: 14px;
+                            }}
                         </style>
                         {body}
+                        <script>var database_lol = {database_lol}</script>
                     </body>
                 </html> 
                """
@@ -61,7 +133,7 @@ class ReportTemplate:
                 </div>
                 <script>
                     $(document).ready(function(){
-                        $('.modal').modal();
+                        $('#developerModal').modal();
                     });
                 </script>
                 <div id="developerModal" class="modal">
@@ -71,18 +143,15 @@ class ReportTemplate:
                            I'm <a href="https://www.linkedin.com/in/arturspirin/" target="_blank">Artur</a>
                            by the way, the developer of
                            <a href="https://github.com/ArturSpirin/test_junkie" target="_blank">Test Junkie</a></p>
-                        <br>
                         <p>It took a lot of effort, all my free time outside my day job, and many sleepless
                             nights to get this project to this point, that includes styling and doing data
                             processing in order to render all those charts and tables. I have been motivated by
                             the idea that it may become useful for testers, QA managers, QA team leads, and
                             even project managers and developers. Thus I open sourced this project initially
                             knowing that I wont make much (if any at all) money by doing it.</p>
-                        <br>
                         <p>Ask yourself if all the effort I put in and the benefits Test Junkie brings to you
                             and/or your company (if any) are worth a donation. This donation will keep me
                             motivated and directly support this project.</p>
-                        <br>
                         <p>Ways you can donate:</p>
                         <ol>
                             <li>Share Test Junkie on social media, with your friend and/or colleagues.
@@ -99,8 +168,6 @@ class ReportTemplate:
                                 on behalf of your company and get some benefits by doing so.</li>
                         </ol>
                         <p>Happy testing!</p>
-
-
                     </div>
                     <div class="modal-footer">
                       <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
@@ -190,8 +257,10 @@ class ReportTemplate:
                                         mDataProp: "status",
                                         defaultContent: "N/A"}],
                                 createdRow: function(row, data, index){
-                                    row.setAttribute("href", "#developerModal")
+                                    row.setAttribute("href", "#testCaseModal")
                                     row.setAttribute('class', 'modal-trigger')
+                                    row.setAttribute('data-test_id', data.test_id)
+                                    row.setAttribute('data-suite_id', data.suite_id)
                                 }
                             });
 
@@ -234,12 +303,98 @@ class ReportTemplate:
                     <div class="col s12 m12 l12 xl12">
                       <div class="card blue-grey darken-3">
                             <div class="card-content white-text">
-                                <table id="table_results" class="mdl-data-table" >
+                                <table id="table_results" class="mdl-data-table" ></table>
                                 {css}
                                 {js}
                             </div>
                         </div>
                     </div>
+                    
+                    <div id="testCaseModal" class="modal" style="background-color: #3d4f58; color: #bbc3c7">
+                        <div id="testCaseModalContent" class="modal-content">
+                              <div class="row"><span style="font-size: 22px;" id="test_name"></span></div>
+                              <div class="row"><ul class="collapsible expandable" id="test_details"></ul></div>
+                        </div>
+                    </div>
+                    <script>
+                        $(document).ready(function(){{
+                            $('#testCaseModal').modal();
+                            var test_modal = $("#testCaseModal")
+                            $("tr.modal-trigger").on("click", function(event){{
+                                var row = $(this)[0].dataset
+                                var test_id = row.test_id
+                                var suite_id = row.suite_id
+                                render_modal(test_id, suite_id)
+                            }})
+
+                            function render_modal(test_id, suite_id){{
+                                var status = database_lol.tests[test_id]["status"]
+                                var name = database_lol.tests[test_id]["name"]
+                                $("#test_name").html("Test: <b>"+name+"</b>")
+                                var inject_html = ""
+                                var data = database_lol.tests[test_id].metrics
+                                for(class_param in data){{
+                                    var class_data = data[class_param]
+                                    for(test_param in class_data){{
+                                        var test_data = class_data[test_param]
+                                        var actual_suite_param = test_data.class_param
+                                        var actual_test_param = test_data.param
+                                        var status = test_data.status
+                                        var retry = test_data.retry
+                            
+                                        var params_ul = '<li class="bg">'
+                            
+                                        params_ul += '<div class="collapsible-header bg">'
+                                            params_ul += '<div class="col xl1 badge_value"><span class="badge '+status+'">'+status+'</span></div>'
+                                            params_ul += '<div class="col xl11">'
+                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_suite_param+'" class="col xl6 parameter tooltipped">Class parameter: '+actual_suite_param+'</div>'
+                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_test_param+'" class="col xl6 parameter tooltipped">Test parameter: '+actual_test_param+'</div>'
+                                            params_ul += '</div>'
+                                        params_ul += '</div>'    
+                                        
+                                        params_ul += '<div class="collapsible-body">'
+                                        
+                                        var details_ul = '<ul class="collapsible expandable">'
+                                        for(index in test_data.performance){{
+                                            var attempt = parseInt(index) + 1
+                                             var new_li = '<li>'
+                                                new_li += '<div class="collapsible-header attempt-header">'
+                                                    new_li += '<div class="col xl1">'
+                                                        new_li += '<i class="material-icons">fingerprint</i>'
+                                                    new_li += '</div>'
+                                                    new_li += '<div class="col xl2">'
+                                                        new_li += '<span>Attempt: <span class="badge info-badge">'+attempt+'</span></span>'
+                                                    new_li += '</div>'
+                                                    new_li += '<div class="col xl3">'
+                                                        new_li += '<span>Runtime: <span data-position="bottom" data-tooltip="Seconds" class="badge info-badge tooltipped">'+test_data.performance[index]+'</span></span>'
+                                                    new_li += '</div>'
+                                                    new_li += '<div class="col xl3">'
+                                                        new_li += '<span>@beforeTest: <span class="badge info-badge">N/A</span></span>'
+                                                    new_li += '</div>'
+                                                    new_li += '<div class="col xl3">'
+                                                        new_li += '<span>@afterTest: <span class="badge info-badge">N/A</span></span>'
+                                                    new_li += '</div>'
+                                                new_li += '</div>'
+                                                if(test_data.tracebacks[index] != null){{
+                                                    new_li += '<div class="collapsible-body"><p class="traceback">'+test_data.tracebacks[index]+'</p></div>'
+                                                }}
+                                             new_li += '</li>'
+                                             details_ul += new_li
+                                        }}
+                                        details_ul += '</ul>'
+                                        params_ul += details_ul
+                                        params_ul += '</div>'
+                                        params_ul += '</li>'
+                                        inject_html += params_ul
+                                    }}
+                                }}
+                                $("#test_details").html(inject_html)
+                                $('.collapsible.expandable').collapsible();
+                                $('.tooltipped').tooltip();
+                            }}
+
+                        }});
+                    </script>
                 </div>
                """.format(css=css(), js=js())
 

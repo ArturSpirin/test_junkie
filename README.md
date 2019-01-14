@@ -1168,7 +1168,7 @@ class LoginSuite:
     def after_class(self):
         # Here, generally, we would have clean up logic.
         # For the sake of this example, lets assume we logout 
-        # from the account that we logged into during @beforeTest()
+        # from the account that we logged into during @beforeClass()
         pass
 
     @test(parameters=["page_url_1", "page_url_2", "page_url_3"])

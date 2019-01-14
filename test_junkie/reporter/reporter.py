@@ -1,6 +1,7 @@
 import copy
+import json
 import time
-from test_junkie.constants import TestCategory
+from test_junkie.constants import TestCategory, DecoratorType
 from test_junkie.metrics import Aggregator
 from test_junkie.reporter.reporter_template import ReportTemplate
 
@@ -39,7 +40,7 @@ class Reporter:
         self.__cpu_average = "Unknown"
         self.__mem_average = "Unknown"
 
-    def generate_html_report_v2(self, write_file):
+    def generate_html_report(self, write_file):
 
         html = copy.deepcopy(ReportTemplate.get_body_template())
 
@@ -76,10 +77,11 @@ class Reporter:
             suites_data=self.__get_suites_data(),
             tags_data=self.__get_tags_data())
 
-        row_two_html += ReportTemplate.get_table(self.__get_table_data())
+        table_data = self.__get_table_data()
+        row_two_html += ReportTemplate.get_table(table_data["table_data"])
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
-        html = html.format(body=body)
+        html = html.format(body=body, database_lol=json.dumps(table_data["database_lol"]))
         with open(write_file, "w+") as output:
             output.write(html)
 
@@ -188,11 +190,26 @@ class Reporter:
     def __get_table_data(self):  # for data table
         status_priority = [TestCategory.CANCEL, TestCategory.IGNORE, TestCategory.ERROR,
                            TestCategory.FAIL, TestCategory.SKIP, TestCategory.SUCCESS]
-        data = []
+        table_data = []
+        database_lol = {"suites": {}, "tests": {}}
+
         executed_suites = self.aggregator.executed_suites
+        test_id = 0
+        suite_id = 0
         for suite in executed_suites:
+            suite_id += 1
+            suite_metrics = copy.deepcopy(suite.metrics.get_metrics())
+            for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST,
+                              DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS]:
+                for exception in suite_metrics[decorator]["exceptions"]:
+                    index = suite_metrics[decorator]["exceptions"].index(exception)
+                    suite_metrics[decorator]["exceptions"][index] = str(exception)
+            database_lol["suites"].update({suite_id: {"name": suite.get_class_name(),
+                                                      "module": suite.get_class_module(),
+                                                      "metrics": suite_metrics}})
             for test in suite.get_test_objects():
-                test_metrics = test.metrics.get_metrics()
+                test_id += 1
+                test_metrics = copy.deepcopy(test.metrics.get_metrics())
                 duration = []
                 statuses = []
                 component = test.get_component()
@@ -206,6 +223,17 @@ class Reporter:
                     for param, param_data in class_param_data.items():
                         duration += param_data["performance"]
                         statuses.append(param_data["status"])
+                        for exception in param_data["exceptions"]:
+                            index = param_data["exceptions"].index(exception)
+                            test_metrics[class_param][param]["exceptions"][index] = str(exception)
+                        for runtime in param_data["performance"]:
+                            index = param_data["performance"].index(runtime)
+                            test_metrics[class_param][param]["performance"][index] = "{:0.2f}s".format(runtime)
+                        for traceback in param_data["tracebacks"]:
+                            index = param_data["tracebacks"].index(traceback)
+                            if traceback is not None:
+                                traceback = traceback.replace("\n", "<br>").replace("    ", "&emsp;")
+                                test_metrics[class_param][param]["tracebacks"][index] = traceback
                 duration = Reporter.round(duration)
                 set(statuses)
                 if len(statuses) == 1:
@@ -215,6 +243,9 @@ class Reporter:
                         if preferred_status in statuses:
                             status = preferred_status
                             break
-                data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
-                             "duration": duration, "status": status})
-        return data
+                table_data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
+                                   "duration": duration, "status": status, "test_id": test_id, "suite_id": suite_id})
+                database_lol["tests"].update({test_id: {"name": test.get_function_name(),
+                                                        "metrics": test_metrics,
+                                                        "status": status}})
+        return {"table_data": table_data, "database_lol": database_lol}
