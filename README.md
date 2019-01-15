@@ -84,6 +84,7 @@ Like this project? Support it by sharing it on your social media or donate throu
     * [JSON Report](#json-reports)
     * [XML / Jenkins Report](#jenkins-xml-report)
   * [Runner Object](#runner-object)
+  * [Limiter](#limiter)
 * [Examples](#examples)
   * [Test Suite](#test-suite)
     * [Classic Test Suite Example](#classic-test-suite-example)
@@ -1091,6 +1092,25 @@ allows to define more configurations for running your tests, such as:
 Read more about it [here](#canceling-test-execution).
 + `get_executed_suites()`: This will return a list of `test_junkie.objects.SuiteObject`s. 
 This `SuiteObject` can be used to analyze anything from test results to performance of tests in great detail.
+
+### Limiter
+
+By default, Test Junkie will truncate long exception messages to keep tracebacks to a sensible size.
+You can control the threshold limit or you can completely turn the feature off.
+
+```python
+from test_junkie.objects import Limiter
+
+# Will disable all truncations
+Limiter.ACTIVE = False
+
+# Will increase char limit from default 3000 to 10000 for all exception messages
+Limiter.EXCEPTION_MESSAGE_LIMIT = 10000
+
+# Will increase char limit from default 3000 to 10000 for all tracebacks messages
+# This will have effect on the traceback output in the console and the HTML/XML reports
+Limiter.TRACEBACK_LIMIT = 10000
+```
 
 ## Examples
 ### Test Suite

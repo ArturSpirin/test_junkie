@@ -2,7 +2,6 @@ import multiprocessing
 import os
 import threading
 import time
-import traceback
 from datetime import datetime
 
 from test_junkie.decorators import DecoratorType
@@ -20,10 +19,10 @@ class ClassMetrics:
                         DecoratorType.AFTER_CLASS: {"performance": [], "exceptions": [], "tracebacks": []}}
 
     def update_decorator_metrics(self, decorator, start_time, exception=None, trace=None):
-
+        from test_junkie.objects import Limiter
         self.__stats[decorator]["performance"].append(time.time() - start_time)
-        self.__stats[decorator]["exceptions"].append(exception)
-        self.__stats[decorator]["tracebacks"].append(trace)
+        self.__stats[decorator]["exceptions"].append(Limiter.parse_exception_object(exception))
+        self.__stats[decorator]["tracebacks"].append(Limiter.parse_traceback(trace))
 
     def update_suite_metrics(self, status, start_time, initiation_error=None):
 
@@ -59,6 +58,7 @@ class TestMetrics:
                     "tracebacks": [],
                     DecoratorType.BEFORE_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
                     DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []}}
+
         runtime = runtime if runtime is not None else time.time() - start_time
         string_param = str(param)
         string_class_param = str(class_param)
@@ -66,14 +66,20 @@ class TestMetrics:
             self.__stats.update({string_class_param: {string_param: __get_template()}})
         elif string_param not in self.__stats[string_class_param]:
             self.__stats[string_class_param].update({string_param: __get_template()})
+
+        from test_junkie.objects import Limiter
         if decorator is not None:
             self.__stats[string_class_param][string_param][decorator]["performance"].append(time.time() - start_time)
-            self.__stats[string_class_param][string_param][decorator]["exceptions"].append(exception)
-            self.__stats[string_class_param][string_param][decorator]["tracebacks"].append(formatted_traceback)
+            self.__stats[string_class_param][string_param][decorator]["exceptions"]\
+                .append(Limiter.parse_exception_object(exception))
+            self.__stats[string_class_param][string_param][decorator]["tracebacks"]\
+                .append(Limiter.parse_traceback(formatted_traceback))
         else:
             self.__stats[string_class_param][string_param]["performance"].append(runtime)
-            self.__stats[string_class_param][string_param]["exceptions"].append(exception)
-            self.__stats[string_class_param][string_param]["tracebacks"].append(formatted_traceback)
+            self.__stats[string_class_param][string_param]["exceptions"]\
+                .append(Limiter.parse_exception_object(exception))
+            self.__stats[string_class_param][string_param]["tracebacks"]\
+                .append(Limiter.parse_traceback(formatted_traceback))
             self.__stats[string_class_param][string_param]["retry"] += 1
             self.__stats[string_class_param][string_param]["status"] = status
             self.__stats[string_class_param][string_param]["param"] = param
@@ -240,11 +246,6 @@ class Aggregator:
         def parse_exception(value):
             if value is not None:
                 error = ""
-                if isinstance(value, Exception):
-                    try:
-                        raise value
-                    except:
-                        value = traceback.format_exc()
                 for line in value.split("\n"):
                     error += "\n\t\t\t\t\t\t{}".format(line)
                 return error
@@ -270,7 +271,7 @@ class Aggregator:
                           passed=stats[TestCategory.SUCCESS],
                           total=stats["total"]))
             if status == SuiteCategory.IGNORE:
-                print("\t|__ reason: {error}".format(error=suite.metrics.get_metrics()["initiation_error"]))
+                print("\t|__ reason: {error}".format(error=suite.metrics.get_metrics().get("initiation_error", None)))
             if status != SuiteCategory.SUCCESS:
                 tests = suite.get_unsuccessful_tests()
                 for test in tests:
@@ -283,14 +284,10 @@ class Aggregator:
                             if param != "None":
                                 print("\t\t\t|__ parameter: {parameter}".format(parameter=param))
                             for index in range(param_data["retry"]):
-                                exception = param_data["exceptions"][index]
-                                if len(param_data["tracebacks"]) == index + 1:
-                                    trace = param_data["tracebacks"][index]
-                                    if trace is not None:
-                                        exception = trace
+                                trace = param_data["tracebacks"][index]
                                 print("\t\t\t\t|__ run #{num} [{status}] [{runtime:0.2f}s] :: Traceback: {exception}"
                                       .format(num=index + 1,
-                                              exception=parse_exception(exception),
+                                              exception=parse_exception(trace),
                                               runtime=param_data["performance"][index],
                                               status=param_data["status"].upper()))
 

@@ -1,7 +1,7 @@
 import copy
 import inspect
 import traceback
-
+import sys
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import TestCategory
 from test_junkie.errors import TestJunkieExecutionError, BadParameters
@@ -404,3 +404,29 @@ class TestObject:
         if self.__not_ran(param, class_param):
             return 0
         return self.metrics.get_metrics()[str(class_param)][str(param)]["retry"]
+
+
+class Limiter:
+
+    __DEFAULT_LIMIT = 3000
+    ACTIVE = True
+
+    EXCEPTION_MESSAGE_LIMIT = __DEFAULT_LIMIT
+    TRACEBACK_LIMIT = __DEFAULT_LIMIT
+
+    @staticmethod
+    def parse_exception_object(value):
+
+        if Limiter.ACTIVE and value is not None:
+            msg = value.message if sys.version_info[0] < 3 else str(value)
+            if isinstance(msg, str) and len(msg) > Limiter.EXCEPTION_MESSAGE_LIMIT:
+                value.message = "{} [...]".format(str(msg[:Limiter.EXCEPTION_MESSAGE_LIMIT]))
+        return value
+
+    @staticmethod
+    def parse_traceback(value):
+
+        if Limiter.ACTIVE and value is not None:
+            if isinstance(value, str) and len(value) > Limiter.TRACEBACK_LIMIT:
+                value = "{} [...]".format(str(value[:Limiter.TRACEBACK_LIMIT]))
+        return value
