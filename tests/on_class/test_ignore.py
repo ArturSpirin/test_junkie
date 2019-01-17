@@ -1,6 +1,6 @@
 import pprint
 
-from test_junkie.errors import BadParameters
+from test_junkie.errors import BadParameters, BadSignature
 from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
 from tests.junkie_suites.IgnoreSuite import IgnoreSuiteBoundMethod, IgnoreSuiteFunction, IgnoreSuiteClassic, \
@@ -144,7 +144,7 @@ def test_test_metrics5():
 def test_wrong_params():
 
     try:
-        from tests.junkie_suites.ErrorSuite import ErrorSuiteWrongDatatype
+        from tests.junkie_suites.error_handling import ErrorSuite1
         raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
     except Exception as error:
         assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
@@ -153,34 +153,16 @@ def test_wrong_params():
 def test_wrong_params2():
 
     try:
-        from tests.junkie_suites.ErrorSuite import ErrorSuite2
+        from tests.junkie_suites.error_handling import ErrorSuite2
         raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
     except Exception as error:
-        assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
+        assert isinstance(error, BadSignature), "Exception must be raised for bad signature"
 
 
 def test_wrong_params3():
 
     try:
-        from tests.junkie_suites.ErrorSuite import ErrorSuite3
-        raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
-    except Exception as error:
-        assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
-
-
-def test_wrong_params4():
-
-    try:
-        from tests.junkie_suites.ErrorSuite import ErrorSuite4
-        raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
-    except Exception as error:
-        assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
-
-
-def test_wrong_params5():
-
-    try:
-        from tests.junkie_suites.ErrorSuite import ErrorSuite5
+        from tests.junkie_suites.error_handling.ErrorSuite3 import ErrorSuite3
         raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
     except Exception as error:
         assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"

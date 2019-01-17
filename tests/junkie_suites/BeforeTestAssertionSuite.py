@@ -3,27 +3,11 @@ from tests.junkie_suites.TestListener import TestListener
 
 
 @Suite(retry=2, listener=TestListener)
-class BeforeTestSuite1:
+class BeforeTestAssertionSuite:
 
     @beforeTest()
     def before_test(self):
         raise AssertionError("Assertion Error in before class")
-
-    @test(retry=2)
-    def ignore_1(self):
-        pass
-
-    @test(retry=2)
-    def ignore_2(self):
-        pass
-
-
-@Suite(retry=2, listener=TestListener)
-class BeforeTestSuite2:
-
-    @beforeTest()
-    def before_test(self):
-        raise Exception("Assertion Error in before class")
 
     @test(retry=2)
     def ignore_1(self):

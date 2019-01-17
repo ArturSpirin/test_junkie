@@ -2,10 +2,12 @@ import pprint
 
 from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
-from tests.junkie_suites.AfterTestSuite import AfterTestSuite1, AfterTestSuite2
-from tests.junkie_suites.BeforeTestSuite import BeforeTestSuite1, BeforeTestSuite2
+from tests.junkie_suites.AfterTestAssertionSuite import AfterTestAssertionSuite
+from tests.junkie_suites.AfterTestExceptionSuite import AfterTestExceptionSuite
+from tests.junkie_suites.BeforeTestAssertionSuite import BeforeTestAssertionSuite
+from tests.junkie_suites.BeforeTestExceptionSuite import BeforeTestExceptionSuite
 
-runner = Runner(BeforeTestSuite1)
+runner = Runner(BeforeTestAssertionSuite)
 runner.run()
 results = runner.get_executed_suites()
 
@@ -34,7 +36,7 @@ def test_failure():
                                           expected_exception=AssertionError)
 
 
-runner2 = Runner(BeforeTestSuite2)
+runner2 = Runner(BeforeTestExceptionSuite)
 runner2.run()
 results2 = runner2.get_executed_suites()
 
@@ -63,7 +65,7 @@ def test_failure2():
                                           expected_exception=Exception)
 
 
-runner3 = Runner(AfterTestSuite1)
+runner3 = Runner(AfterTestAssertionSuite)
 runner3.run()
 results3 = runner3.get_executed_suites()
 
@@ -84,6 +86,7 @@ def test_failure3():
     tests = results3[0].get_test_objects()
     for test in tests:
         metrics = test.metrics.get_metrics()["None"]["None"]
+        pprint.pprint(metrics)
         QualityManager.check_test_metrics(metrics,
                                           expected_status="fail",
                                           expected_retry_count=4,
@@ -92,7 +95,7 @@ def test_failure3():
                                           expected_exception=AssertionError)
 
 
-runner4 = Runner(AfterTestSuite2)
+runner4 = Runner(AfterTestExceptionSuite)
 runner4.run()
 results4 = runner4.get_executed_suites()
 
