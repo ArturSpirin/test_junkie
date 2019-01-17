@@ -1,7 +1,7 @@
 import inspect
 
 from test_junkie.constants import DocumentationLinks
-from test_junkie.errors import BadParameters
+from test_junkie.errors import BadParameters, BadSignature
 from test_junkie.listener import Listener
 from test_junkie.rules import Rules
 
@@ -45,7 +45,7 @@ class Builder(object):
         _function_name = None
         _class_name = None
         if inspect.isfunction(decorated_function):
-            Builder.__validate_test_kwargs(decorator_kwargs)
+            Builder.__validate_test_kwargs(decorator_kwargs, decorated_function)
             _function_name = decorated_function.__name__
         else:
             if decorated_function is not None:
@@ -121,10 +121,15 @@ class Builder(object):
                                         DocumentationLinks.SUITE_DECORATOR))
 
     @staticmethod
-    def __validate_test_kwargs(kwargs):
+    def __validate_test_kwargs(kwargs, decorated_function):
         data = Builder.__validation_failed(kwargs, suite=False)
         if data:
             raise BadParameters("Argument: \"{}\" in @test() decorator must be of either type: {} but found: {}. "
                                 "For more info, see @test() decorator documentation: {}"
                                 .format(data["arg"], data["expected"], data["actual"],
                                         DocumentationLinks.TEST_DECORATOR))
+        if "parameter" not in inspect.getargspec(decorated_function).args and kwargs.get("parameters") is not None:
+            raise BadSignature("When using \"parameters\" argument for @test() decorator, "
+                               "you must accept \"parameter\" in the function's signature. "
+                               "For more info, see documentation: {}"
+                               .format(DocumentationLinks.PARAMETERIZED_TESTS))

@@ -387,17 +387,23 @@ class Runner:
                 if not test.skip_before_test_rule():
                     suite.get_rules().before_test()
                 if not test.skip_before_test():
-                    Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST, suite=suite,
-                                               class_parameter=class_parameter, test=test, parameter=parameter)
+                    before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
+                                                                   suite=suite, class_parameter=class_parameter,
+                                                                   test=test, parameter=parameter)
+                    if before_test_error is not None:
+                        process_failure(before_test_error, pre_processed=True)
+                        return False
                 return True
             except Exception as before_test_error:
                 process_failure(before_test_error)
                 return False
 
-        def process_failure(error):
+        def process_failure(error, pre_processed=False):
             if not isinstance(error, TestJunkieExecutionError):
-                trace = traceback.format_exc()
-                traceback.print_exc()
+                if pre_processed:
+                    trace = error.message if sys.version_info[0] < 3 else str(error)
+                else:
+                    trace = traceback.format_exc()
                 __category, __event = TestCategory.ERROR, Event.ON_ERROR
                 if isinstance(error, AssertionError):
                     __category, __event = TestCategory.FAIL, Event.ON_FAILURE
@@ -412,17 +418,21 @@ class Runner:
             else:
                 raise error
 
-        def run_after_test(record_test_failure=True):
+        def run_after_test(_record_test_failure=True):
             try:
                 # Running after test functions
                 if not test.skip_after_test():
-                    Runner.__process_decorator(decorator_type=DecoratorType.AFTER_TEST, suite=suite,
-                                               class_parameter=class_parameter, test=test, parameter=parameter)
+                    after_test_error = Runner.__process_decorator(decorator_type=DecoratorType.AFTER_TEST,
+                                                                  suite=suite, class_parameter=class_parameter,
+                                                                  test=test, parameter=parameter)
+                    if after_test_error is not None:
+                        process_failure(after_test_error, pre_processed=True)
+                        return False
                 if not test.skip_after_test_rule():
                     suite.get_rules().after_test()
                 return True
             except Exception as after_test_error:
-                if record_test_failure:
+                if _record_test_failure:
                     process_failure(after_test_error)
                 return False
 
@@ -474,12 +484,6 @@ class Runner:
                                         retry_attempt, test.get_retry_limit()))
                 record_test_failure = True
                 try:
-                    if not test.accepts_test_parameters() and parameter is not None:
-                        raise BadSignature("When using \"parameters\" argument for @test() decorator, "
-                                           "you must accept \"parameter\" in the function's signature. "
-                                           "For more info, see documentation: {}"
-                                           .format(DocumentationLinks.PARAMETERIZED_TESTS))
-                    # TODO add tests for skipping before test function calls
                     if run_before_test() is False:  # if before test failed, moving on without running the test
                         continue  # everything recorded at this point in the metrics and flow is solid
                     # Running actual test
@@ -491,7 +495,7 @@ class Runner:
                     process_failure(test_error)
                     record_test_failure = False  # already recorded the failure just above this
 
-                if run_after_test(record_test_failure=record_test_failure) is True:  # if did not fail, test is OK
+                if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
                     if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
                         test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=None, param=parameter,
                                                     class_param=class_parameter, runtime=runtime)
@@ -503,8 +507,10 @@ class Runner:
     def __run_before_class(suite, class_parameter=None):
         try:
             suite.get_rules().before_class()
-            Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_CLASS, suite=suite,
-                                       class_parameter=class_parameter)
+            before_class_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_CLASS,
+                                                            suite=suite, class_parameter=class_parameter)
+            if before_class_error is not None:
+                raise before_class_error
             return
         except Exception as error:
             trace = traceback.format_exc()
@@ -519,8 +525,10 @@ class Runner:
     @staticmethod
     def __run_after_class(suite, class_parameter=None):
         try:
-            Runner.__process_decorator(decorator_type=DecoratorType.AFTER_CLASS, suite=suite,
-                                       class_parameter=class_parameter)
+            after_class_error = Runner.__process_decorator(decorator_type=DecoratorType.AFTER_CLASS,
+                                                           suite=suite, class_parameter=class_parameter)
+            if after_class_error is not None:
+                raise after_class_error
             suite.get_rules().after_class()
         except Exception as error:
             trace = traceback.format_exc()
@@ -535,12 +543,12 @@ class Runner:
     # @synchronized(threading.Lock())
     def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None):
 
-        def update_metrics(error=None, trace=None):
-            suite.metrics.update_decorator_metrics(decorator_type, start_time, error, trace)
+        def update_metrics(error=None, _trace=None):
+            suite.metrics.update_decorator_metrics(decorator_type, start_time, error, _trace)
             if decorator_type in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
                 test.metrics.update_metrics(status=None, start_time=start_time, param=parameter,
                                             class_param=class_parameter, decorator=decorator_type,
-                                            formatted_traceback=trace)
+                                            formatted_traceback=_trace)
         start_time = time.time()
         if DecoratorType.TEST_CASE != decorator_type:
             functions_list = suite.get_decorated_definition(decorator_type)
@@ -551,10 +559,12 @@ class Runner:
                         func["decorated_function"](suite.get_class_object()(), suite_parameter=class_parameter)
                     else:
                         func["decorated_function"](suite.get_class_object()())
-                    update_metrics()
                 except Exception as decorator_error:
-                    update_metrics(decorator_error, traceback.format_exc())
-                    raise decorator_error
+                    trace = traceback.format_exc()
+                    update_metrics(decorator_error, trace)
+                    return AssertionError(trace) \
+                        if isinstance(decorator_error, AssertionError) else Exception(trace)
+                update_metrics()
         else:
             if test.accepts_test_and_suite_parameters():
                 test.get_function_object()(suite.get_class_object()(),
@@ -603,8 +613,8 @@ class Runner:
 
         native_function = event_mapping[event]["native"]
         custom_function = event_mapping[event]["custom"]
-        custom_function = custom_function if str(custom_function).split(" at ")[0] != \
-                                             str(native_function).split(" at ")[0] else None
+        custom_function = custom_function \
+            if str(custom_function).split(" at ")[0] != str(native_function).split(" at ")[0] else None
 
         @synchronized(threading.Lock())
         def __create_properties():
@@ -627,10 +637,12 @@ class Runner:
                 native_function(custom_function=custom_function,
                                 properties=__create_properties())
         except Exception:
-            traceback.print_exc()
+            trace = ""
+            if sys.version_info[0] < 3:
+                trace = "\n\n{}".format(traceback.format_exc())
             raise TestListenerError("Exception occurred while processing custom event listener for function: {}. "
-                                    "For help on defining custom event listeners, see documentation: {}"
-                                    .format(custom_function, DocumentationLinks.LISTENERS))
+                                    "For help on defining custom event listeners, see documentation: {}{}"
+                                    .format(custom_function, DocumentationLinks.LISTENERS, trace))
 
     @staticmethod
     def __runnable_tags(test, run_config):
@@ -668,9 +680,11 @@ class Runner:
                 elif __config_set("run_on_match_any") and __partial_match("run_on_match_any"):
                     return True
             except Exception:
-                traceback.print_exc()
+                trace = ""
+                if sys.version_info[0] < 3:
+                    trace = "\n\n{}".format(traceback.format_exc())
                 raise ConfigError("Error occurred while trying to parse `tag_config`. For help on defining the config, "
-                                  "see documentation: {}".format(DocumentationLinks.TAGS))
+                                  "see documentation: {}{}".format(DocumentationLinks.TAGS, trace))
         return True
 
     @staticmethod

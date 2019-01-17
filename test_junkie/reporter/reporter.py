@@ -50,7 +50,7 @@ class Reporter:
         tiny = [{"label": "Tests Executed:", "value": str(self.test_totals["total"])},
                 {"label": "Passing Rate:", "value": "{:0.2f}%".format(float(self.test_totals[TestCategory.SUCCESS]) /
                                                                       float(self.test_totals["total"]) * 100)
-                if self.test_totals[TestCategory.SUCCESS] > 0 else "0"},
+                if self.test_totals[TestCategory.SUCCESS] > 0 else "0%"},
                 {"label": "Runtime:", "value": time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime))},
                 {"label": "Average Test Runtime:", "value": str(time.strftime('%Hh:%Mm:%Ss',
                                                                               time.gmtime(self.average_runtime)))}]
@@ -199,11 +199,12 @@ class Reporter:
         for suite in executed_suites:
             suite_id += 1
             suite_metrics = copy.deepcopy(suite.metrics.get_metrics())
+
+            # no value for exception objects in the HTML report, only will consume memory
             for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST,
                               DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS]:
-                for exception in suite_metrics[decorator]["exceptions"]:
-                    index = suite_metrics[decorator]["exceptions"].index(exception)
-                    suite_metrics[decorator]["exceptions"][index] = str(exception)
+                suite_metrics[decorator].pop("exceptions")
+
             database_lol["suites"].update({suite_id: {"name": suite.get_class_name(),
                                                       "module": suite.get_class_module(),
                                                       "metrics": suite_metrics}})
@@ -223,9 +224,12 @@ class Reporter:
                     for param, param_data in class_param_data.items():
                         duration += param_data["performance"]
                         statuses.append(param_data["status"])
-                        for exception in param_data["exceptions"]:
-                            index = param_data["exceptions"].index(exception)
-                            test_metrics[class_param][param]["exceptions"][index] = str(exception)
+
+                        # no value for exception objects in the HTML report, only will consume memory
+                        for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
+                            param_data[decorator].pop("exceptions")
+                        param_data.pop("exceptions")
+
                         for runtime in param_data["performance"]:
                             index = param_data["performance"].index(runtime)
                             test_metrics[class_param][param]["performance"][index] = "{:0.2f}s".format(runtime)

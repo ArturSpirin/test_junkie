@@ -420,7 +420,7 @@ class Limiter:
         if Limiter.ACTIVE and value is not None:
             msg = value.message if sys.version_info[0] < 3 else str(value)
             if isinstance(msg, str) and len(msg) > Limiter.EXCEPTION_MESSAGE_LIMIT:
-                value.message = "{} [...]".format(str(msg[:Limiter.EXCEPTION_MESSAGE_LIMIT]))
+                value.message = "{} [. . .]".format(msg[:Limiter.EXCEPTION_MESSAGE_LIMIT])
         return value
 
     @staticmethod
@@ -428,5 +428,5 @@ class Limiter:
 
         if Limiter.ACTIVE and value is not None:
             if isinstance(value, str) and len(value) > Limiter.TRACEBACK_LIMIT:
-                value = "{} [...]".format(str(value[:Limiter.TRACEBACK_LIMIT]))
+                value = "{} [. . .]".format(value[:Limiter.TRACEBACK_LIMIT])
         return value
