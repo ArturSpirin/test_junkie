@@ -148,3 +148,39 @@ def test_wrong_params():
         raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
     except Exception as error:
         assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
+
+
+def test_wrong_params2():
+
+    try:
+        from tests.junkie_suites.ErrorSuite import ErrorSuite2
+        raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
+    except Exception as error:
+        assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
+
+
+def test_wrong_params3():
+
+    try:
+        from tests.junkie_suites.ErrorSuite import ErrorSuite3
+        raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
+    except Exception as error:
+        assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
+
+
+def test_wrong_params4():
+
+    try:
+        from tests.junkie_suites.ErrorSuite import ErrorSuite4
+        raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
+    except Exception as error:
+        assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
+
+
+def test_wrong_params5():
+
+    try:
+        from tests.junkie_suites.ErrorSuite import ErrorSuite5
+        raise AssertionError("This test must raise exception, as wrang datatype is used for parameters")
+    except Exception as error:
+        assert isinstance(error, BadParameters), "Exception must be raised for bad parameters"
