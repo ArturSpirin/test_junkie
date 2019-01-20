@@ -407,10 +407,15 @@ class ReportTemplate:
                                     var class_data = data[class_param]
                                     for(test_param in class_data){{
                                         var test_data = class_data[test_param]
+                                        
                                         var actual_suite_param = test_data.class_param
                                         if(actual_suite_param == null) actual_suite_param = "N/A"
+                                        else actual_suite_param = class_param
+                                        
                                         var actual_test_param = test_data.param
                                         if(actual_test_param == null) actual_test_param = "N/A"
+                                        else actual_test_param = test_param
+                                        
                                         var status = test_data.status
                                         var retry = test_data.retry
                             
