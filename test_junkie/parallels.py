@@ -12,12 +12,12 @@ class ParallelProcessor:
 
     def __init__(self, **kwargs):
 
-        self.__test_limit = kwargs.get("test_multithreading_limit", 1)
+        self.__test_limit = int(kwargs.get("test_multithreading_limit", 1))
         if self.__test_limit == 0:
             LogJunkie.warn("Thread limit for tests cannot be 0, falling back to limit of 1 thread per test case.")
             self.__test_limit = 1
 
-        self.__suite_limit = kwargs.get("suite_multithreading_limit", 1)
+        self.__suite_limit = int(kwargs.get("suite_multithreading_limit", 1))
         if self.__suite_limit == 0:
             LogJunkie.warn("Thread limit for suites cannot be 0, falling back to limit of 1 thread per test suite.")
             self.__suite_limit = 1

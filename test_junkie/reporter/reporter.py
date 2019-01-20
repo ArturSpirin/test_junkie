@@ -188,6 +188,56 @@ class Reporter:
         return data
 
     def __get_table_data(self):  # for data table
+
+        def convert_performance(_data):
+
+            for _runtime in _data:
+                _index = _data.index(_runtime)
+                _data[_index] = "{:0.2f}s".format(_runtime)
+
+        def convert_tracebacks(_data):
+
+            for _traceback in _data:
+                if _traceback is not None:
+                    _index = _data.index(_traceback)
+                    _traceback = _traceback.replace("\n", "<br>").replace("    ", "&emsp;")
+                    _data[_index] = _traceback
+
+        def prioritize_status(_data):
+            # tests are parameterized but table will show only parent test, thus have to give priority to one
+            set(_data)
+            if len(_data) == 1:
+                return _data[0]
+            else:
+                for preferred_status in status_priority:
+                    if preferred_status in statuses:
+                        return preferred_status
+
+        def convert_suite_metrics(_data):
+            new_suite_metrics = {}
+            for _decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST,
+                               DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS]:
+                med, avg, minimum, maximum = "N/A", "N/A", "N/A", "N/A"
+                if _data[_decorator]["performance"]:
+                    med = "{:0.2f}s".format(median(_data[_decorator]["performance"]))
+                    avg = "{:0.2f}s".format(mean(_data[_decorator]["performance"]))
+                    minimum = "{:0.2f}s".format(min(_data[_decorator]["performance"]))
+                    maximum = "{:0.2f}s".format(max(_data[_decorator]["performance"]))
+                executions = 0
+                for traceback in _data[_decorator]["tracebacks"]:
+                    if traceback != "N/A":
+                        executions += 1
+                failures = 0
+                for exception in _data[_decorator]["exceptions"]:
+                    if exception is not None:
+                        failures += 1
+                new_suite_metrics.update({_decorator: {"executions": executions, "failures": failures,
+                                                       "median": med, "avg": avg,
+                                                       "minimum": minimum, "maximum": maximum}})
+            return new_suite_metrics
+
+        from statistics import median, mean
+
         status_priority = [TestCategory.CANCEL, TestCategory.IGNORE, TestCategory.ERROR,
                            TestCategory.FAIL, TestCategory.SKIP, TestCategory.SUCCESS]
         table_data = []
@@ -199,27 +249,23 @@ class Reporter:
         for suite in executed_suites:
             suite_id += 1
             suite_metrics = copy.deepcopy(suite.metrics.get_metrics())
-
-            # no value for exception objects in the HTML report, only will consume memory
-            for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST,
-                              DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS]:
-                suite_metrics[decorator].pop("exceptions")
-
             database_lol["suites"].update({suite_id: {"name": suite.get_class_name(),
                                                       "module": suite.get_class_module(),
-                                                      "metrics": suite_metrics}})
+                                                      "metrics": convert_suite_metrics(suite_metrics)}})
             for test in suite.get_test_objects():
+
                 test_id += 1
                 test_metrics = copy.deepcopy(test.metrics.get_metrics())
-                duration = []
-                statuses = []
+                duration, statuses = [], []
+
                 component = test.get_component()
                 component = "Not Defined" if component is None else component
                 feature = suite.get_feature()
                 feature = "Not Defined" if feature is None else feature
+
                 test_name = test.get_function_name()
                 suite_name = suite.get_class_name()
-                status = "unknown"  # Should never happen
+
                 for class_param, class_param_data in test_metrics.items():
                     for param, param_data in class_param_data.items():
                         duration += param_data["performance"]
@@ -228,25 +274,15 @@ class Reporter:
                         # no value for exception objects in the HTML report, only will consume memory
                         for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
                             param_data[decorator].pop("exceptions")
+                            convert_performance(param_data[decorator]["performance"])
+                            convert_tracebacks(param_data[decorator]["tracebacks"])
                         param_data.pop("exceptions")
+                        convert_performance(param_data["performance"])
+                        convert_tracebacks(param_data["tracebacks"])
 
-                        for runtime in param_data["performance"]:
-                            index = param_data["performance"].index(runtime)
-                            test_metrics[class_param][param]["performance"][index] = "{:0.2f}s".format(runtime)
-                        for traceback in param_data["tracebacks"]:
-                            index = param_data["tracebacks"].index(traceback)
-                            if traceback is not None:
-                                traceback = traceback.replace("\n", "<br>").replace("    ", "&emsp;")
-                                test_metrics[class_param][param]["tracebacks"][index] = traceback
                 duration = Reporter.round(duration)
-                set(statuses)
-                if len(statuses) == 1:
-                    status = statuses[0]
-                else:  # tests are parameterized but table will show only parent test, thus have to give priority to one
-                    for preferred_status in status_priority:
-                        if preferred_status in statuses:
-                            status = preferred_status
-                            break
+                status = prioritize_status(statuses)
+
                 table_data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
                                    "duration": duration, "status": status, "test_id": test_id, "suite_id": suite_id})
                 database_lol["tests"].update({test_id: {"name": test.get_function_name(),

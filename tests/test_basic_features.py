@@ -143,7 +143,11 @@ def test_execution_sequence1():
                                        expected_retry_count=2,
                                        expected_beforetest_exception_count=20,
                                        expected_beforetest_performance_count=20,
-                                       expected_beforetest_exception_object=AssertionError)
+                                       expected_beforetest_exception_object=AssertionError,
+                                       expected_aftertest_exception_count=20,
+                                       expected_aftertest_performance_count=20,
+                                       expected_aftertest_exception_object=None
+                                       )
     for test in suites[0].get_test_objects():
         test_metrics = test.metrics.get_metrics()
         for class_param, class_param_data in test_metrics.items():

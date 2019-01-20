@@ -543,12 +543,12 @@ class Runner:
     # @synchronized(threading.Lock())
     def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None):
 
-        def update_metrics(error=None, _trace=None):
-            suite.metrics.update_decorator_metrics(decorator_type, start_time, error, _trace)
-            if decorator_type in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
+        def update_metrics(_decorator_type, error=None, _trace=None):
+            suite.metrics.update_decorator_metrics(_decorator_type, start_time, error, _trace)
+            if _decorator_type in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
                 test.metrics.update_metrics(status=None, start_time=start_time, param=parameter,
-                                            class_param=class_parameter, decorator=decorator_type,
-                                            formatted_traceback=_trace)
+                                            class_param=class_parameter, decorator=_decorator_type,
+                                            formatted_traceback=_trace, exception=error)
         start_time = time.time()
         if DecoratorType.TEST_CASE != decorator_type:
             functions_list = suite.get_decorated_definition(decorator_type)
@@ -561,10 +561,14 @@ class Runner:
                         func["decorated_function"](suite.get_class_object()())
                 except Exception as decorator_error:
                     trace = traceback.format_exc()
-                    update_metrics(decorator_error, trace)
+                    update_metrics(decorator_type, decorator_error, trace)
+                    if DecoratorType.BEFORE_TEST == decorator_type:  # if before test fails, after test wont run
+                        if suite.get_decorated_definition(DecoratorType.AFTER_TEST):
+                            update_metrics(DecoratorType.AFTER_TEST, None, "N/A")  # but we need to keep list synced
                     return AssertionError(trace) \
                         if isinstance(decorator_error, AssertionError) else Exception(trace)
-                update_metrics()
+            if functions_list:  # will updated only if we had decorated function(s)
+                update_metrics(decorator_type)
         else:
             if test.accepts_test_and_suite_parameters():
                 test.get_function_object()(suite.get_class_object()(),

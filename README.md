@@ -28,7 +28,7 @@ You no longer need to worry about third party packages to run parameterized test
 its all built in! 
 
 Test Junkie was designed with reporting in mind, and you can see its reporting 
-capabilities just by looking the demo [console output](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/console_out.jpg) 
+capabilities just by looking at the demo [console output](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/console_out.jpg) 
 or the demo [HTML report](https://goo.gl/F5b1tr)
 
 _Still in ALFA, documentation may be incomplete and functionality of features is subject to change. 

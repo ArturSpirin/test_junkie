@@ -37,6 +37,10 @@ class ReportTemplate:
                             .absolute_value{{
                                 font-size: 27px;
                             }}
+                            
+                            .modal_absolute_value{{
+                                font-size: 17px;
+                            }}
 
                             .card:hover {{
                                 background: #193746 !important;
@@ -81,9 +85,11 @@ class ReportTemplate:
                             
                             .traceback {{
                                 background: #23323a;
-                                border-radius: 3px;
                                 padding: 15px;
                                 color: #fd5858;
+                                margin: 0px;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
                             }}
                             
                             .collapsible-header {{
@@ -116,6 +122,19 @@ class ReportTemplate:
                               overflow: hidden;
                               text-overflow: ellipsis;
                               font-size: 14px;
+                            }}
+                            
+                            html {{
+                                overflow: scroll;
+                                overflow-x: hidden;
+                            }}
+                            ::-webkit-scrollbar {{
+                                width: 0px;  /* remove scrollbar space */
+                                background: transparent;  /* optional: just make scrollbar invisible */
+                            }}
+                            /* optional: show position indicator in red */
+                            ::-webkit-scrollbar-thumb {{
+                                background: transparent;
                             }}
                         </style>
                         {body}
@@ -218,6 +237,34 @@ class ReportTemplate:
                             border: 1px transparent!important;}
                         .dataTables_wrapper .dataTables_paginate .paginate_button.current{
                             background: #1e4254 !important;}
+                        .trace-label {
+                            width: 120px;
+                            background: #23323a;
+                            color: #cac531;
+                            position: relative;
+                            padding: 3px;
+                            padding-left: 8px;}
+                        .trace-label:before {
+                            content: '';
+                            position: absolute;
+                            top: 0; right: 0;
+                            border-top: 28px solid #3c4f58;
+                            border-left: 28px solid #23323a;
+                            width: 0;}
+                        .runtime-label {
+                            width: 120px;
+                            background: #23323a;
+                            position: relative;
+                            padding: 3px;
+                            margin-bottom: 15px;
+                            padding-right: 8px;}
+                        .runtime-label:before {
+                            content: '';
+                            position: absolute;
+                            top: 0; left: 0;
+                            border-bottom: 28px solid #3c4f58;
+                            border-right: 28px solid #23323a;
+                            width: 0;}
                    </style>
                    """
 
@@ -313,6 +360,7 @@ class ReportTemplate:
                     <div id="testCaseModal" class="modal" style="background-color: #3d4f58; color: #bbc3c7">
                         <div id="testCaseModalContent" class="modal-content">
                               <div class="row"><span style="font-size: 22px;" id="test_name"></span></div>
+                              <div class="row" id="suite_metrics"></div>
                               <div class="row"><ul class="collapsible expandable" id="test_details"></ul></div>
                         </div>
                     </div>
@@ -330,7 +378,29 @@ class ReportTemplate:
                             function render_modal(test_id, suite_id){{
                                 var status = database_lol.tests[test_id]["status"]
                                 var name = database_lol.tests[test_id]["name"]
-                                $("#test_name").html("Test: <b>"+name+"</b>")
+                                var suite = database_lol.suites[suite_id]["name"]
+                                var module = database_lol.suites[suite_id]["module"]
+                                $("#test_name").html("<span>"+module+"."+suite+".<b>"+name+"()</b></span>")
+                                
+                                var suite_metrics_html = ""
+                                var suite_metrics = database_lol.suites[suite_id].metrics
+                                for(index in suite_metrics){{
+                                    var data = suite_metrics[index]
+                                    suite_metrics_html += '<div class="col s12 m6 l6 xl3">'                                
+                                    suite_metrics_html += '<div class="card blue-grey darken-3 absolute_cards">'                                
+                                    suite_metrics_html += '<div data-position="bottom" data-tooltip="This metrics show data for the entire suite: '+suite+' and not just for this test case" class="tooltipped card-content" style="color: #bbc3c7;">'
+                                    suite_metrics_html += '<span>Performance</span>'                                
+                                    suite_metrics_html += '<span class="card-title">@'+index+'</span>'                                
+                                    suite_metrics_html += '<div class="modal_absolute_value">avg <b class="right">'+data.avg+'</b></div>'
+                                    suite_metrics_html += '<div class="modal_absolute_value">median <b class="right">'+data.median+'</b></div>'
+                                    suite_metrics_html += '<div class="modal_absolute_value">min <b class="right">'+data.minimum+'</b></div>'
+                                    suite_metrics_html += '<div class="modal_absolute_value">max <b class="right">'+data.maximum+'</b></div>'
+                                    suite_metrics_html += '<div class="modal_absolute_value">executions <b class="right">'+data.executions+'</b></div>'
+                                    suite_metrics_html += '<div class="modal_absolute_value">failures <b class="right">'+data.failures+'</b></div>'
+                                    suite_metrics_html += '</div></div></div>'                                
+                                }}
+                                $("#suite_metrics").html(suite_metrics_html)
+                                
                                 var inject_html = ""
                                 var data = database_lol.tests[test_id].metrics
                                 for(class_param in data){{
@@ -338,7 +408,9 @@ class ReportTemplate:
                                     for(test_param in class_data){{
                                         var test_data = class_data[test_param]
                                         var actual_suite_param = test_data.class_param
+                                        if(actual_suite_param == null) actual_suite_param = "N/A"
                                         var actual_test_param = test_data.param
+                                        if(actual_test_param == null) actual_test_param = "N/A"
                                         var status = test_data.status
                                         var retry = test_data.retry
                             
@@ -347,8 +419,8 @@ class ReportTemplate:
                                         params_ul += '<div class="collapsible-header bg">'
                                             params_ul += '<div class="col xl1 badge_value"><span class="badge '+status+'">'+status+'</span></div>'
                                             params_ul += '<div class="col xl11">'
-                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_suite_param+'" class="col xl6 parameter tooltipped">Class parameter: '+actual_suite_param+'</div>'
-                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_test_param+'" class="col xl6 parameter tooltipped">Test parameter: '+actual_test_param+'</div>'
+                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_suite_param+'" class="col xl6 parameter tooltipped">Class parameter: <b>'+actual_suite_param+'</b></div>'
+                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_test_param+'" class="col xl6 parameter tooltipped">Test parameter: <b>'+actual_test_param+'</b></div>'
                                             params_ul += '</div>'
                                         params_ul += '</div>'    
                                         
@@ -357,27 +429,76 @@ class ReportTemplate:
                                         var details_ul = '<ul class="collapsible expandable">'
                                         for(index in test_data.performance){{
                                             var attempt = parseInt(index) + 1
+                                            
+                                            var beforeTestTraceback = test_data.beforeTest.tracebacks[index]
+                                            var afterTestTraceback = test_data.afterTest.tracebacks[index]
+                                            var testTraceback = test_data.tracebacks[index]
+                                            
+                                            var beforeTestDuration = test_data.beforeTest.performance[index]
+                                            var testDuration = test_data.performance[index]
+                                            var afterTestDuration = test_data.afterTest.performance[index]
+                                            
+                                            var beforeTestStatus = "N/A"
+                                            if(beforeTestTraceback == null && beforeTestDuration != null) beforeTestStatus = "OK"
+                                            else if(beforeTestTraceback){{
+                                                if(beforeTestTraceback.includes("AssertionError")) beforeTestStatus = "Fail"
+                                                else beforeTestStatus = "Error"
+                                            }}
+
+                                            var afterTestStatus = "N/A"
+                                            if(afterTestTraceback == null && afterTestDuration != null){{
+                                                if (["N/A", "OK"].includes(beforeTestStatus)) afterTestStatus = "OK"
+                                            }}
+                                            else if(afterTestTraceback){{
+                                                if(afterTestTraceback != afterTestStatus){{
+                                                    if(afterTestTraceback.includes("AssertionError")) afterTestStatus = "Fail"
+                                                    else afterTestStatus = "Error"
+                                                }}
+                                            }}
+                                            
                                              var new_li = '<li>'
                                                 new_li += '<div class="collapsible-header attempt-header">'
-                                                    new_li += '<div class="col xl1">'
+                                                    new_li += '<div class="col s1 m1 l1 xl1">'
                                                         new_li += '<i class="material-icons">fingerprint</i>'
                                                     new_li += '</div>'
-                                                    new_li += '<div class="col xl2">'
-                                                        new_li += '<span>Attempt: <span class="badge info-badge">'+attempt+'</span></span>'
-                                                    new_li += '</div>'
-                                                    new_li += '<div class="col xl3">'
-                                                        new_li += '<span>Runtime: <span data-position="bottom" data-tooltip="Seconds" class="badge info-badge tooltipped">'+test_data.performance[index]+'</span></span>'
-                                                    new_li += '</div>'
-                                                    new_li += '<div class="col xl3">'
-                                                        new_li += '<span>@beforeTest: <span class="badge info-badge">N/A</span></span>'
-                                                    new_li += '</div>'
-                                                    new_li += '<div class="col xl3">'
-                                                        new_li += '<span>@afterTest: <span class="badge info-badge">N/A</span></span>'
+                                                    new_li += '<div class="col s11 m11 l11 xl11">'
+                                                        new_li += '<div class="col s3 m3 l3 xl3">'
+                                                            new_li += '<span>Attempt: <span class="badge info-badge">'+attempt+'</span></span>'
+                                                        new_li += '</div>'
+                                                        new_li += '<div class="col s3 m3 l3 xl3">'
+                                                            new_li += '<span>Runtime: <span data-position="bottom" data-tooltip="Seconds" class="badge info-badge tooltipped">'+testDuration+'</span></span>'
+                                                        new_li += '</div>'
+                                                        new_li += '<div class="col s3 m3 l3 xl3">'
+                                                            new_li += '<span>@beforeTest: <span class="badge info-badge">'+beforeTestStatus+'</span></span>'
+                                                        new_li += '</div>'
+                                                        new_li += '<div class="col s3 m3 l3 xl3">'
+                                                            new_li += '<span>@afterTest: <span class="badge info-badge">'+afterTestStatus+'</span></span>'
+                                                        new_li += '</div>'
                                                     new_li += '</div>'
                                                 new_li += '</div>'
-                                                if(test_data.tracebacks[index] != null){{
-                                                    new_li += '<div class="collapsible-body"><p class="traceback">'+test_data.tracebacks[index]+'</p></div>'
-                                                }}
+                                                
+                                                if(beforeTestTraceback == null) beforeTestTraceback = "N/A"
+                                                if(testTraceback == null) testTraceback = "N/A"
+                                                if(afterTestTraceback == null) afterTestTraceback = "N/A"
+                                                
+                                                new_li += '<div class="collapsible-body">'
+                                                    if(beforeTestDuration != null){{
+                                                        new_li += '<div class="trace-label"><span>@beforeTest</span></div>'
+                                                        new_li += '<p class="traceback">'+beforeTestTraceback+'</p>'
+                                                        new_li += '<div class="right runtime-label"><span class="right">'+beforeTestDuration+'</span></div>'
+                                                        new_li += '<br>'
+                                                    }}
+                                                    new_li += '<div class="trace-label"><span>@test</span></div>'
+                                                    new_li += '<p class="traceback">'+testTraceback+'</p>'
+                                                    new_li += '<div class="right runtime-label"><span class="right">'+testDuration+'</span></div>'
+                                                    new_li += '<br>'
+                                                    if(afterTestDuration != null){{
+                                                        new_li += '<div class="trace-label"><span>@afterTest</span></div>'
+                                                        new_li += '<p class="traceback">'+afterTestTraceback+'</p>'
+                                                        new_li += '<div class="right runtime-label"><span class="right">'+afterTestDuration+'</span></div>'
+                                                        new_li += '<br>'
+                                                    }}
+                                                new_li += '</div>'
                                              new_li += '</li>'
                                              details_ul += new_li
                                         }}
