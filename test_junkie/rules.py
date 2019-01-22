@@ -8,10 +8,10 @@ class Rules:
     def before_class(self):
         pass
 
-    def before_test(self):
+    def before_test(self, **kwargs):
         pass
 
-    def after_test(self):
+    def after_test(self, **kwargs):
         pass
 
     def after_class(self):

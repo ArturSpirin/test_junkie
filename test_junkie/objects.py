@@ -55,11 +55,11 @@ class SuiteObject:
 
         self.__suite_definition = suite_definition
         self.__listener = suite_definition["test_listener"](class_meta=suite_definition["class_meta"])
-        self.__rules = suite_definition["test_rules"](class_meta=suite_definition["test_rules"])
         self.__tests = []
         for test in suite_definition["suite_definition"].get(DecoratorType.TEST_CASE):
             self.__tests.append(TestObject(test))
         self.metrics = ClassMetrics()
+        self.__rules = suite_definition["test_rules"](suite=copy.deepcopy(self))
 
     def get_decorated_definition(self, decorator_type):
 

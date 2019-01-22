@@ -11,11 +11,11 @@ class TestRules(Rules):
         # write your code here
         pass
 
-    def before_test(self):
+    def before_test(self, **kwargs):
         # write your code here
         pass
 
-    def after_test(self):
+    def after_test(self, **kwargs):
         # write your code here
         pass
 

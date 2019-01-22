@@ -1,3 +1,4 @@
+import copy
 import inspect
 import threading
 import time
@@ -385,7 +386,7 @@ class Runner:
         def run_before_test():
             try:
                 if not test.skip_before_test_rule():
-                    suite.get_rules().before_test()
+                    suite.get_rules().before_test(test=copy.deepcopy(test))
                 if not test.skip_before_test():
                     before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
                                                                    suite=suite, class_parameter=class_parameter,
@@ -429,7 +430,7 @@ class Runner:
                         process_failure(after_test_error, pre_processed=True)
                         return False
                 if not test.skip_after_test_rule():
-                    suite.get_rules().after_test()
+                    suite.get_rules().after_test(test=copy.deepcopy(test))
                 return True
             except Exception as after_test_error:
                 if _record_test_failure:

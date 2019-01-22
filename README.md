@@ -880,19 +880,24 @@ from test_junkie.rules import Rules
 class MyRules(Rules):
 
     def __init__(self, **kwargs):
-
         Rules.__init__(self, **kwargs)
+        # through kwargs you can access a copy of the SuiteObject in the current context
+        # self.kwargs.get("suite")
 
     def before_class(self):
         # write your code here
         pass
 
-    def before_test(self):
+    def before_test(self, **kwargs):
         # write your code here
+        # through kwargs you can access a copy of the TestObject in the current context
+        # kwargs.get("test")
         pass
 
-    def after_test(self):
+    def after_test(self, **kwargs):
         # write your code here
+        # through kwargs you can access a copy of the TestObject in the current context
+        # kwargs.get("test")
         pass
 
     def after_class(self):
