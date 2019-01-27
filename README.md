@@ -812,7 +812,7 @@ On After Group Failure event is triggered when a [Group Rule](#grouprules) produ
 ```
 
 #### On After Group Error
-On After Group Failure event is triggered when a [Group Rule](#grouprules) produces an exception other 
+On After Group Error event is triggered when a [Group Rule](#grouprules) produces an exception other 
 than AssertionError. 
 ```python
 ...
