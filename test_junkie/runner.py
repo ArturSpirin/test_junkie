@@ -21,11 +21,14 @@ class Runner:
 
     def __init__(self, suites, **kwargs):
 
+        if not suites or not isinstance(suites, list):
+            raise BadParameters("Runner needs to be initiated with a mandatory argument \"suites\" which must be of "
+                                "type {}. Instead got: {}. Please see documentation: {}"
+                                .format(list, suites, DocumentationLinks.RUNNER_OBJECT))
+
         self.__stats = {}
 
         self.__suites = suites
-        if not isinstance(self.__suites, list):
-            self.__suites = [self.__suites]
 
         self.__suites = self.__prioritize(suites=self.__suites)
         for suite in self.__suites:
@@ -42,6 +45,8 @@ class Runner:
 
         self.__executed_suites = []
         self.__active_suites = []
+
+        self.group_rules = Builder.build_group_definitions(self.__suites)
 
     def __monitoring_enabled(self):
 
@@ -369,6 +374,12 @@ class Runner:
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
                                                        start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_COMPLETE, suite=suite)
+            after_group_failed = self.group_rules.run_after_group(suite)
+            if after_group_failed:
+                event = Event.ON_AFTER_GROUP_FAIL if isinstance(after_group_failed["exception"],
+                                                                AssertionError) else Event.ON_AFTER_GROUP_ERROR
+                Runner.__process_event(event=event, suite=suite, error=after_group_failed["exception"],
+                                       formatted_traceback=after_group_failed["trace"])
         elif self.__cancel:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_CANCEL, suite=suite)
@@ -612,6 +623,14 @@ class Runner:
                                                      "native": Listener().on_after_class_failure},
                          Event.ON_CLASS_IN_PROGRESS: {"custom": suite.get_listener().on_class_in_progress,
                                                       "native": Listener().on_class_in_progress},
+                         Event.ON_BEFORE_GROUP_FAIL: {"custom": suite.get_listener().on_before_group_failure,
+                                                      "native": Listener().on_before_group_failure},
+                         Event.ON_BEFORE_GROUP_ERROR: {"custom": suite.get_listener().on_before_group_error,
+                                                       "native": Listener().on_before_group_error},
+                         Event.ON_AFTER_GROUP_FAIL: {"custom": suite.get_listener().on_after_group_failure,
+                                                     "native": Listener().on_after_group_failure},
+                         Event.ON_AFTER_GROUP_ERROR: {"custom": suite.get_listener().on_after_group_error,
+                                                      "native": Listener().on_after_group_error},
                          Event.ON_CLASS_COMPLETE: {"custom": suite.get_listener().on_class_complete,
                                                    "native": Listener().on_class_complete}
                          }

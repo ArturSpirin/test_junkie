@@ -2,7 +2,7 @@ from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
 from tests.junkie_suites.BeforeClassAssertionSuite import BeforeClassAssertionSuite
 
-runner = Runner(BeforeClassAssertionSuite)
+runner = Runner([BeforeClassAssertionSuite])
 runner.run()
 results = runner.get_executed_suites()
 

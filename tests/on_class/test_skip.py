@@ -4,7 +4,7 @@ from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
 from tests.junkie_suites.SkipSuite import SkipSuite
 
-runner = Runner(SkipSuite)
+runner = Runner([SkipSuite])
 runner.run()
 results = runner.get_executed_suites()
 

@@ -83,6 +83,49 @@ class afterClass(object):
         return decorated_function
 
 
+class GroupRules(object):
+
+    def __init__(self, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+
+    def __call__(self, decorated_function):
+
+        Builder.register_group_rules(decorated_function=decorated_function,
+                                     decorator_kwargs=self.decorator_kwargs,
+                                     decorator_type=DecoratorType.GROUP_RULES)
+        return decorated_function
+
+
+class afterGroup(object):
+
+    def __init__(self, group, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+        self.group = group
+
+    def __call__(self, decorated_function):
+
+        Builder.add_group_rule(suites=self.group,
+                               decorated_function=decorated_function,
+                               decorator_kwargs=self.decorator_kwargs,
+                               decorator_type=DecoratorType.AFTER_GROUP)
+        return decorated_function
+
+
+class beforeGroup(object):
+
+    def __init__(self, group, **decorator_kwargs):
+        self.decorator_kwargs = decorator_kwargs
+        self.group = group
+
+    def __call__(self, decorated_function):
+
+        Builder.add_group_rule(suites=self.group,
+                               decorated_function=decorated_function,
+                               decorator_kwargs=self.decorator_kwargs,
+                               decorator_type=DecoratorType.BEFORE_GROUP)
+        return decorated_function
+
+
 def synchronized(lock=threading.Lock()):
     def wrapper(f):
         @functools.wraps(f)

@@ -7,7 +7,7 @@ from tests.junkie_suites.AfterTestExceptionSuite import AfterTestExceptionSuite
 from tests.junkie_suites.BeforeTestAssertionSuite import BeforeTestAssertionSuite
 from tests.junkie_suites.BeforeTestExceptionSuite import BeforeTestExceptionSuite
 
-runner = Runner(BeforeTestAssertionSuite)
+runner = Runner([BeforeTestAssertionSuite])
 runner.run()
 results = runner.get_executed_suites()
 
@@ -36,7 +36,7 @@ def test_failure():
                                           expected_exception=AssertionError)
 
 
-runner2 = Runner(BeforeTestExceptionSuite)
+runner2 = Runner([BeforeTestExceptionSuite])
 runner2.run()
 results2 = runner2.get_executed_suites()
 
@@ -65,7 +65,7 @@ def test_failure2():
                                           expected_exception=Exception)
 
 
-runner3 = Runner(AfterTestAssertionSuite)
+runner3 = Runner([AfterTestAssertionSuite])
 runner3.run()
 results3 = runner3.get_executed_suites()
 
@@ -95,7 +95,7 @@ def test_failure3():
                                           expected_exception=AssertionError)
 
 
-runner4 = Runner(AfterTestExceptionSuite)
+runner4 = Runner([AfterTestExceptionSuite])
 runner4.run()
 results4 = runner4.get_executed_suites()
 

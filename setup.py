@@ -14,6 +14,8 @@ setuptools.setup(
     url="https://github.com/ArturSpirin/test_junkie",
     packages=setuptools.find_packages(),
     classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
@@ -22,7 +24,10 @@ setuptools.setup(
         "Operating System :: OS Independent",
         "Topic :: Software Development :: Quality Assurance",
         "Topic :: Software Development :: Testing",
-        "Development Status :: 3 - Alpha"
+        "Topic :: Software Development :: Libraries",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: Utilities"
     ],
     install_requires=["statistics", "psutil"],
+    keywords=["automation", "testing", "tests"],
 )

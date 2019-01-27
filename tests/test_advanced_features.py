@@ -10,7 +10,7 @@ LogJunkie.enable_logging(10)
 from test_junkie.runner import Runner
 from tests.junkie_suites.AdvancedSuite import AdvancedSuite
 
-runner = Runner(AdvancedSuite)
+runner = Runner([AdvancedSuite])
 runner.run(suite_multithreading=True, suite_multithreading_limit=5,
            test_multithreading=True, test_multithreading_limit=5,
            tag_config={"run_on_match_all": ["critical", "v2"],

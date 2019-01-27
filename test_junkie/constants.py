@@ -38,6 +38,9 @@ class DecoratorType:
     AFTER_TEST = "afterTest"
     AFTER_CLASS = "afterClass"
     TEST_CASE = "testCase"
+    GROUP_RULES = "groupRules"
+    BEFORE_GROUP = "beforeGroup"
+    AFTER_GROUP = "afterGroup"
 
 
 class Event:
@@ -57,6 +60,10 @@ class Event:
     ON_CLASS_IN_PROGRESS = 13
     ON_CLASS_COMPLETE = 14
     ON_CLASS_IGNORE = 15
+    ON_BEFORE_GROUP_FAIL = 16
+    ON_BEFORE_GROUP_ERROR = 17
+    ON_AFTER_GROUP_FAIL = 18
+    ON_AFTER_GROUP_ERROR = 19
 
 
 class DocumentationLinks:
@@ -70,3 +77,4 @@ class DocumentationLinks:
     TAGS = "https://github.com/ArturSpirin/test_junkie#tags"
     SPONSOR_PATREON = "https://www.patreon.com/join/arturspirin"
     RUNNER_OBJECT = "https://github.com/ArturSpirin/test_junkie#runner-object"
+    GROUP_RULES = "https://github.com/ArturSpirin/test_junkie#group-rules"

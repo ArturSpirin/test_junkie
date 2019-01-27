@@ -48,6 +48,7 @@ Like this project? Support it by sharing it on your social media or donate throu
     * [@test](#test)
     * [@afterTest](#aftertest)
     * [@afterClass](#afterclass)
+    * [@GroupRules](#grouprules)
   * [Skipping Tests/Suites](#skipping-testssuites)
   * [Retrying Tests/Suites](#retrying-testssuites)
     * [Retry on Specific Exception](#retry-on-specific-exception)
@@ -73,6 +74,8 @@ Like this project? Support it by sharing it on your social media or donate throu
     * [On After Class Fail](#on-after-class-failure)
     * [On After Class Error](#on-after-class-error)
     * [On Class Complete](#on-class-complete)
+    * [On After Group Fail](#on-after-group-failure)
+    * [On After Group Error](#on-after-group-error)
   * [Meta](#meta)
   * [Assignees](#suite--test-assignees)
   * [Rules](#rules)
@@ -224,6 +227,43 @@ def d_function():
     ...
 ```
 @afterClass does not support any special decorator properties.
+
+#### @GroupRules
+Test Junkie allows to define:
++ `@afterGroup`: anything inside a function that is decorated with @afterGroup, will be executed right after the 
+                 very last test suite in the group. This will have no effect on the test results if code 
+                 produces an exception here, however, it will trigger an [On After Group Error](#on-after-group-error) 
+                 or [On After Group Fail](#on-after-group-failure) event which will allow you to take appropriate 
+                 course of action.
+
+You can define as many rules as you want for different or the same groups of suites, just like shown bellow.
+```python
+from test_junkie.decorators import GroupRules, afterGroup
+from test_junkie.rules import Rules
+
+class TestRules(Rules):
+
+    def __init__(self, **kwargs):
+
+        Rules.__init__(self, **kwargs)
+
+    @GroupRules()
+    def group_rules(self):
+        
+        from my.suites.examples.ExampleSuite1 import ExampleSuite1
+        from my.suites.examples.ExampleSuite2 import ExampleSuite2
+        @afterGroup([ExampleSuite1, ExampleSuite2])
+        def after_group_a():
+            # anything that you want to do after all of the tests in the group finished running
+            pass
+            
+        from my.suites.examples.ExampleSuite3 import ExampleSuite3
+        from my.suites.examples.ExampleSuite4 import ExampleSuite4
+        @afterGroup([ExampleSuite3, ExampleSuite4])
+        def after_group_b():
+            # anything that you want to do after all of the tests in the group finished running
+            pass
+```
 
 ### Skipping Tests/Suites
 Test Junkie extends skipping functionality at the test level and at the suite level. You can use both at the same time 
@@ -756,6 +796,27 @@ or [suite retries](#retrying-testssuites).
 ```python
 ...
     def on_class_complete(self, **kwargs):
+        # Write your own code here
+        print(kwargs) 
+    ...
+```
+
+#### On After Group Failure
+On After Group Failure event is triggered when a [Group Rule](#grouprules) produces an AssertionError. 
+```python
+...
+    def on_after_group_failure(self, **kwargs):
+        # Write your own code here
+        print(kwargs) 
+    ...
+```
+
+#### On After Group Error
+On After Group Failure event is triggered when a [Group Rule](#grouprules) produces an exception other 
+than AssertionError. 
+```python
+...
+    def on_after_group_error(self, **kwargs):
         # Write your own code here
         print(kwargs) 
     ...

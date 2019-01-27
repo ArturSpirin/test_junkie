@@ -430,3 +430,24 @@ class Limiter:
             if isinstance(value, str) and len(value) > Limiter.TRACEBACK_LIMIT:
                 value = "{} [. . .]".format(value[:Limiter.TRACEBACK_LIMIT])
         return value
+
+
+class GroupRulesObject:
+
+    def __init__(self, definition):
+
+        self.definition = definition
+
+    def run_after_group(self, suite):
+
+        for group, definition in self.definition.items():
+            if suite.get_class_object() in definition["suites"]:
+                definition["suites"].remove(suite.get_class_object())
+                if not definition["suites"]:
+                    for func in definition["rules"][DecoratorType.AFTER_GROUP]:
+                        try:
+                            func["decorated_function"]()
+                        except Exception as error:
+                            trace = traceback.format_exc()
+                            return {"trace": trace, "exception": error}
+        return None

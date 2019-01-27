@@ -59,3 +59,15 @@ class Listener(object):
 
     def on_class_ignore(self, **kwargs):
         Listener.__process_event(**kwargs)
+
+    def on_before_group_failure(self, **kwargs):
+        Listener.__process_event(**kwargs)
+
+    def on_before_group_error(self, **kwargs):
+        Listener.__process_event(**kwargs)
+
+    def on_after_group_failure(self, **kwargs):
+        Listener.__process_event(**kwargs)
+
+    def on_after_group_error(self, **kwargs):
+        Listener.__process_event(**kwargs)

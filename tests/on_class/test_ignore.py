@@ -6,7 +6,7 @@ from tests.QualityManager import QualityManager
 from tests.junkie_suites.IgnoreSuite import IgnoreSuiteBoundMethod, IgnoreSuiteFunction, IgnoreSuiteClassic, \
     IgnoreSuiteClassic2, IgnoreSuiteClassic3
 
-runner = Runner(IgnoreSuiteBoundMethod)
+runner = Runner([IgnoreSuiteBoundMethod])
 runner.run()
 results = runner.get_executed_suites()
 
@@ -33,7 +33,7 @@ def test_test_metrics():
         assert len(properties) == 0
 
 
-runner = Runner(IgnoreSuiteFunction)
+runner = Runner([IgnoreSuiteFunction])
 runner.run()
 results = runner.get_executed_suites()
 
@@ -60,7 +60,7 @@ def test_test_metrics2():
         assert len(properties) == 0
 
 
-runner = Runner(IgnoreSuiteClassic)
+runner = Runner([IgnoreSuiteClassic])
 runner.run()
 results = runner.get_executed_suites()
 
@@ -87,7 +87,7 @@ def test_test_metrics3():
         assert len(properties) == 0
 
 
-runner = Runner(IgnoreSuiteClassic2)
+runner = Runner([IgnoreSuiteClassic2])
 runner.run()
 results = runner.get_executed_suites()
 
@@ -114,7 +114,7 @@ def test_test_metrics4():
         assert len(properties) == 0
 
 
-runner = Runner(IgnoreSuiteClassic3)
+runner = Runner([IgnoreSuiteClassic3])
 runner.run()
 results = runner.get_executed_suites()
 

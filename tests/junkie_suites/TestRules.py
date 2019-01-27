@@ -1,3 +1,4 @@
+from test_junkie.decorators import GroupRules, beforeGroup, afterGroup
 from test_junkie.objects import TestObject, SuiteObject
 from test_junkie.rules import Rules
 
@@ -21,3 +22,16 @@ class TestRules(Rules):
 
     def after_class(self):
         assert isinstance(self.kwargs.get("suite"), SuiteObject), "Suite Object must be passed to the before_test()"
+
+    @GroupRules()
+    def group_rules(self):
+
+        from tests.junkie_suites.AdvancedSuite import AdvancedSuite
+
+        @beforeGroup([AdvancedSuite])
+        def after_group():
+            raise Exception("Test exception")
+
+        @afterGroup([AdvancedSuite])
+        def after_group():
+            raise Exception("Test exception")

@@ -6,7 +6,7 @@ from tests.junkie_suites.ExecutionSquence import ExecutionSequence1, ExecutionSe
     ExecutionSequence4
 from tests.junkie_suites.ParametersSuite import ParametersSuite
 
-runner = Runner(BasicSuite)
+runner = Runner([BasicSuite])
 runner.run()
 results = runner.get_executed_suites()
 tests = results[0].get_test_objects()

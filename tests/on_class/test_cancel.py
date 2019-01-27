@@ -6,7 +6,7 @@ from tests.QualityManager import QualityManager
 from test_junkie.runner import Runner
 from tests.junkie_suites.CancelSuite import CancelSuite
 
-runner = Runner(CancelSuite)
+runner = Runner([CancelSuite])
 thread = threading.Thread(target=runner.run, args=())
 runner.cancel()
 thread.start()

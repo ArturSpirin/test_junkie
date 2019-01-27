@@ -1,4 +1,6 @@
+import hashlib
 import inspect
+import pprint
 
 from test_junkie.constants import DocumentationLinks
 from test_junkie.errors import BadParameters, BadSignature
@@ -19,6 +21,10 @@ class Builder(object):
                               "no_retry_on": [list], "retry_on": [list], "pr": [list],
                               "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
 
+    __GROUP_RULES = []
+    __GROUP_RULE_DEFINITIONS = {}
+    __REQUESTED_SUITES = None
+
     @staticmethod
     def get_execution_roster():
         return Builder.__EXECUTION_ROSTER
@@ -37,6 +43,43 @@ class Builder(object):
                                                                DecoratorType.TEST_CASE: [],
                                                                DecoratorType.AFTER_TEST: [],
                                                                DecoratorType.AFTER_CLASS: []}}
+
+    @staticmethod
+    def build_group_definitions(suites):
+
+        Builder.__REQUESTED_SUITES = suites
+        for group_rule in Builder.__GROUP_RULES:
+            func = group_rule["decorated_function"]
+            func(func)
+        pprint.pprint(Builder.__GROUP_RULE_DEFINITIONS)
+        from test_junkie.objects import GroupRulesObject
+        return GroupRulesObject(Builder.__GROUP_RULE_DEFINITIONS)
+
+    @staticmethod
+    def register_group_rules(decorated_function, decorator_kwargs, decorator_type):
+
+        Builder.__GROUP_RULES.append({"decorated_function": decorated_function,
+                                      "decorator_kwargs": decorator_kwargs,
+                                      "decorator_type": decorator_type})
+
+    @staticmethod
+    def add_group_rule(suites, decorated_function, decorator_kwargs, decorator_type):
+
+        if not suites or not isinstance(suites, list):
+            raise BadParameters("Group Rules must be defined with a mandatory argument \"suites\" which must be "
+                                "of type {}. Please see documentation: {}".format(list, DocumentationLinks.GROUP_RULES))
+        suites = sorted(set(suites))
+        for suite in suites:
+            if suite not in Builder.__REQUESTED_SUITES:
+                suites.remove(suite)
+        if suites:  # making sure that rules only apply when we actually run applicable test suites
+            group = hashlib.md5(str(suites).encode("utf8")).hexdigest()
+            if group not in Builder.__GROUP_RULE_DEFINITIONS:
+                Builder.__GROUP_RULE_DEFINITIONS.update({group: {"suites": suites, "rules": {}}})
+            if decorator_type not in Builder.__GROUP_RULE_DEFINITIONS[group]["rules"]:
+                Builder.__GROUP_RULE_DEFINITIONS[group]["rules"].update({decorator_type: []})
+            Builder.__GROUP_RULE_DEFINITIONS[group]["rules"][decorator_type].append(
+                {"decorated_function": decorated_function, "decorator_kwargs": decorator_kwargs})
 
     @staticmethod
     def build_suite_definitions(decorated_function, decorator_kwargs, decorator_type):

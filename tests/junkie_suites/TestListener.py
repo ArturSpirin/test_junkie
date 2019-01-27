@@ -112,3 +112,33 @@ class TestListener(Listener):
         assert "suite_meta" in kwargs["properties"], "missing suite meta"
         assert "jm" in kwargs["properties"], "missing test junkie meta: {}".format(kwargs)
         assert "jso" in kwargs["properties"]["jm"], "missing suite object in junkie meta"
+
+    def on_class_ignore(self, **kwargs):
+        assert "properties" in kwargs, "missing properties"
+        assert "suite_meta" in kwargs["properties"], "missing suite meta"
+        assert "jm" in kwargs["properties"], "missing test junkie meta: {}".format(kwargs)
+        assert "jso" in kwargs["properties"]["jm"], "missing suite object in junkie meta"
+
+    def on_before_group_failure(self, **kwargs):
+        assert "properties" in kwargs, "missing properties"
+        assert "suite_meta" in kwargs["properties"], "missing suite meta"
+        assert "jm" in kwargs["properties"], "missing test junkie meta: {}".format(kwargs)
+        assert "jso" in kwargs["properties"]["jm"], "missing suite object in junkie meta"
+
+    def on_before_group_error(self, **kwargs):
+        assert "properties" in kwargs, "missing properties"
+        assert "suite_meta" in kwargs["properties"], "missing suite meta"
+        assert "jm" in kwargs["properties"], "missing test junkie meta: {}".format(kwargs)
+        assert "jso" in kwargs["properties"]["jm"], "missing suite object in junkie meta"
+
+    def on_after_group_failure(self, **kwargs):
+        assert "properties" in kwargs, "missing properties"
+        assert "suite_meta" in kwargs["properties"], "missing suite meta"
+        assert "jm" in kwargs["properties"], "missing test junkie meta: {}".format(kwargs)
+        assert "jso" in kwargs["properties"]["jm"], "missing suite object in junkie meta"
+
+    def on_after_group_error(self, **kwargs):
+        assert "properties" in kwargs, "missing properties"
+        assert "suite_meta" in kwargs["properties"], "missing suite meta"
+        assert "jm" in kwargs["properties"], "missing test junkie meta: {}".format(kwargs)
+        assert "jso" in kwargs["properties"]["jm"], "missing suite object in junkie meta"
