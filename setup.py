@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.5a7",
+    version="0.5a8",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Advanced test runner with built in reporting and analytics",
@@ -29,5 +29,5 @@ setuptools.setup(
         "Topic :: Utilities"
     ],
     install_requires=["statistics", "psutil"],
-    keywords=["automation", "testing", "tests"],
+    keywords=["automation", "testing", "tests", "test-runner"],
 )

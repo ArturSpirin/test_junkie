@@ -331,8 +331,8 @@ class Runner:
                                                                class_param=class_param, error=bad_params)
                                         continue
                                     for param in test.get_parameters(process_functions=True):
-                                        if unsuccessful_tests is not None:
-                                            if not test.is_qualified_for_retry(param, class_param=class_param):
+                                        if unsuccessful_tests is not None and \
+                                                not test.is_qualified_for_retry(param, class_param=class_param):
                                                 # If does not qualify with current parameter, will move to the next
                                                 continue
                                         if ((self.__processor.test_multithreading()

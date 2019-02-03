@@ -237,12 +237,6 @@ class Aggregator:
     @staticmethod
     def present_console_output(aggregator):
 
-        def percentage(total, part):
-            if part > 0:
-                return "{:0.2f}".format(float(part) / float(total) * 100)
-            else:
-                return "0"
-
         def parse_exception(value):
             if value is not None:
                 error = ""
@@ -256,7 +250,7 @@ class Aggregator:
         for status in TestCategory.ALL:
             print("[{part}/{total} {percent}%] {status}"
                   .format(part=test_report[status], total=test_report["total"], status=status.upper(),
-                          percent=percentage(test_report["total"], test_report[status])))
+                          percent=Aggregator.percentage(test_report["total"], test_report[status])))
         print("")
         for suite, stats in suite_report.items():
             status = suite.metrics.get_metrics()["status"]
@@ -267,7 +261,7 @@ class Aggregator:
                           name=suite.get_class_name(),
                           status=status.upper(),
                           runtime=suite.get_runtime(),
-                          rate=percentage(stats["total"], stats[TestCategory.SUCCESS]),
+                          rate=Aggregator.percentage(stats["total"], stats[TestCategory.SUCCESS]),
                           passed=stats[TestCategory.SUCCESS],
                           total=stats["total"]))
             if status == SuiteCategory.IGNORE:
