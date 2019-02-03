@@ -60,6 +60,7 @@ class SuiteObject:
             self.__tests.append(TestObject(test))
         self.metrics = ClassMetrics()
         self.__rules = suite_definition["test_rules"](suite=copy.deepcopy(self))
+        self.__instance = None
 
     def get_decorated_definition(self, decorator_type):
 
@@ -72,6 +73,12 @@ class SuiteObject:
     def get_class_name(self):
 
         return self.__suite_definition["class_name"]
+
+    def get_class_instance(self):
+
+        if self.__instance is None:
+            self.__instance = self.__suite_definition["class_object"]()
+        return self.__instance
 
     def get_class_object(self):
 

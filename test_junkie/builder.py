@@ -94,7 +94,7 @@ class Builder(object):
             if decorated_function is not None:
                 Builder.__validate_suite_kwargs(decorator_kwargs)
                 _class_name = decorated_function.__name__
-                Builder.__CURRENT_SUITE_OBJECT["class_object"] = decorated_function()
+                Builder.__CURRENT_SUITE_OBJECT["class_object"] = decorated_function
                 Builder.__CURRENT_SUITE_OBJECT["class_retry"] = decorator_kwargs.get("retry", 1)
                 Builder.__CURRENT_SUITE_OBJECT["class_skip"] = decorator_kwargs.get("skip", False)
                 Builder.__CURRENT_SUITE_OBJECT["class_meta"] = decorator_kwargs.get("meta", {})
