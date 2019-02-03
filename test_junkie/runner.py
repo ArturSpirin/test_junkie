@@ -568,9 +568,9 @@ class Runner:
                 try:
                     # deprecated but supports Python 2
                     if "suite_parameter" in inspect.getargspec(func["decorated_function"]).args:
-                        func["decorated_function"](suite.get_class_object()(), suite_parameter=class_parameter)
+                        func["decorated_function"](suite.get_class_object(), suite_parameter=class_parameter)
                     else:
-                        func["decorated_function"](suite.get_class_object()())
+                        func["decorated_function"](suite.get_class_object())
                 except Exception as decorator_error:
                     trace = traceback.format_exc()
                     update_metrics(decorator_type, decorator_error, trace)
@@ -583,14 +583,14 @@ class Runner:
                 update_metrics(decorator_type)
         else:
             if test.accepts_test_and_suite_parameters():
-                test.get_function_object()(suite.get_class_object()(),
+                test.get_function_object()(suite.get_class_object(),
                                            parameter=parameter, suite_parameter=class_parameter)
             elif test.accepts_suite_parameters():
-                test.get_function_object()(suite.get_class_object()(), suite_parameter=class_parameter)
+                test.get_function_object()(suite.get_class_object(), suite_parameter=class_parameter)
             elif test.accepts_test_parameters():
-                test.get_function_object()(suite.get_class_object()(), parameter=parameter)
+                test.get_function_object()(suite.get_class_object(), parameter=parameter)
             else:
-                test.get_function_object()(suite.get_class_object()())
+                test.get_function_object()(suite.get_class_object())
 
     @staticmethod
     def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None):

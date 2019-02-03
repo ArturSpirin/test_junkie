@@ -290,9 +290,6 @@ class Aggregator:
                                               exception=parse_exception(trace),
                                               runtime=param_data["performance"][index],
                                               status=param_data["status"].upper()))
-
-        print("\nHi, I'm Artur, the developer of Test Junkie. If you like this framework, consider backing me: {}"
-              .format(DocumentationLinks.SPONSOR_PATREON))
         print("============================================================\n\n\n")
 
     @staticmethod
