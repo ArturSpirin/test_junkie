@@ -7,7 +7,7 @@ import sys
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType, synchronized
-from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, BadSignature
+from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
 from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.parallels import ParallelProcessor
@@ -274,13 +274,20 @@ class Runner:
     def __validate_test_parameters(test):
         parameters = test.get_parameters(process_functions=True)
         if not parameters or not isinstance(parameters, list):
-            if isinstance(parameters, list):
-                return BadParameters("Argument: \"parameters\" in @test() decorator returned empty: <class 'list'>. "
-                                     "For more info, see: {}".format(DocumentationLinks.ON_TEST_IGNORE))
-            else:
-                return BadParameters("Argument: \"parameters\" in @test() decorator must be of type: <class 'list'> "
-                                     "but found: {}. For more info, see @test() decorator documentation: {}"
-                                     .format(type(parameters), DocumentationLinks.TEST_DECORATOR))
+            exception = None
+            try:
+                if isinstance(parameters, list):
+                    exception = BadParameters("Argument: \"parameters\" in @test() decorator returned empty: "
+                                              "<class 'list'>. For more info, see: {}"
+                                              .format(DocumentationLinks.ON_TEST_IGNORE))
+                else:
+                    exception = BadParameters("Argument: \"parameters\" in @test() decorator must be of type: "
+                                              "<class 'list'> but found: {}. For more info, see @test() decorator "
+                                              "documentation: {}"
+                                              .format(type(parameters), DocumentationLinks.TEST_DECORATOR))
+                raise exception
+            except:
+                return {"exception": exception, "trace": traceback.format_exc()}
 
     def __run_suite(self, suite):
         suite_start_time = time.time()
@@ -326,7 +333,9 @@ class Runner:
                                     if bad_params is not None:
                                         tests.remove(test)
                                         test.metrics.update_metrics(status=TestCategory.IGNORE,
-                                                                    start_time=test_start_time, exception=bad_params)
+                                                                    start_time=test_start_time,
+                                                                    exception=bad_params["exception"],
+                                                                    formatted_traceback=bad_params["trace"])
                                         Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test,
                                                                class_param=class_param, error=bad_params)
                                         continue
