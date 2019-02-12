@@ -1,8 +1,8 @@
 from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
-from tests.junkie_suites.IgnoreSuite import IgnoreSuiteBeforeGroupRule
+from tests.junkie_suites.IgnoreSuite import IgnoreSuiteBeforeGroupRule, IgnoreSuiteBeforeGroupRule2
 
-runner = Runner([IgnoreSuiteBeforeGroupRule])
+runner = Runner([IgnoreSuiteBeforeGroupRule, IgnoreSuiteBeforeGroupRule2])
 runner.run()
 results = runner.get_executed_suites()
 

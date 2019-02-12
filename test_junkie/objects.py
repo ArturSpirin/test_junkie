@@ -450,7 +450,7 @@ class GroupRulesObject:
         for group, definition in self.definition.items():
             if suite.get_class_object() in definition["suites"]:
                 definition["suites"].remove(suite.get_class_object())
-                if not definition["suites"] and DecoratorType.AFTER_GROUP in definition:
+                if not definition["suites"] and DecoratorType.AFTER_GROUP in definition["rules"]:
                     for func in definition["rules"][DecoratorType.AFTER_GROUP]:
                         try:
                             func["decorated_function"]()
