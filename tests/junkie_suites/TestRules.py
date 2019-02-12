@@ -29,9 +29,16 @@ class TestRules(Rules):
         from tests.junkie_suites.AdvancedSuite import AdvancedSuite
 
         @beforeGroup([AdvancedSuite])
-        def after_group():
-            raise Exception("Test exception")
+        def before_group():
+            pass
 
         @afterGroup([AdvancedSuite])
         def after_group():
             raise Exception("Test exception")
+
+        from tests.junkie_suites.IgnoreSuite import IgnoreSuiteBeforeGroupRule
+        from tests.junkie_suites.IgnoreSuite import IgnoreSuiteBeforeGroupRule2
+
+        @beforeGroup([IgnoreSuiteBeforeGroupRule, IgnoreSuiteBeforeGroupRule2])
+        def before_group():
+            assert True is False

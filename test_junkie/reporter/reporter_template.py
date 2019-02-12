@@ -316,7 +316,7 @@ class ReportTemplate:
                             example_filter.html("")
                             example_length.html("")
 
-                             $('#table_results thead th').each(function(){
+                            $('#table_results thead th').each(function(){
                                 var title = $('#table_results thead th').eq($(this).index()).text();
                                 $(this).html('<input class="deletable" id="search'+$('#table_results thead th').eq($(this).index()).text()+'" type="text" placeholder="'+title+'"/>');
                             });

@@ -1,5 +1,6 @@
 from test_junkie.decorators import Suite, test
 from tests.junkie_suites.TestListener import TestListener
+from tests.junkie_suites.TestRules import TestRules
 
 
 class Bound:
@@ -54,4 +55,28 @@ class IgnoreSuiteClassic3:
 
     @test()
     def pass_1(self):
+        pass
+
+
+@Suite(listener=TestListener, retry=2, rules=TestRules)
+class IgnoreSuiteBeforeGroupRule:
+
+    @test()
+    def ignore_1(self):
+        pass
+
+    @test()
+    def ignore_2(self):
+        pass
+
+
+@Suite(listener=TestListener, retry=2, rules=TestRules)
+class IgnoreSuiteBeforeGroupRule2:
+
+    @test()
+    def ignore_1(self):
+        pass
+
+    @test()
+    def ignore_2(self):
         pass

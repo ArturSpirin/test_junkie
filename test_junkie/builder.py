@@ -1,6 +1,5 @@
 import hashlib
 import inspect
-import pprint
 
 from test_junkie.constants import DocumentationLinks
 from test_junkie.errors import BadParameters, BadSignature
@@ -51,7 +50,6 @@ class Builder(object):
         for group_rule in Builder.__GROUP_RULES:
             func = group_rule["decorated_function"]
             func(func)
-        pprint.pprint(Builder.__GROUP_RULE_DEFINITIONS)
         from test_junkie.objects import GroupRulesObject
         return GroupRulesObject(Builder.__GROUP_RULE_DEFINITIONS)
 
@@ -68,8 +66,8 @@ class Builder(object):
         if not suites or not isinstance(suites, list):
             raise BadParameters("Group Rules must be defined with a mandatory argument \"suites\" which must be "
                                 "of type {}. Please see documentation: {}".format(list, DocumentationLinks.GROUP_RULES))
-        suites = sorted(set(suites))
-        for suite in suites:
+        suites = sorted(set(suites), key=lambda x: str(x), reverse=True)
+        for suite in list(suites):
             if suite not in Builder.__REQUESTED_SUITES:
                 suites.remove(suite)
         if suites:  # making sure that rules only apply when we actually run applicable test suites

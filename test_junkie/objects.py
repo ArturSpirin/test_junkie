@@ -450,11 +450,24 @@ class GroupRulesObject:
         for group, definition in self.definition.items():
             if suite.get_class_object() in definition["suites"]:
                 definition["suites"].remove(suite.get_class_object())
-                if not definition["suites"]:
+                if not definition["suites"] and DecoratorType.AFTER_GROUP in definition:
                     for func in definition["rules"][DecoratorType.AFTER_GROUP]:
                         try:
                             func["decorated_function"]()
                         except Exception as error:
                             trace = traceback.format_exc()
                             return {"trace": trace, "exception": error}
+        return None
+
+    def run_before_group(self, suite, rule_type):
+
+        for group, definition in self.definition.items():
+            if suite.get_class_object() in definition["suites"] and rule_type in definition["rules"]:
+                for func in list(definition["rules"][rule_type]):
+                    try:
+                        func["decorated_function"]()
+                        definition["rules"].pop(rule_type)
+                    except Exception as error:
+                        trace = traceback.format_exc()
+                        return {group: {"trace": trace, "exception": error, "definition": definition}}
         return None

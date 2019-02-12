@@ -48,6 +48,8 @@ class Runner:
 
         self.group_rules = Builder.build_group_definitions(self.__suites)
 
+        self.before_group_failed = {}
+
     def __monitoring_enabled(self):
 
         return self.__kwargs.get("monitor_resources", False)
@@ -290,10 +292,26 @@ class Runner:
                 return {"exception": exception, "trace": traceback.format_exc()}
 
     def __run_suite(self, suite):
+
+        def before_group_rule_failed():
+            for group, _result in self.before_group_failed.items():
+                if suite.get_class_object() in _result["definition"]["suites"]:
+                    return True
+            return False
+
         suite_start_time = time.time()
         unsuccessful_tests = None
-        bad_params = Runner.__validate_suite_parameters(suite)
-        if not suite.can_skip(self.__run_config.get("features", None)) and not self.__cancel and not bad_params:
+        exception = Runner.__validate_suite_parameters(suite)
+
+        if not exception:
+            result = self.group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
+            if result is not None:
+                self.before_group_failed.update(result)
+                exception = result[list(result.keys())[0]]["trace"]
+
+        if not suite.can_skip(self.__run_config.get("features", None)) and \
+                not self.__cancel and \
+                not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
@@ -392,9 +410,9 @@ class Runner:
         elif self.__cancel:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_CANCEL, suite=suite)
-        elif bad_params:
+        elif exception or before_group_rule_failed():
             suite.metrics.update_suite_metrics(status=SuiteCategory.IGNORE, start_time=suite_start_time,
-                                               initiation_error=bad_params)
+                                               initiation_error=exception)
             Runner.__process_event(event=Event.ON_CLASS_IGNORE, suite=suite)
         else:
             suite.metrics.update_suite_metrics(status=SuiteCategory.SKIP, start_time=suite_start_time)
