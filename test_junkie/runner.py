@@ -296,18 +296,19 @@ class Runner:
         def before_group_rule_failed():
             for group, _result in self.before_group_failed.items():
                 if suite.get_class_object() in _result["definition"]["suites"]:
-                    return True
-            return False
+                    return _result["trace"]
 
         suite_start_time = time.time()
         unsuccessful_tests = None
         exception = Runner.__validate_suite_parameters(suite)
 
         if not exception:
-            result = self.group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
-            if result is not None:
-                self.before_group_failed.update(result)
-                exception = result[list(result.keys())[0]]["trace"]
+            exception = before_group_rule_failed()
+            if not exception:
+                result = self.group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
+                if result is not None:
+                    self.before_group_failed.update(result)
+                    exception = result[list(result.keys())[0]]["trace"]
 
         if not suite.can_skip(self.__run_config.get("features", None)) and \
                 not self.__cancel and \
