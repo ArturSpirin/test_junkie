@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.5a9",
+    version="0.6a0",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Advanced test runner with built in reporting and analytics",

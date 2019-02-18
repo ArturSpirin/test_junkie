@@ -1,7 +1,10 @@
 import copy
 import json
 import time
+import traceback
+
 from test_junkie.constants import TestCategory, DecoratorType
+from test_junkie.debugger import LogJunkie
 from test_junkie.metrics import Aggregator
 from test_junkie.reporter.reporter_template import ReportTemplate
 
@@ -20,6 +23,13 @@ class Reporter:
         from statistics import mean
         if value:
             return str(float("{0:.2f}".format(float(mean(value)))))
+        else:
+            return "0"
+
+    @staticmethod
+    def total_up(value):
+        if value:
+            return str(float("{0:.2f}".format(float(sum(value)))))
         else:
             return "0"
 
@@ -47,15 +57,19 @@ class Reporter:
         row_one_html = "<div class='row'>"
         row_two_html = "<div class='row'>"
 
-        tiny = [{"label": "Tests Executed:", "value": str(self.test_totals["total"])},
+        tiny = [{"label": "Tests Executed:", "value": str(self.test_totals["total"]),
+                 "tooltip": "Absolute # of tests executed.<br>May not match with the # of entries in the table "
+                            "because parameterized tests are nested in the table."},
                 {"label": "Passing Rate:", "value": "{:0.2f}%".format(float(self.test_totals[TestCategory.SUCCESS]) /
                                                                       float(self.test_totals["total"]) * 100)
-                if self.test_totals[TestCategory.SUCCESS] > 0 else "0%"},
-                {"label": "Runtime:", "value": time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime))},
+                if self.test_totals[TestCategory.SUCCESS] > 0 else "0%", "tooltip": None},
+                {"label": "Runtime:", "value": time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime)),
+                 "tooltip": "Absolute time that it took to run all of the tests"},
                 {"label": "Average Test Runtime:", "value": str(time.strftime('%Hh:%Mm:%Ss',
-                                                                              time.gmtime(self.average_runtime)))}]
+                                                                              time.gmtime(self.average_runtime))),
+                 "tooltip": "Avg. time per test. This accounts only for the functions decorated with @test()"}]
         for card in tiny:
-            row_one_html += ReportTemplate.get_tiny_card_template(card["label"], card["value"])
+            row_one_html += ReportTemplate.get_tiny_card_template(card["label"], card["value"], card["tooltip"])
 
         row_two_html += ReportTemplate.get_health_of_features(self.__get_health_of_features())
         absolute_metrics = self.__get_absolute_results_dataset()
@@ -217,12 +231,13 @@ class Reporter:
             new_suite_metrics = {}
             for _decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST,
                                DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS]:
-                med, avg, minimum, maximum = "N/A", "N/A", "N/A", "N/A"
+                med, avg, minimum, maximum, total = "N/A", "N/A", "N/A", "N/A", "N/A"
                 if _data[_decorator]["performance"]:
                     med = "{:0.2f}s".format(median(_data[_decorator]["performance"]))
                     avg = "{:0.2f}s".format(mean(_data[_decorator]["performance"]))
                     minimum = "{:0.2f}s".format(min(_data[_decorator]["performance"]))
                     maximum = "{:0.2f}s".format(max(_data[_decorator]["performance"]))
+                    total = "{}s".format(Reporter.total_up(_data[_decorator]["performance"]))
                 executions = 0
                 for traceback in _data[_decorator]["tracebacks"]:
                     if traceback != "N/A":
@@ -232,9 +247,18 @@ class Reporter:
                     if exception is not None:
                         failures += 1
                 new_suite_metrics.update({_decorator: {"executions": executions, "failures": failures,
-                                                       "median": med, "avg": avg,
+                                                       "median": med, "avg": avg, "total": total,
                                                        "minimum": minimum, "maximum": maximum}})
             return new_suite_metrics
+
+        def get_copy(value):
+
+            try:
+                return copy.deepcopy(value)
+            except:
+                LogJunkie.error("Failed to deepcopy: {}. Metrics may be missing in the HTML report.".format(value))
+                LogJunkie.error(traceback.format_exc())
+                return None
 
         from statistics import median, mean
 
@@ -248,14 +272,18 @@ class Reporter:
         suite_id = 0
         for suite in executed_suites:
             suite_id += 1
-            suite_metrics = copy.deepcopy(suite.metrics.get_metrics())
+            suite_metrics = get_copy(suite.metrics.get_metrics())
+            if suite_metrics is None:
+                continue
             database_lol["suites"].update({suite_id: {"name": suite.get_class_name(),
                                                       "module": suite.get_class_module(),
                                                       "metrics": convert_suite_metrics(suite_metrics)}})
             for test in suite.get_test_objects():
 
                 test_id += 1
-                test_metrics = copy.deepcopy(test.metrics.get_metrics())
+                test_metrics = get_copy(test.metrics.get_metrics())
+                if test_metrics is None:
+                    continue
                 duration, statuses = [], []
 
                 component = test.get_component()
@@ -280,7 +308,7 @@ class Reporter:
                         convert_performance(param_data["performance"])
                         convert_tracebacks(param_data["tracebacks"])
 
-                duration = Reporter.round(duration)
+                duration = Reporter.total_up(duration)
                 status = prioritize_status(statuses)
 
                 table_data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,

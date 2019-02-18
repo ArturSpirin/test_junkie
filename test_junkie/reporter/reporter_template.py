@@ -195,17 +195,19 @@ class ReportTemplate:
                """
 
     @staticmethod
-    def get_tiny_card_template(label, data):
+    def get_tiny_card_template(label, data, tooltip=None):
         return """
                     <div class="col s6 m4 l3 xl2">
-                      <div class="card blue-grey darken-3 absolute_cards">
+                      <div class="card blue-grey darken-3 absolute_cards {tooltipped}" {tooltip}>
                         <div class="card-content white-text">
                           <span class="card-title">{label}</span>
                           <div class="absolute_value"><b>{data}</b></div>
                         </div>
                       </div>
                     </div>
-                   """.format(label=label, data=data)
+                   """.format(label=label, data=data,
+                              tooltip="data-html='true' data-tooltip='{}'".format(tooltip) if tooltip else "",
+                              tooltipped="tooltipped"if tooltip else "")
 
     @staticmethod
     def get_table(data):
@@ -368,19 +370,29 @@ class ReportTemplate:
                         $(document).ready(function(){{
                             $('#testCaseModal').modal();
                             var test_modal = $("#testCaseModal")
-                            $("tr.modal-trigger").on("click", function(event){{
-                                var row = $(this)[0].dataset
-                                var test_id = row.test_id
-                                var suite_id = row.suite_id
-                                render_modal(test_id, suite_id)
-                            }})
+                            
+                            function register_tr_clicks(){{
+                                $("tr.modal-trigger").on("click", function(event){{
+                                    var row = $(this)[0].dataset
+                                    var test_id = row.test_id
+                                    var suite_id = row.suite_id
+                                    render_modal(test_id, suite_id)
+                                }})
+                            }}
+                            
+                            register_tr_clicks()
+                            $("#table_results").on( 'draw.dt', function () {{
+                                console.log("table redrawn")
+                                register_tr_clicks()
+                            }});
 
                             function render_modal(test_id, suite_id){{
                                 var status = database_lol.tests[test_id]["status"]
                                 var name = database_lol.tests[test_id]["name"]
                                 var suite = database_lol.suites[suite_id]["name"]
                                 var module = database_lol.suites[suite_id]["module"]
-                                $("#test_name").html("<span>"+module+"."+suite+".<b>"+name+"()</b></span>")
+                                
+                                $("#test_name").html("<span data-tooltip="+module+"."+suite+"."+name+"() class='tooltipped'><b>"+name+"()</b></span>")
                                 
                                 var suite_metrics_html = ""
                                 var suite_metrics = database_lol.suites[suite_id].metrics
@@ -395,6 +407,7 @@ class ReportTemplate:
                                     suite_metrics_html += '<div class="modal_absolute_value">median <b class="right">'+data.median+'</b></div>'
                                     suite_metrics_html += '<div class="modal_absolute_value">min <b class="right">'+data.minimum+'</b></div>'
                                     suite_metrics_html += '<div class="modal_absolute_value">max <b class="right">'+data.maximum+'</b></div>'
+                                    suite_metrics_html += '<div class="modal_absolute_value">total <b class="right">'+data.total+'</b></div>'
                                     suite_metrics_html += '<div class="modal_absolute_value">executions <b class="right">'+data.executions+'</b></div>'
                                     suite_metrics_html += '<div class="modal_absolute_value">failures <b class="right">'+data.failures+'</b></div>'
                                     suite_metrics_html += '</div></div></div>'                                
@@ -770,6 +783,7 @@ class ReportTemplate:
                               series_{chart_id}.dataFields.valueY = field;
                               series_{chart_id}.dataFields.categoryX = "measure";
                               series_{chart_id}.sequencedInterpolation = true;
+                              series_{chart_id}.legendSettings.valueText = "{valueY}"
                             
                               // Make it stacked
                               series_{chart_id}.stacked = true;
@@ -798,6 +812,7 @@ class ReportTemplate:
                         durationSeries_{chart_id}.tooltip.getFillFromObject = false;
                         durationSeries_{chart_id}.tooltip.background.fill = am4core.color("#03a2cd");
                         durationSeries_{chart_id}.tooltipText = "{valueY.formatDuration()}";
+                        durationSeries_{chart_id}.legendSettings.valueText = "{valueY}"
                         
                         var bullet_{chart_id} = durationSeries_{chart_id}.bullets.push(new am4charts.Bullet());
                         var circle_{chart_id} = bullet_{chart_id}.createChild(am4core.Circle);

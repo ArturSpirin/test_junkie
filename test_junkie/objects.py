@@ -49,7 +49,7 @@ class _FuncEval:
         return params
 
 
-class SuiteObject:
+class SuiteObject(object):
 
     def __init__(self, suite_definition):
 
@@ -61,6 +61,12 @@ class SuiteObject:
         self.metrics = ClassMetrics()
         self.__rules = suite_definition["test_rules"](suite=copy.deepcopy(self))
         self.__instance = None
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
 
     def get_decorated_definition(self, decorator_type):
 
@@ -253,13 +259,19 @@ class SuiteObject:
         return data
 
 
-class TestObject:
+class TestObject(object):
 
     def __init__(self, test_definition):
 
         self.__test_definition = test_definition
 
         self.metrics = TestMetrics()
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
 
     def get_skip(self):
         return self.get_kwargs().get("skip", False)
@@ -439,7 +451,7 @@ class Limiter:
         return value
 
 
-class GroupRulesObject:
+class GroupRulesObject(object):
 
     def __init__(self, definition):
 

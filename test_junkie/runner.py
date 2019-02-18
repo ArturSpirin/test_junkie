@@ -46,9 +46,9 @@ class Runner:
         self.__executed_suites = []
         self.__active_suites = []
 
-        self.group_rules = Builder.build_group_definitions(self.__suites)
+        self.__group_rules = Builder.build_group_definitions(self.__suites)
 
-        self.before_group_failed = {}
+        self.__before_group_failure_records = {}
 
     def __monitoring_enabled(self):
 
@@ -294,7 +294,7 @@ class Runner:
     def __run_suite(self, suite):
 
         def before_group_rule_failed():
-            for group, _result in self.before_group_failed.items():
+            for group, _result in self.__before_group_failure_records.items():
                 if suite.get_class_object() in _result["definition"]["suites"]:
                     return _result["trace"]
 
@@ -305,9 +305,9 @@ class Runner:
         if not exception:
             exception = before_group_rule_failed()
             if not exception:
-                result = self.group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
+                result = self.__group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
                 if result is not None:
-                    self.before_group_failed.update(result)
+                    self.__before_group_failure_records.update(result)
                     exception = result[list(result.keys())[0]]["trace"]
 
         if not suite.can_skip(self.__run_config.get("features", None)) and \
@@ -402,7 +402,7 @@ class Runner:
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
                                                        start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_COMPLETE, suite=suite)
-            after_group_failed = self.group_rules.run_after_group(suite)
+            after_group_failed = self.__group_rules.run_after_group(suite)
             if after_group_failed:
                 event = Event.ON_AFTER_GROUP_FAIL if isinstance(after_group_failed["exception"],
                                                                 AssertionError) else Event.ON_AFTER_GROUP_ERROR

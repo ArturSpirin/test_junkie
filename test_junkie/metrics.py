@@ -5,10 +5,10 @@ import time
 from datetime import datetime
 
 from test_junkie.decorators import DecoratorType
-from test_junkie.constants import SuiteCategory, TestCategory, DocumentationLinks
+from test_junkie.constants import SuiteCategory, TestCategory
 
 
-class ClassMetrics:
+class ClassMetrics(object):
 
     def __init__(self):
 
@@ -17,6 +17,12 @@ class ClassMetrics:
                         DecoratorType.BEFORE_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
                         DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
                         DecoratorType.AFTER_CLASS: {"performance": [], "exceptions": [], "tracebacks": []}}
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
 
     def update_decorator_metrics(self, decorator, start_time, exception=None, trace=None):
         from test_junkie.objects import Limiter
@@ -40,11 +46,17 @@ class ClassMetrics:
         return self.__stats
 
 
-class TestMetrics:
+class TestMetrics(object):
 
     def __init__(self):
 
         self.__stats = {}
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
 
     def update_metrics(self, status, start_time, param=None, class_param=None, exception=None,
                        formatted_traceback=None, runtime=None, decorator=None):
@@ -90,7 +102,7 @@ class TestMetrics:
         return self.__stats
 
 
-class Aggregator:
+class Aggregator(object):
 
     def __init__(self, executed_suites):
 
