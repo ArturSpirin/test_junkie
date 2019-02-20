@@ -16,6 +16,8 @@
 
 ## ![Test Junkie Logo](https://raw.githubusercontent.com/ArturSpirin/test_junkie/master/test_junkie/assets/logo.png)
 
+**Documentation bellow is dated and will soon be removed from GitHub. Documentation will be available at https://www.test-junkie.com/**
+
 Test Junkie is an advanced test [runner](#runner-object) for Python with built in reporting and analytics. 
 Its packed with tons of configurable features.
 
