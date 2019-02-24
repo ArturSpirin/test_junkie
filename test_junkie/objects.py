@@ -427,11 +427,17 @@ class TestObject(object):
 
 class Limiter:
 
-    __DEFAULT_LIMIT = 3000
+    # honor limits or not
     ACTIVE = True
 
+    # truncation limits
+    __DEFAULT_LIMIT = 3000
     EXCEPTION_MESSAGE_LIMIT = __DEFAULT_LIMIT
     TRACEBACK_LIMIT = __DEFAULT_LIMIT
+
+    # throttling limits
+    SUITE_THROTTLING = 0
+    TEST_THROTTLING = 0
 
     @staticmethod
     def parse_exception_object(value):
@@ -449,6 +455,14 @@ class Limiter:
             if isinstance(value, str) and len(value) > Limiter.TRACEBACK_LIMIT:
                 value = "{} [. . .]".format(value[:Limiter.TRACEBACK_LIMIT])
         return value
+
+    @staticmethod
+    def get_suite_throttling():
+        return Limiter.SUITE_THROTTLING if Limiter.ACTIVE else 0
+
+    @staticmethod
+    def get_test_throttling():
+        return Limiter.TEST_THROTTLING if Limiter.ACTIVE else 0
 
 
 class GroupRulesObject(object):

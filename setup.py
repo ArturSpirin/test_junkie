@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.6a0",
+    version="0.6a1",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Advanced test runner with built in reporting and analytics",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/ArturSpirin/test_junkie",
+    url="https://www.test-junkie.com/",
     packages=setuptools.find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",

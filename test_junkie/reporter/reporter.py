@@ -290,6 +290,8 @@ class Reporter:
                 component = "Not Defined" if component is None else component
                 feature = suite.get_feature()
                 feature = "Not Defined" if feature is None else feature
+                assignee = suite.get_owner()
+                assignee = "Not Defined" if assignee is None else assignee
 
                 test_name = test.get_function_name()
                 suite_name = suite.get_class_name()
@@ -312,7 +314,8 @@ class Reporter:
                 status = prioritize_status(statuses)
 
                 table_data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
-                                   "duration": duration, "status": status, "test_id": test_id, "suite_id": suite_id})
+                                   "duration": duration, "status": status, "test_id": test_id, "suite_id": suite_id,
+                                   "assignee": assignee})
                 database_lol["tests"].update({test_id: {"name": test.get_function_name(),
                                                         "metrics": test_metrics,
                                                         "status": status}})

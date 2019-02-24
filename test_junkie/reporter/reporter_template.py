@@ -298,6 +298,10 @@ class ReportTemplate:
                                         mDataProp: "component",
                                         defaultContent: "N/A"},
                                     {
+                                        title: "Assignee" ,
+                                        mDataProp: "assignee",
+                                        defaultContent: "N/A"},
+                                    {
                                         title: "Duration" ,
                                         mDataProp: "duration",
                                         defaultContent: "N/A"},

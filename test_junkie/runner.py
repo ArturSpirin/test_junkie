@@ -10,6 +10,7 @@ from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
 from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
+from test_junkie.objects import Limiter
 from test_junkie.parallels import ParallelProcessor
 from test_junkie.builder import Builder
 from test_junkie.reporter.reporter import Reporter
@@ -213,6 +214,7 @@ class Runner:
                         if self.__processor.suite_multithreading() and suite_object.is_parallelized():
                             while True:
                                 if self.__processor.suite_qualifies(suite_object):
+                                    time.sleep(Limiter.get_suite_throttling())
                                     self.__executed_suites.append(suite_object)
                                     parallels.append(ParallelProcessor
                                                      .run_suite_in_a_thread(self.__run_suite, suite_object))
@@ -371,6 +373,7 @@ class Runner:
                                                 if self.__processor.test_qualifies(suite, test):
                                                     while self.__processor.test_limit_reached(parallels):
                                                         time.sleep(1)
+                                                    time.sleep(Limiter.get_test_throttling())
                                                     parallels.append(
                                                         self.__processor.run_test_in_a_thread(Runner.__run_test,
                                                                                               suite, test, param,
@@ -511,37 +514,43 @@ class Runner:
             else:
                 return
 
-        for retry_attempt in range(1, test.get_retry_limit() + 1):
-            if test.is_qualified_for_retry(parameter, class_param=class_parameter):
-                LogJunkie.debug("\n===============Running test==================\n"
-                                "Test Case: {}\n"
-                                "Test Suite: {}\n"
-                                "Test Parameter: {}\n"
-                                "Class Parameter: {}\n"
-                                "Retry Attempt: {}/{}\n"
-                                "============================================="
-                                .format(test.get_function_name(), suite.get_class_name(), parameter, class_parameter,
-                                        retry_attempt, test.get_retry_limit()))
-                record_test_failure = True
-                try:
-                    if run_before_test() is False:  # if before test failed, moving on without running the test
-                        continue  # everything recorded at this point in the metrics and flow is solid
-                    # Running actual test
-                    start_time = time.time()
-                    Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
-                                               test=test, parameter=parameter, class_parameter=class_parameter)
-                    runtime = time.time() - start_time
-                except Exception as test_error:
-                    process_failure(test_error)
-                    record_test_failure = False  # already recorded the failure just above this
+        Runner.__process_event(event=Event.ON_IN_PROGRESS, suite=suite, test=test,
+                               class_param=class_parameter, param=parameter)
+        try:
+            for retry_attempt in range(1, test.get_retry_limit() + 1):
+                if test.is_qualified_for_retry(parameter, class_param=class_parameter):
+                    LogJunkie.debug("\n===============Running test==================\n"
+                                    "Test Case: {}\n"
+                                    "Test Suite: {}\n"
+                                    "Test Parameter: {}\n"
+                                    "Class Parameter: {}\n"
+                                    "Retry Attempt: {}/{}\n"
+                                    "============================================="
+                                    .format(test.get_function_name(), suite.get_class_name(), parameter, class_parameter,
+                                            retry_attempt, test.get_retry_limit()))
+                    record_test_failure = True
+                    try:
+                        if run_before_test() is False:  # if before test failed, moving on without running the test
+                            continue  # everything recorded at this point in the metrics and flow is solid
+                        # Running actual test
+                        start_time = time.time()
+                        Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
+                                                   test=test, parameter=parameter, class_parameter=class_parameter)
+                        runtime = time.time() - start_time
+                    except Exception as test_error:
+                        process_failure(test_error)
+                        record_test_failure = False  # already recorded the failure just above this
 
-                if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
-                    if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
-                        test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=None, param=parameter,
-                                                    class_param=class_parameter, runtime=runtime)
-                        Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
-                                               class_param=class_parameter, param=parameter)
-                        return
+                    if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
+                        if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
+                            test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=None, param=parameter,
+                                                        class_param=class_parameter, runtime=runtime)
+                            Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
+                                                   class_param=class_parameter, param=parameter)
+                            return
+        finally:
+            Runner.__process_event(event=Event.ON_COMPLETE, suite=suite, test=test,
+                                   class_param=class_parameter, param=parameter)
 
     @staticmethod
     def __run_before_class(suite, class_parameter=None):
@@ -635,6 +644,10 @@ class Runner:
                                            "native": Listener().on_cancel},
                          Event.ON_IGNORE: {"custom": suite.get_listener().on_ignore,
                                            "native": Listener().on_ignore},
+                         Event.ON_IN_PROGRESS: {"custom": suite.get_listener().on_in_progress,
+                                                "native": Listener().on_in_progress},
+                         Event.ON_COMPLETE: {"custom": suite.get_listener().on_complete,
+                                             "native": Listener().on_complete},
                          Event.ON_CLASS_CANCEL: {"custom": suite.get_listener().on_class_cancel,
                                                  "native": Listener().on_class_cancel},
                          Event.ON_CLASS_SKIP: {"custom": suite.get_listener().on_class_skip,
