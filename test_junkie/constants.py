@@ -70,13 +70,12 @@ class Event:
 
 class DocumentationLinks:
 
-    SUITE_DECORATOR = "https://github.com/ArturSpirin/test_junkie#suite"
-    TEST_DECORATOR = "https://github.com/ArturSpirin/test_junkie#test"
-    ON_CLASS_IGNORE = "https://github.com/ArturSpirin/test_junkie#on-class-ignore"
-    ON_TEST_IGNORE = "https://github.com/ArturSpirin/test_junkie#on-ignore"
-    PARAMETERIZED_TESTS = "https://github.com/ArturSpirin/test_junkie#parameterized-tests"
-    LISTENERS = "https://github.com/ArturSpirin/test_junkie#test-listeners"
-    TAGS = "https://github.com/ArturSpirin/test_junkie#tags"
-    SPONSOR_PATREON = "https://www.patreon.com/join/arturspirin"
-    RUNNER_OBJECT = "https://github.com/ArturSpirin/test_junkie#runner-object"
-    GROUP_RULES = "https://github.com/ArturSpirin/test_junkie#group-rules"
+    SUITE_DECORATOR = "https://www.test-junkie.com/documentation/#suite"
+    TEST_DECORATOR = "https://www.test-junkie.com/documentation/#test"
+    ON_CLASS_IGNORE = "https://www.test-junkie.com/documentation/#on_class_ignore"
+    ON_TEST_IGNORE = "https://www.test-junkie.com/documentation/#on_ignore"
+    PARAMETERIZED_TESTS = "https://www.test-junkie.com/documentation/#parameters"
+    LISTENERS = "https://www.test-junkie.com/documentation/#listeners"
+    TAGS = "https://www.test-junkie.com/documentation/#tags"
+    RUNNER_OBJECT = "https://www.test-junkie.com/documentation/#runner"
+    GROUP_RULES = "https://www.test-junkie.com/documentation/#GroupRules"
