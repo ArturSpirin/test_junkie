@@ -214,7 +214,7 @@ class Reporter:
             for _traceback in _data:
                 if _traceback is not None:
                     _index = _data.index(_traceback)
-                    _traceback = _traceback.replace("\n", "<br>").replace("    ", "&emsp;")
+                    # _traceback = _traceback.replace("\n", "<br>").replace("    ", "&emsp;")
                     _data[_index] = _traceback
 
         def prioritize_status(_data):
@@ -224,7 +224,7 @@ class Reporter:
                 return _data[0]
             else:
                 for preferred_status in status_priority:
-                    if preferred_status in statuses:
+                    if preferred_status in _data:
                         return preferred_status
 
         def convert_suite_metrics(_data):
@@ -311,7 +311,7 @@ class Reporter:
                         convert_tracebacks(param_data["tracebacks"])
 
                 duration = Reporter.total_up(duration)
-                status = prioritize_status(statuses)
+                status = str(prioritize_status(statuses))
 
                 table_data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
                                    "duration": duration, "status": status, "test_id": test_id, "suite_id": suite_id,

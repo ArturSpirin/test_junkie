@@ -84,12 +84,10 @@ class ReportTemplate:
                             }}
                             
                             .traceback {{
-                                background: #23323a;
-                                padding: 15px;
-                                color: #fd5858;
-                                margin: 0px;
-                                overflow: hidden;
-                                text-overflow: ellipsis;
+                                background: #23323a !important;
+                                padding: 15px !important;
+                                color: #fd5858 !important;
+                                margin: 0px !important;
                             }}
                             
                             .collapsible-header {{
@@ -138,7 +136,21 @@ class ReportTemplate:
                             }}
                         </style>
                         {body}
-                        <script>var database_lol = {database_lol}</script>
+                        <script>
+                            var database_lol = {database_lol}
+                            function registerCopy(){{
+                                $(".copy_icon").on("click", function(event) {{
+                                  var copy_target = event.target.dataset.tcopy
+                                  var textarea = document.getElementById(copy_target);
+                                  var $temp = $("<input>");
+                                  $("body").append($temp);
+                                  $temp.val(textarea.value).select();
+                                  document.execCommand("copy");
+                                  $temp.remove();
+                                  Materialize.toast('Copied!', 2000)
+                                }});
+                            }};
+                        </script>
                     </body>
                 </html> 
                """
@@ -420,9 +432,14 @@ class ReportTemplate:
                                 
                                 var inject_html = ""
                                 var data = database_lol.tests[test_id].metrics
+                                var distinct_index = 0
+                                
                                 for(class_param in data){{
                                     var class_data = data[class_param]
+                                    distinct_index += 1
                                     for(test_param in class_data){{
+                                        distinct_index += 1
+                                        
                                         var test_data = class_data[test_param]
                                         
                                         var actual_suite_param = test_data.class_param
@@ -450,6 +467,7 @@ class ReportTemplate:
                                         
                                         var details_ul = '<ul class="collapsible expandable">'
                                         for(index in test_data.performance){{
+                                            distinct_index += 1
                                             var attempt = parseInt(index) + 1
                                             
                                             var beforeTestTraceback = test_data.beforeTest.tracebacks[index]
@@ -510,8 +528,8 @@ class ReportTemplate:
                                                         new_li += '<div class="right runtime-label"><span class="right">'+beforeTestDuration+'</span></div>'
                                                         new_li += '<br>'
                                                     }}
-                                                    new_li += '<div class="trace-label"><span>@test</span></div>'
-                                                    new_li += '<p class="traceback">'+testTraceback+'</p>'
+                                                    new_li += '<div class="trace-label"><span>@test</span><a data-tooltip="Copy traceback" class="tooltipped waves-effect copy_icon"><i data-tcopy="trace'+distinct_index+'" class="material-icons tiny right">content_copy</i></a></div>'
+                                                    new_li += '<div class="traceback"><textarea id="trace'+distinct_index+'" disabled style="color: #fd5858; overflow-y: auto; height: 150px;" class="materialize-textarea">'+testTraceback+'</textarea></div>'
                                                     new_li += '<div class="right runtime-label"><span class="right">'+testDuration+'</span></div>'
                                                     new_li += '<br>'
                                                     if(afterTestDuration != null){{
@@ -534,6 +552,7 @@ class ReportTemplate:
                                 $("#test_details").html(inject_html)
                                 $('.collapsible.expandable').collapsible();
                                 $('.tooltipped').tooltip();
+                                registerCopy();
                             }}
 
                         }});
