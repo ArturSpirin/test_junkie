@@ -16,29 +16,40 @@ Save code bellow into a Python file. Lets say `C:\Development\TestJunkie\demo.py
 ```python
 from test_junkie.decorators import Suite, beforeTest, afterTest, test, beforeClass, afterClass
 from test_junkie.runner import Runner
+
+
 @Suite()
 class ExampleTestSuite:
+    
     @beforeClass()
     def before_class(self):
         pass
+        
     @beforeTest()
     def before_test(self):
         pass
+        
     @afterTest()
     def after_test(self):
         pass
+        
     @afterClass()
     def after_class(self):
         pass
+        
     @test()
     def something_to_test1(self):
         pass
+        
     @test()
     def something_to_test2(self):
         pass
+        
     @test()
     def something_to_test3(self):
         pass
+        
+        
 # and to run this marvel, all you need to do . . .
 if "__main__" == __name__:
     runner = Runner([ExampleTestSuite])
