@@ -10,11 +10,50 @@
 
 [![Test Junkie Logo](https://www.test-junkie.com/static/media/logo.png)](https://www.test-junkie.com/)
 
-**Teaser trailer**:
+**Basic Usage**
+
+Save code bellow into a Python file. Lets say `C:\Development\TestJunkie\demo.py`.
+```python
+from test_junkie.decorators import Suite, beforeTest, afterTest, test, beforeClass, afterClass
+from test_junkie.runner import Runner
+@Suite()
+class ExampleTestSuite:
+    @beforeClass()
+    def before_class(self):
+        pass
+    @beforeTest()
+    def before_test(self):
+        pass
+    @afterTest()
+    def after_test(self):
+        pass
+    @afterClass()
+    def after_class(self):
+        pass
+    @test()
+    def something_to_test1(self):
+        pass
+    @test()
+    def something_to_test2(self):
+        pass
+    @test()
+    def something_to_test3(self):
+        pass
+# and to run this marvel, all you need to do . . .
+if "__main__" == __name__:
+    runner = Runner([ExampleTestSuite])
+    runner.run()
+```
+
+You can either run this suite via your favourite IDE or via the CMD like you would run any other Python program.
+
+**Output Example**
+[![Test Junkie Console Output](https://www.test-junkie.com/static/media/console_out.jpg)](https://www.test-junkie.com/static/media/console_out.jpg)
+
+Full documentation is available on **[test-junkie.com](https://www.test-junkie.com/)**  
+
+Please [report](https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md) any bugs you find.
+
+**Teaser**
 
 [![test junkie teaser](https://www.test-junkie.com/static/media/test-junkie-teaser-trailer-play.jpg)](https://www.youtube.com/watch?v=vRrpOgbuT9w)
-
-Full documentation is available on **[test-junkie.com](https://www.test-junkie.com/)**
-
-Found a bug? [Report it](https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md)!
-
