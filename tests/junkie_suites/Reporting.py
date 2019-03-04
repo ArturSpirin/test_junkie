@@ -35,7 +35,7 @@ class LoginSessions:
         time.sleep(1)
 
 
-@Suite(feature="Dashboard", owner="Jane")
+@Suite(feature="Dashboard", owner="Jane", retry=3)
 class Dashboard:
 
     @test(component="Charts")
