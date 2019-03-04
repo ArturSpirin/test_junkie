@@ -45,3 +45,13 @@ class Dashboard:
     @test(component="Charts", tags=["awesome", "tags"])
     def remove_chart(self):
         time.sleep(1)
+
+    @test(component="Charts", tags=["awesome", "tags"])
+    def remove_chart(self):
+        time.sleep(1)
+        raise Exception("Test")
+
+    @test(component="Charts", tags=["awesome", "tags"])
+    def remove_chart(self):
+        time.sleep(1)
+        raise AssertionError("Test")
