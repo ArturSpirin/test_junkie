@@ -13,7 +13,8 @@ from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.objects import Limiter
 from test_junkie.parallels import ParallelProcessor
 from test_junkie.builder import Builder
-from test_junkie.reporter.reporter import Reporter
+from test_junkie.reporter.html_reporter import Reporter
+from test_junkie.reporter.xml_reporter import XmlReporter
 
 
 class Runner:
@@ -54,70 +55,6 @@ class Runner:
     def __monitoring_enabled(self):
 
         return self.__kwargs.get("monitor_resources", False)
-
-    def __create_xml_report(self):
-
-        def __update_tag_stats(tag, status):
-
-            tag.set("tests", str(int(suite.get("tests")) + 1))
-            if status == TestCategory.SUCCESS:
-                tag.set("passed", str(int(tag.get("passed")) + 1))
-            else:
-                tag.set("failures", str(int(tag.get("failures")) + 1))
-            return tag
-
-        if self.__kwargs.get("xml_report", None) is not None:
-            write_file = self.__kwargs.get("xml_report")
-            import os
-            from xml.etree.ElementTree import ElementTree, Element, SubElement
-            import xml
-            if not os.path.exists(write_file):
-                request = Element("root")
-                ElementTree(request).write(write_file)
-
-            xml_file = xml.etree.ElementTree.parse(write_file)
-            root = xml_file.getroot()
-
-            suites = self.get_executed_suites()
-
-            for suite_object in suites:
-
-                test_suite = suite_object.get_class_name()
-                tests = suite_object.get_test_objects()
-
-                for test_object in tests:
-
-                    test_name = test_object.get_function_name()
-                    test_metrics = test_object.metrics.get_metrics()
-
-                    for class_param, class_param_data in test_metrics.items():
-                        for param, param_data in class_param_data.items():
-
-                            test_status = param_data["status"]
-                            if test_status != TestCategory.SUCCESS:
-                                test_status = "failure"
-                            suite_found = False
-
-                            for suite in root.iter("testsuite"):
-                                suite_found = suite.attrib["name"] == test_suite
-                                if suite_found:
-                                    __update_tag_stats(suite, test_status)
-                                    test = Element("testcase", name=str(test_name), status=str(test_status))
-                                    if test_status == "failure":
-                                        failure = Element("failure", type="failure")
-                                        test.append(failure)
-                                    suite.append(test)
-                                    ElementTree(root).write(write_file)
-                                    break
-
-                            if not suite_found:
-                                suite = SubElement(root, "testsuite", name=test_suite,
-                                                   tests="0", passed="0", failures="0")
-                                __update_tag_stats(suite, test_status)
-                                test = SubElement(suite, "testcase", name=str(test_name), status=str(test_status))
-                                if test_status == "failure":
-                                    SubElement(test, "failure", type="failure")
-                                ElementTree(root).write(write_file)
 
     def __create_html_report(self, reporter):
 
@@ -257,7 +194,8 @@ class Runner:
                                 runtime=runtime,
                                 aggregator=aggregator)
             self.__create_html_report(reporter)
-        self.__create_xml_report()
+        XmlReporter.create_xml_report(write_file=self.__kwargs.get("xml_report", None),
+                                      suites=self.get_executed_suites())
         return aggregator
 
     @staticmethod
@@ -563,12 +501,9 @@ class Runner:
             return
         except Exception as error:
             trace = traceback.format_exc()
-            if isinstance(error, AssertionError):
-                Runner.__process_event(event=Event.ON_BEFORE_CLASS_FAIL, suite=suite, error=error,
-                                       class_param=class_parameter, formatted_traceback=trace)
-            else:
-                Runner.__process_event(event=Event.ON_BEFORE_CLASS_ERROR, suite=suite, error=error,
-                                       class_param=class_parameter, formatted_traceback=trace)
+            event = Event.ON_BEFORE_CLASS_FAIL if isinstance(error, AssertionError) else Event.ON_BEFORE_CLASS_ERROR
+            Runner.__process_event(event=event, suite=suite, error=error,
+                                   class_param=class_parameter, formatted_traceback=trace)
             return {"exception": error, "traceback": trace}
 
     @staticmethod
@@ -581,12 +516,10 @@ class Runner:
             suite.get_rules().after_class()
         except Exception as error:
             trace = traceback.format_exc()
-            if isinstance(error, AssertionError):
-                Runner.__process_event(event=Event.ON_AFTER_CLASS_FAIL, suite=suite, error=error,
-                                       class_param=class_parameter, formatted_traceback=trace)
-            else:
-                Runner.__process_event(event=Event.ON_AFTER_CLASS_ERROR, suite=suite, error=error,
-                                       class_param=class_parameter, formatted_traceback=trace)
+            event = Event.ON_AFTER_CLASS_FAIL if isinstance(error, AssertionError) else Event.ON_AFTER_CLASS_ERROR
+            Runner.__process_event(event=event, suite=suite, error=error,
+                                   class_param=class_parameter, formatted_traceback=trace)
+            return {"exception": error, "traceback": trace}
 
     @staticmethod
     # @synchronized(threading.Lock())

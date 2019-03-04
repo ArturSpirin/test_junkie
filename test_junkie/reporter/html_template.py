@@ -1,4 +1,4 @@
-from test_junkie.constants import TestCategory
+from test_junkie.constants import TestCategory, Color
 
 
 class ReportTemplate:
@@ -139,15 +139,20 @@ class ReportTemplate:
                         <script>
                             var database_lol = {database_lol}
                             function registerCopy(){{
-                                $(".copy_icon").on("click", function(event) {{
-                                  var copy_target = event.target.dataset.tcopy
-                                  var textarea = document.getElementById(copy_target);
-                                  var $temp = $("<input>");
-                                  $("body").append($temp);
-                                  $temp.val(textarea.value).select();
-                                  document.execCommand("copy");
-                                  $temp.remove();
-                                  Materialize.toast('Copied!', 2000)
+                                $(".copy_icon").on("click", function(event){{
+                                    event.stopPropagation();
+                                    var copy_target = event.target.dataset.tcopy
+                                    var data_element = document.getElementById(copy_target);
+                                    if(data_element.tagName == "textarea") var val = data_element.value
+                                    else var val = data_element.innerHTML
+                                    
+                                    var $temp = $("<input>");
+                                    $("body").append($temp);
+                                    $temp.val(val).select();
+                                    document.execCommand("copy");
+                                    $temp.remove();
+                                    
+                                    Materialize.toast('Copied!', 2000)
                                 }});
                             }};
                         </script>
@@ -173,20 +178,21 @@ class ReportTemplate:
                         <p>Some features are not yet finished. 
                            I'm <a href="https://www.linkedin.com/in/arturspirin/" target="_blank">Artur</a>
                            by the way, the developer of
-                           <a href="https://github.com/ArturSpirin/test_junkie" target="_blank">Test Junkie</a></p>
+                           <a href="https://www.test-junkie.com/" target="_blank" rel="noopener">Test Junkie</a></p>
                         <p>It took a lot of effort, all my free time outside my day job, and many sleepless
                             nights to get this project to this point, that includes styling and doing data
                             processing in order to render all those charts and tables. I have been motivated by
                             the idea that it may become useful for testers, QA managers, QA team leads, and
-                            even project managers and developers. Thus I open sourced this project initially
-                            knowing that I wont make much (if any at all) money by doing it.</p>
+                            even project managers and developers. Thus I open sourced it.</p>
                         <p>Ask yourself if all the effort I put in and the benefits Test Junkie brings to you
-                            and/or your company (if any) are worth a donation. This donation will keep me
-                            motivated and directly support this project.</p>
-                        <p>Ways you can donate:</p>
+                            and/or your company (if any) are worth a donation or 2 minutes of your time.</p>
+                        <p>Ways you can help:</p>
                         <ol>
-                            <li>Share Test Junkie on social media, with your friend and/or colleagues.
-                                Tell them how it helped you in your project.</li>
+                            <li>The biggest thing you can do for me is 
+                                <a class="github-button" href="https://github.com/ArturSpirin/test_junkie" 
+                                data-size="large" data-show-count="true" aria-label="Star ArturSpirin/test_junkie on 
+                                GitHub">Star</a> the project on GitHub and share it on social media, with your friend 
+                                and/or colleagues.</li>
                             <li>Write me a message on <a href="https://www.linkedin.com/in/arturspirin/"
                                                          target="_blank">Linked In</a> and tell me about your
                                 experience with Test Junkie.</li>
@@ -203,6 +209,7 @@ class ReportTemplate:
                     <div class="modal-footer">
                       <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
                     </div>
+                    <script async defer src="https://buttons.github.io/buttons.js"></script>
                 </div>
                """
 
@@ -408,7 +415,7 @@ class ReportTemplate:
                                 var suite = database_lol.suites[suite_id]["name"]
                                 var module = database_lol.suites[suite_id]["module"]
                                 
-                                $("#test_name").html("<span data-tooltip="+module+"."+suite+"."+name+"() class='tooltipped'><b>"+name+"()</b></span>")
+                                $("#test_name").html("<span data-tooltip="+module+"."+suite+"."+name+"() class='tooltipped'><i class='material-icons'>near_me</i> <b>"+name+"()</b></span>")
                                 
                                 var suite_metrics_html = ""
                                 var suite_metrics = database_lol.suites[suite_id].metrics
@@ -452,14 +459,16 @@ class ReportTemplate:
                                         
                                         var status = test_data.status
                                         var retry = test_data.retry
+                                        var params_total = test_data.params_total
                             
                                         var params_ul = '<li class="bg">'
                             
                                         params_ul += '<div class="collapsible-header bg">'
                                             params_ul += '<div class="col xl1 badge_value"><span class="badge '+status+'">'+status+'</span></div>'
-                                            params_ul += '<div class="col xl11">'
-                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_suite_param+'" class="col xl6 parameter tooltipped">Class parameter: <b>'+actual_suite_param+'</b></div>'
-                                                params_ul += '<div data-position="bottom" data-tooltip="'+actual_test_param+'" class="col xl6 parameter tooltipped">Test parameter: <b>'+actual_test_param+'</b></div>'
+                                            params_ul += '<div class="col xl1 badge_value"><span class="badge info-badge">'+params_total+'</span></div>'
+                                            params_ul += '<div class="col xl10">'
+                                                params_ul += '<div data-position="bottom" class="col xl6"><a data-tooltip="Copy class parameters" class="tooltipped waves-effect copy_icon"><i data-tcopy="suite_param_'+distinct_index+'" class="material-icons tiny right">content_copy</i></a>Class parameter: <b><span id="suite_param_'+distinct_index+'" class="parameter tooltipped" data-tooltip="'+actual_suite_param+'">'+actual_suite_param+'</span></b></div>'
+                                                params_ul += '<div data-position="bottom" class="col xl6"><a data-tooltip="Copy test parameters" class="tooltipped waves-effect copy_icon"><i data-tcopy="test_param_'+distinct_index+'" class="material-icons tiny right">content_copy</i></a>Test parameter: <b><span id="test_param_'+distinct_index+'" class="parameter tooltipped" data-tooltip="'+actual_test_param+'">'+actual_test_param+'</span></b></div>'
                                             params_ul += '</div>'
                                         params_ul += '</div>'    
                                         
@@ -506,7 +515,7 @@ class ReportTemplate:
                                                             new_li += '<span>Attempt: <span class="badge info-badge">'+attempt+'</span></span>'
                                                         new_li += '</div>'
                                                         new_li += '<div class="col s3 m3 l3 xl3">'
-                                                            new_li += '<span>Runtime: <span data-position="bottom" data-tooltip="Seconds" class="badge info-badge tooltipped">'+testDuration+'</span></span>'
+                                                            new_li += '<span>Runtime: <span data-position="bottom" class="badge info-badge">'+testDuration+'</span></span>'
                                                         new_li += '</div>'
                                                         new_li += '<div class="col s3 m3 l3 xl3">'
                                                             new_li += '<span>@beforeTest: <span class="badge info-badge">'+beforeTestStatus+'</span></span>'
@@ -528,7 +537,7 @@ class ReportTemplate:
                                                         new_li += '<div class="right runtime-label"><span class="right">'+beforeTestDuration+'</span></div>'
                                                         new_li += '<br>'
                                                     }}
-                                                    new_li += '<div class="trace-label"><span>@test</span><a data-tooltip="Copy traceback" class="tooltipped waves-effect copy_icon"><i data-tcopy="trace'+distinct_index+'" class="material-icons tiny right">content_copy</i></a></div>'
+                                                    new_li += '<div class="trace-label"><span>@test</span></div>'
                                                     new_li += '<div class="traceback"><textarea id="trace'+distinct_index+'" disabled style="color: #fd5858; overflow-y: auto; height: 150px;" class="materialize-textarea">'+testTraceback+'</textarea></div>'
                                                     new_li += '<div class="right runtime-label"><span class="right">'+testDuration+'</span></div>'
                                                     new_li += '<br>'
@@ -745,9 +754,8 @@ class ReportTemplate:
         """
 
         series = []
-        from test_junkie.reporter.reporter import Reporter
         for status in TestCategory.ALL:
-            series.append({"status": status, "label": status, "color": Reporter.COLOR_MAPPING[status]})
+            series.append({"status": status, "label": status, "color": Color.MAPPING[status]})
 
         def css(chart_id):
 
@@ -1006,9 +1014,9 @@ class ReportTemplate:
 
             return """
                     <style>
-                        #suggestions {
+                        #insights {
                             width: 100%;
-                            height: 282px;
+                            height: 275px;
                         }
                     </style>
                    """
@@ -1017,6 +1025,13 @@ class ReportTemplate:
 
             return """
                    <script>
+                       var insights = {data}
+                       var insights_list = $("#insights_list")
+                       var insights_html = ""
+                       for(index in insights){{
+                           insights_html += "<li>"+insights[index]+"</li>"
+                       }}
+                       insights_list.html(insights_html)
                    </script>
                    """
 
@@ -1024,11 +1039,14 @@ class ReportTemplate:
                 <div class="col s12 m12 l6 xl6">
                   <div class="card blue-grey darken-3">
                     <div class="card-content white-text">
-                      <span class="card-title">Suggestions:</span>
-                      <div id="suggestions">This feature is still in development</div>
+                      <span class="card-title">Insights:</span>
+                      <div id="insights">
+                      <ul id="insights_list">
+                      </ul>
+                      </div>
                       {css}
                       {js}
                     </div>
                   </div>
                 </div>
-               """.format(css=css(), js=js())
+               """.format(css=css(), js=js().format(data=data))

@@ -79,3 +79,20 @@ class DocumentationLinks:
     TAGS = "https://www.test-junkie.com/documentation/#tags"
     RUNNER_OBJECT = "https://www.test-junkie.com/documentation/#runner"
     GROUP_RULES = "https://www.test-junkie.com/documentation/#GroupRules"
+
+
+class Color:
+
+    SUCCESS = "#12d479"
+    FAIL = "#fcd75f"
+    ERROR = "#ff7651"
+    IGNORE = "#cce4eb"
+    SKIP = "#34bff5"
+    CANCEL = "#f19def"
+
+    MAPPING = {TestCategory.SUCCESS: SUCCESS,
+               TestCategory.FAIL: FAIL,
+               TestCategory.ERROR: ERROR,
+               TestCategory.IGNORE: IGNORE,
+               TestCategory.SKIP: SKIP,
+               TestCategory.CANCEL: CANCEL}

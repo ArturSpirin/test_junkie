@@ -3,20 +3,14 @@ import json
 import time
 import traceback
 
-from test_junkie.constants import TestCategory, DecoratorType
+from test_junkie.constants import TestCategory, DecoratorType, Color
 from test_junkie.debugger import LogJunkie
 from test_junkie.metrics import Aggregator
-from test_junkie.reporter.reporter_template import ReportTemplate
+from test_junkie.reporter.analyzer import Analyzer
+from test_junkie.reporter.html_template import ReportTemplate
 
 
 class Reporter:
-
-    COLOR_MAPPING = {TestCategory.SUCCESS: "#12d479",
-                     TestCategory.FAIL: "#fcd75f",
-                     TestCategory.ERROR: "#ff7651",
-                     TestCategory.IGNORE: "#cce4eb",
-                     TestCategory.SKIP: "#34bff5",
-                     TestCategory.CANCEL: "#f19def"}
 
     @staticmethod
     def round(value):
@@ -75,7 +69,8 @@ class Reporter:
         absolute_metrics = self.__get_absolute_results_dataset()
         row_two_html += ReportTemplate.get_absolute_results_template(absolute_metrics["data"],
                                                                      absolute_metrics["colors"])
-        row_two_html += ReportTemplate.get_suggestions(None)
+        table_data = self.__get_table_data()
+        row_two_html += ReportTemplate.get_suggestions(table_data["opportunities"])
 
         resource_data = None
         if self.monitoring_file is not None:
@@ -91,7 +86,7 @@ class Reporter:
             suites_data=self.__get_suites_data(),
             tags_data=self.__get_tags_data())
 
-        table_data = self.__get_table_data()
+        # table_data = self.__get_table_data()
         row_two_html += ReportTemplate.get_table(table_data["table_data"])
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
@@ -123,7 +118,7 @@ class Reporter:
         for status, value in self.test_totals.items():
             if status != "total" and value > 0:
                 data.append({"status": status, "value": value})
-                colors.append(Reporter.COLOR_MAPPING[status])
+                colors.append(Color.MAPPING[status])
 
         return {"data": data, "colors": colors}
 
@@ -266,7 +261,7 @@ class Reporter:
                            TestCategory.FAIL, TestCategory.SKIP, TestCategory.SUCCESS]
         table_data = []
         database_lol = {"suites": {}, "tests": {}}
-
+        analyzer = Analyzer()
         executed_suites = self.aggregator.executed_suites
         test_id = 0
         suite_id = 0
@@ -290,7 +285,7 @@ class Reporter:
                 component = "Not Defined" if component is None else component
                 feature = suite.get_feature()
                 feature = "Not Defined" if feature is None else feature
-                assignee = suite.get_owner()
+                assignee = test.get_owner()
                 assignee = "Not Defined" if assignee is None else assignee
 
                 test_name = test.get_function_name()
@@ -298,15 +293,20 @@ class Reporter:
 
                 for class_param, class_param_data in test_metrics.items():
                     for param, param_data in class_param_data.items():
+
+                        analyzer.analyze(test_id=test_id,
+                                         tracebacks=list(param_data["tracebacks"]),
+                                         performance=list(param_data["performance"]))
+
                         duration += param_data["performance"]
                         statuses.append(param_data["status"])
-
                         # no value for exception objects in the HTML report, only will consume memory
                         for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
                             param_data[decorator].pop("exceptions")
                             convert_performance(param_data[decorator]["performance"])
                             convert_tracebacks(param_data[decorator]["tracebacks"])
                         param_data.pop("exceptions")
+                        param_data.update({"params_total": Reporter.total_up(param_data["performance"])})
                         convert_performance(param_data["performance"])
                         convert_tracebacks(param_data["tracebacks"])
 
@@ -319,4 +319,4 @@ class Reporter:
                 database_lol["tests"].update({test_id: {"name": test.get_function_name(),
                                                         "metrics": test_metrics,
                                                         "status": status}})
-        return {"table_data": table_data, "database_lol": database_lol}
+        return {"table_data": table_data, "database_lol": database_lol, "opportunities": analyzer.analysis}
