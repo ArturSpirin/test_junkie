@@ -1,6 +1,6 @@
 import time
 
-from test_junkie.decorators import test, Suite
+from test_junkie.decorators import test, Suite, afterClass, afterTest, beforeTest, beforeClass
 
 
 @Suite(feature="Login", owner="Mike")
@@ -37,6 +37,22 @@ class LoginSessions:
 
 @Suite(feature="Dashboard", owner="Jane", retry=3)
 class Dashboard:
+
+    @beforeClass()
+    def before_class(self):
+        time.sleep(1)
+
+    @beforeTest()
+    def before_test(self):
+        pass
+
+    @afterTest()
+    def after_test(self):
+        pass
+
+    @afterClass()
+    def after_class(self):
+        time.sleep(1)
 
     @test(component="Charts")
     def add_chart(self):
