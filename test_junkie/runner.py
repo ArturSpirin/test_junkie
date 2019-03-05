@@ -380,6 +380,7 @@ class Runner:
                 return False
 
         def process_failure(error, pre_processed=False):
+            _runtime = time.time() - start_time  # start time defined in the outside scope before each decorated func
             if not isinstance(error, TestJunkieExecutionError):
                 if pre_processed:
                     trace = error.message if sys.version_info[0] < 3 else str(error)
@@ -393,7 +394,8 @@ class Runner:
                                             param=parameter,
                                             class_param=class_parameter,
                                             exception=error,
-                                            formatted_traceback=trace)
+                                            formatted_traceback=trace,
+                                            runtime=_runtime)
                 Runner.__process_event(event=__event, suite=suite, test=test, error=error,
                                        class_param=class_parameter, param=parameter, formatted_traceback=trace)
             else:
@@ -464,21 +466,23 @@ class Runner:
                                     "Class Parameter: {}\n"
                                     "Retry Attempt: {}/{}\n"
                                     "============================================="
-                                    .format(test.get_function_name(), suite.get_class_name(), parameter, class_parameter,
-                                            retry_attempt, test.get_retry_limit()))
+                                    .format(test.get_function_name(), suite.get_class_name(), parameter,
+                                            class_parameter, retry_attempt, test.get_retry_limit()))
                     record_test_failure = True
                     try:
+                        start_time = time.time()  # before test start time
                         if run_before_test() is False:  # if before test failed, moving on without running the test
                             continue  # everything recorded at this point in the metrics and flow is solid
                         # Running actual test
-                        start_time = time.time()
+                        start_time = time.time()  # test start time
                         Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
                                                    test=test, parameter=parameter, class_parameter=class_parameter)
                         runtime = time.time() - start_time
                     except Exception as test_error:
+                        runtime = time.time() - start_time
                         process_failure(test_error)
                         record_test_failure = False  # already recorded the failure just above this
-
+                    start_time = time.time()  # after test start time
                     if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
                         if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
                             test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=None, param=parameter,
