@@ -10,6 +10,12 @@
 # Test Junkie [![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Checkout+this+new+awesome+test+runner+for+Python!&url=https%3A%2F%2Fgithub.com%2FArturSpirin%2Ftest_junkie&hashtags=github,python,programming,pythonprogramming&original_referer=http%3A%2F%2Fgithub.com%2F&tw_p=tweetbutton)
 [![Test Junkie Logo](https://www.test-junkie.com/static/media/logo.png)](https://www.test-junkie.com/)
 
+**Installation**
+
+From your favorite terminal:
+
+`pip install test-junkie` or `python -m pip install test-junkie`
+
 **Basic Usage**
 
 Save code bellow into a Python file. Lets say `C:\Development\TestJunkie\demo.py`.
