@@ -298,6 +298,12 @@ class Runner:
                                         Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test,
                                                                class_param=class_param, error=bad_params)
                                         continue
+
+                                    while not self.__processor.test_qualifies(suite, test):
+                                        time.sleep(1)
+                                        if test.get_priority() is None:
+                                            continue
+
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None and \
                                                 not test.is_qualified_for_retry(param, class_param=class_param):
@@ -307,22 +313,17 @@ class Runner:
                                              and param is None) or (self.__processor.test_multithreading()
                                                                     and test.parallelized_parameters()
                                                                     and param is not None)):
-                                            while True:
-                                                if self.__processor.test_qualifies(suite, test):
-                                                    while self.__processor.test_limit_reached(parallels):
-                                                        time.sleep(1)
-                                                    time.sleep(Limiter.get_test_throttling())
-                                                    parallels.append(
-                                                        self.__processor.run_test_in_a_thread(Runner.__run_test,
-                                                                                              suite, test, param,
-                                                                                              class_param,
-                                                                                              before_class_error,
-                                                                                              self.__cancel))
-                                                    break
-                                                elif test.get_priority() is None:
-                                                    break
-                                                else:
+
+                                                while self.__processor.test_limit_reached(parallels):
                                                     time.sleep(1)
+                                                time.sleep(Limiter.get_test_throttling())
+                                                parallels.append(
+                                                    self.__processor.run_test_in_a_thread(Runner.__run_test,
+                                                                                          suite, test, param,
+                                                                                          class_param,
+                                                                                          before_class_error,
+                                                                                          self.__cancel))
+
                                         else:
                                             Runner.__run_test(suite=suite, test=test,
                                                               parameter=param,

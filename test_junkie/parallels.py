@@ -3,6 +3,7 @@ import threading
 import time
 
 from test_junkie.debugger import LogJunkie
+from test_junkie.decorators import synchronized
 
 
 class ParallelProcessor:
@@ -157,6 +158,7 @@ class ParallelProcessor:
                 time.sleep(5)
         return True
 
+    @synchronized(threading.Lock())
     def test_qualifies(self, suite, test):
 
         def _build_reverse_restriction():
@@ -180,7 +182,7 @@ class ParallelProcessor:
             If current suite does not have any active restrictions, we can run it
             :return: BOOLEAN
             """
-            for class_object, suite_mapping in ParallelProcessor.__PARALLELS.items():
+            for class_object, suite_mapping in list(ParallelProcessor.__PARALLELS.items()):
                 for test_mapping in suite_mapping["tests"]:
                     if test_mapping["test"].get_function_object() in test.get_parallel_restrictions():
                         if test_mapping["thread"].isAlive():
@@ -194,7 +196,7 @@ class ParallelProcessor:
             """
             if test.get_function_object() in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS:
                 reverse_tests = ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[test.get_function_object()]
-                for class_object, suite_mapping in ParallelProcessor.__PARALLELS.items():
+                for class_object, suite_mapping in list(ParallelProcessor.__PARALLELS.items()):
                     for test_mapping in suite_mapping["tests"]:
                         if test_mapping["test"].get_function_object() in reverse_tests:
                             if test_mapping["thread"].isAlive():

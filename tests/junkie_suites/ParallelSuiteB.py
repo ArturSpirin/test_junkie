@@ -7,7 +7,7 @@ from tests.junkie_suites.ParallelSuiteC import ParallelSuiteC
 @Suite()
 class ParallelSuiteB:
 
-    @test(priority=1, parameters=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], pr=[ParallelSuiteC])
+    @test(priority=1, parameters=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], pr=[ParallelSuiteC.a])
     def a(self, parameter):
         time.sleep(1)
 
