@@ -7,7 +7,7 @@ class BeforeTestAssertionSuite:
 
     @beforeTest()
     def before_test(self):
-        raise AssertionError("Assertion Error in before class")
+        raise AssertionError("Assertion Error in before test")
 
     @test(retry=2)
     def ignore_1(self):

@@ -377,10 +377,10 @@ class Runner:
                         return False
                 return True
             except Exception as before_test_error:
-                process_failure(before_test_error)
+                process_failure(before_test_error, decorator=DecoratorType.BEFORE_TEST)
                 return False
 
-        def process_failure(error, pre_processed=False):
+        def process_failure(error, pre_processed=False, decorator=None):
             _runtime = time.time() - start_time  # start time defined in the outside scope before each decorated func
             if not isinstance(error, TestJunkieExecutionError):
                 if pre_processed:
@@ -396,7 +396,8 @@ class Runner:
                                             class_param=class_parameter,
                                             exception=error,
                                             formatted_traceback=trace,
-                                            runtime=_runtime)
+                                            runtime=_runtime,
+                                            decorator=decorator)
                 Runner.__process_event(event=__event, suite=suite, test=test, error=error,
                                        class_param=class_parameter, param=parameter, formatted_traceback=trace)
             else:
@@ -417,7 +418,7 @@ class Runner:
                 return True
             except Exception as after_test_error:
                 if _record_test_failure:
-                    process_failure(after_test_error)
+                    process_failure(after_test_error, decorator=DecoratorType.AFTER_TEST)
                 return False
 
         test_start_time = time.time()
@@ -552,8 +553,7 @@ class Runner:
                     if DecoratorType.BEFORE_TEST == decorator_type:  # if before test fails, after test wont run
                         if suite.get_decorated_definition(DecoratorType.AFTER_TEST):
                             update_metrics(DecoratorType.AFTER_TEST, None, "N/A")  # but we need to keep list synced
-                    return AssertionError(trace) \
-                        if isinstance(decorator_error, AssertionError) else Exception(trace)
+                    return AssertionError(trace) if isinstance(decorator_error, AssertionError) else Exception(trace)
             if functions_list:  # will updated only if we had decorated function(s)
                 update_metrics(decorator_type)
         else:

@@ -1,13 +1,10 @@
-from test_junkie.decorators import Suite, test, beforeTest
+from test_junkie.decorators import Suite, test
 from tests.junkie_suites.TestListener import TestListener
+from tests.junkie_suites.error_handling.BadBeforeTestRules import BadBeforeTestRules
 
 
-@Suite(listener=TestListener)
+@Suite(listener=TestListener, rules=BadBeforeTestRules)
 class ErrorSuite4:
-
-    @beforeTest()
-    def before_test(self):
-        raise Exception("Expected")
 
     @test()
     def test_1(self, parameter):

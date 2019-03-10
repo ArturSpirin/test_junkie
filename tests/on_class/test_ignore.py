@@ -185,10 +185,7 @@ def test_before_test_error1():
     metrics5 = results5[0].metrics.get_metrics()
     QualityManager.check_class_metrics(metrics5,
                                        expected_status="fail",
-                                       expected_retry_count=1,
-                                       expected_beforetest_exception_count=1,
-                                       expected_beforetest_exception_object=Exception,
-                                       expected_beforetest_performance_count=1)
+                                       expected_retry_count=1)
 
 
 def test_before_test_error2():
@@ -218,10 +215,7 @@ def test_after_test_error3():
     metrics6 = results6[0].metrics.get_metrics()
     QualityManager.check_class_metrics(metrics6,
                                        expected_status="fail",
-                                       expected_retry_count=1,
-                                       expected_aftertest_exception_count=1,
-                                       expected_aftertest_exception_object=Exception,
-                                       expected_aftertest_performance_count=1)
+                                       expected_retry_count=1)
 
 
 def test_after_test_error4():

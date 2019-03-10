@@ -7,7 +7,7 @@ class AfterTestExceptionSuite:
 
     @afterTest()
     def after_test(self):
-        raise Exception("Assertion Error in before class")
+        raise Exception("Exception in after test")
 
     @test(retry=2)
     def ignore_1(self):

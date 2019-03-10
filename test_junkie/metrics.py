@@ -86,6 +86,11 @@ class TestMetrics(object):
                 .append(Limiter.parse_exception_object(exception))
             self.__stats[string_class_param][string_param][decorator]["tracebacks"]\
                 .append(Limiter.parse_traceback(formatted_traceback))
+
+            if self.__stats[string_class_param][string_param]["status"] is None:
+                # while status is not set, will use one that is currently passed in
+                # Once its explicitly updated for the test decorator, then we wont change it
+                self.__stats[string_class_param][string_param]["status"] = status
         else:
             self.__stats[string_class_param][string_param]["performance"].append(runtime)
             self.__stats[string_class_param][string_param]["exceptions"]\
