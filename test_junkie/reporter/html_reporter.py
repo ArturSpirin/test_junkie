@@ -27,6 +27,19 @@ class Reporter:
         else:
             return "0"
 
+    @staticmethod
+    def escape(s, quote=True):
+        """
+        Copy of the HTML escape function to avoid python2 dependency
+        """
+        s = s.replace("&", "&amp;")  # Must be done first!
+        s = s.replace("<", "&lt;")
+        s = s.replace(">", "&gt;")
+        if quote:
+            s = s.replace('"', "&quot;")
+            s = s.replace('\'', "&#x27;")
+        return s
+
     def __init__(self, monitoring_file, aggregator, runtime, multi_threading_enabled):
 
         self.analyzer = Analyzer(monitoring_enabled=monitoring_file, multi_threading_enabled=multi_threading_enabled)

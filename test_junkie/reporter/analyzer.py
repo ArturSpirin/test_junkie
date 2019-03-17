@@ -1,5 +1,4 @@
 from difflib import SequenceMatcher
-from html import escape
 from test_junkie.constants import DocumentationLinks
 
 
@@ -58,13 +57,13 @@ class Analyzer:
         This function does a final analysis across the dataset at the time and returns usable HTML for the report
         :return: LIST of STRINGs with HTML ready to go
         """
-        analysis = []
+        from test_junkie.reporter.html_reporter import Reporter
 
+        analysis = []
         # analyzing retries
         retry_link = "<a ref='noopener' target='_blank' href='{}'>retries <i class='fas fa-external-link-alt'></i></a>"\
                      .format(DocumentationLinks.RETRY)
         if self.__analysis["time_lost_retrying"]:
-            from test_junkie.reporter.html_reporter import Reporter
             analysis.append("Total of {retries} {link} cost you {seconds} seconds."
                             .format(retries=len(self.__analysis["time_lost_retrying"]),
                                     seconds=Reporter.total_up(self.__analysis["time_lost_retrying"]),
@@ -91,7 +90,7 @@ class Analyzer:
                 if ones_to_report_on:
                     for test_id, data in ones_to_report_on.items():
                         if len(data["data"]["similar"]) > 0:
-                            tb = escape(data["traceback"], quote=True)
+                            tb = Reporter.escape(data["traceback"], quote=True)
 
                             analysis.append(
                                 "{similar_count} test failures due to a similar "
