@@ -192,7 +192,9 @@ class Runner:
             reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
                                 if resource_monitor is not None else None,
                                 runtime=runtime,
-                                aggregator=aggregator)
+                                aggregator=aggregator,
+                                multi_threading_enabled=self.__processor.test_multithreading()
+                                or self.__processor.suite_multithreading())
             self.__create_html_report(reporter)
         XmlReporter.create_xml_report(write_file=self.__kwargs.get("xml_report", None),
                                       suites=self.get_executed_suites())

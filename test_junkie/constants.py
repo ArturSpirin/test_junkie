@@ -70,15 +70,19 @@ class Event:
 
 class DocumentationLinks:
 
-    SUITE_DECORATOR = "https://www.test-junkie.com/documentation/#suite"
-    TEST_DECORATOR = "https://www.test-junkie.com/documentation/#test"
-    ON_CLASS_IGNORE = "https://www.test-junkie.com/documentation/#on_class_ignore"
-    ON_TEST_IGNORE = "https://www.test-junkie.com/documentation/#on_ignore"
-    PARAMETERIZED_TESTS = "https://www.test-junkie.com/documentation/#parameters"
-    LISTENERS = "https://www.test-junkie.com/documentation/#listeners"
-    TAGS = "https://www.test-junkie.com/documentation/#tags"
-    RUNNER_OBJECT = "https://www.test-junkie.com/documentation/#runner"
-    GROUP_RULES = "https://www.test-junkie.com/documentation/#GroupRules"
+    __DOMAIN = "https://www.test-junkie.com"
+    SUITE_DECORATOR = "{}/documentation/#suite".format(__DOMAIN)
+    TEST_DECORATOR = "{}/documentation/#test".format(__DOMAIN)
+    ON_CLASS_IGNORE = "{}/documentation/#on_class_ignore".format(__DOMAIN)
+    ON_TEST_IGNORE = "{}/documentation/#on_ignore".format(__DOMAIN)
+    PARAMETERIZED_TESTS = "{}/documentation/#parameters".format(__DOMAIN)
+    LISTENERS = "{}/documentation/#listeners".format(__DOMAIN)
+    TAGS = "{}/documentation/#tags".format(__DOMAIN)
+    RUNNER_OBJECT = "{}/documentation/#runner".format(__DOMAIN)
+    GROUP_RULES = "{}/documentation/#GroupRules".format(__DOMAIN)
+    THREADING = "{}/documentation/#parallel_execution".format(__DOMAIN)
+    HTML_REPORT = "{}/documentation/#html_report".format(__DOMAIN)
+    RETRY = "{}/documentation/#retry".format(__DOMAIN)
 
 
 class Color:

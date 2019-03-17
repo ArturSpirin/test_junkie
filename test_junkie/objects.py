@@ -68,6 +68,9 @@ class SuiteObject(object):
     def __deepcopy__(self, memo):
         return self
 
+    def get_suite_id(self):
+        return self.get_kwargs().get("testjunkie_suite_id", 0)
+
     def get_decorated_definition(self, decorator_type):
 
         return self.__suite_definition["suite_definition"].get(decorator_type)
@@ -272,6 +275,12 @@ class TestObject(object):
 
     def __deepcopy__(self, memo):
         return self
+
+    def get_test_id(self):
+        return self.get_kwargs().get("testjunkie_test_id", 0)
+
+    def get_suite_id(self):
+        return self.get_kwargs().get("testjunkie_suite_id", 0)
 
     def get_skip(self):
         return self.get_kwargs().get("skip", False)

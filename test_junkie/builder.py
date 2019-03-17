@@ -9,6 +9,9 @@ from test_junkie.rules import Rules
 
 class Builder(object):
 
+    __TEST_ID = 0  # unique but not persistent from execution to execution
+    __SUITE_ID = 0  # unique but not persistent from execution to execution
+
     __UNIQUE_TEST_SUITES = []
     __EXECUTION_ROSTER = {}
     __CURRENT_SUITE_OBJECT = None
@@ -81,11 +84,20 @@ class Builder(object):
 
     @staticmethod
     def build_suite_definitions(decorated_function, decorator_kwargs, decorator_type):
+        from test_junkie.decorators import DecoratorType
         from test_junkie.debugger import LogJunkie
         from test_junkie.objects import SuiteObject
+
+        if decorator_type == DecoratorType.TEST_CASE:
+            Builder.__TEST_ID += 1
+        elif decorator_type == DecoratorType.TEST_SUITE:
+            Builder.__SUITE_ID += 1
+
         _function_name = None
         _class_name = None
         if inspect.isfunction(decorated_function):
+            decorator_kwargs.update({"testjunkie_test_id": Builder.__TEST_ID,
+                                     "testjunkie_suite_id": Builder.__SUITE_ID})
             Builder.__validate_test_kwargs(decorator_kwargs, decorated_function)
             _function_name = decorated_function.__name__
         else:
@@ -100,6 +112,7 @@ class Builder(object):
                 Builder.__CURRENT_SUITE_OBJECT["test_rules"] = decorator_kwargs.get("rules", Rules)
                 Builder.__CURRENT_SUITE_OBJECT["class_parameters"] = decorator_kwargs.get("parameters", [None])
                 Builder.__CURRENT_SUITE_OBJECT["parallelized"] = decorator_kwargs.get("parallelized", True)
+                decorator_kwargs.update({"testjunkie_suite_id": Builder.__SUITE_ID})
                 Builder.__CURRENT_SUITE_OBJECT["decorator_kwargs"] = decorator_kwargs
 
         if Builder.__CURRENT_SUITE_OBJECT is None:
@@ -108,8 +121,8 @@ class Builder(object):
             Builder.__CURRENT_SUITE_OBJECT["class_name"] = _class_name
 
         if _function_name is not None:
-            Builder.__CURRENT_SUITE_OBJECT["suite_definition"][decorator_type]\
-                        .append({"decorated_function": decorated_function, "decorator_kwargs": decorator_kwargs})
+            Builder.__CURRENT_SUITE_OBJECT["suite_definition"][decorator_type].append(
+                {"decorated_function": decorated_function, "decorator_kwargs": decorator_kwargs})
             LogJunkie.debug("=======================Suite Definition Updated=============================")
             LogJunkie.debug("Function: {}".format(_function_name))
             LogJunkie.debug("Decorator Type: {}".format(decorator_type))
