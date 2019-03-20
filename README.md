@@ -71,6 +71,9 @@ Full documentation is available on **[test-junkie.com](https://www.test-junkie.c
 
 Please [report](https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md) any bugs you find.
 
-**Teaser**
+**Our Sponsors**
 
-[![test junkie teaser](https://www.test-junkie.com/static/media/test-junkie-teaser-trailer-play.jpg)](https://www.youtube.com/watch?v=vRrpOgbuT9w)
+[<img width="270" src="https://www.actocorp.com/wp-content/uploads/2019/02/ActoLogo-red.png">](http://github.com)
+
+become our [sponsor](https://www.patreon.com/join/arturspirin?)
+
