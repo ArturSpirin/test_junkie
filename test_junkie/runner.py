@@ -374,12 +374,13 @@ class Runner:
                     before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
                                                                    suite=suite, class_parameter=class_parameter,
                                                                    test=test, parameter=parameter)
-                    if before_test_error is not None:
+                    if before_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(before_test_error, pre_processed=True)
                         return False
                 return True
             except Exception as before_test_error:
                 process_failure(before_test_error, decorator=DecoratorType.BEFORE_TEST)
+                process_failure(before_test_error)  # updating **test** metrics (no decorator passed in)
                 return False
 
         def process_failure(error, pre_processed=False, decorator=None):
@@ -400,8 +401,11 @@ class Runner:
                                             formatted_traceback=trace,
                                             runtime=_runtime,
                                             decorator=decorator)
-                Runner.__process_event(event=__event, suite=suite, test=test, error=error,
-                                       class_param=class_parameter, param=parameter, formatted_traceback=trace)
+                if decorator is None:
+                    Runner.__process_event(event=__event, suite=suite, test=test, error=error,
+                                           class_param=class_parameter, param=parameter, formatted_traceback=trace)
+                else:
+                    suite.metrics.update_decorator_metrics(decorator, start_time, error, trace)
             else:
                 raise error
 
@@ -412,7 +416,7 @@ class Runner:
                     after_test_error = Runner.__process_decorator(decorator_type=DecoratorType.AFTER_TEST,
                                                                   suite=suite, class_parameter=class_parameter,
                                                                   test=test, parameter=parameter)
-                    if after_test_error is not None:
+                    if after_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(after_test_error, pre_processed=True)
                         return False
                 if not test.skip_after_test_rule():
@@ -421,6 +425,7 @@ class Runner:
             except Exception as after_test_error:
                 if _record_test_failure:
                     process_failure(after_test_error, decorator=DecoratorType.AFTER_TEST)
+                    process_failure(after_test_error)  # updating **test** metrics (no decorator passed in)
                 return False
 
         test_start_time = time.time()

@@ -211,8 +211,8 @@ class ReportTemplate:
                             <li>If you can afford, you can donate through
                                 <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=FJPYWX5B776YS
                                 &currency_code=USD&source=url" target="_blank" rel="noopener">PayPal 
-                                <i class='fas fa-external-link-alt'></i></a>. No amount is small too small and it 
-                                motivates me to spend more time on this project.</li>
+                                <i class='fas fa-external-link-alt'></i></a>. Every penny donated motivates me more and 
+                                more to spend time on this project.</li>
                             <li>You can also back me on
                                 <a rel="noopener" href="https://www.patreon.com/join/arturspirin/" target="_blank">
                                 Patreon <i class='fas fa-external-link-alt'></i></a> on behalf of your company and 
