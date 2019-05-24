@@ -5,17 +5,18 @@ import pprint
 import time
 import re
 from setuptools.glob import glob
+
+from test_junkie.cli.config_manager import ConfigManager
 from test_junkie.runner import Runner
 
 
-class RunnerCli:
+class RunnerManager:
 
     __REGEX_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite as.*?\n"
     __REGEX_NO_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite.*?\n"
 
     def __init__(self, root, ignore):
 
-        print "Root: ", root
         self.root = root
         self.tjignore = ignore
         self.detected_suites = {}
@@ -64,13 +65,13 @@ class RunnerCli:
                 with open(file_path) as doc:
                     source = doc.read()
 
-                    suite_imported_as_alias = re.findall(RunnerCli.__REGEX_ALIAS_IMPORT, source)
+                    suite_imported_as_alias = re.findall(RunnerManager.__REGEX_ALIAS_IMPORT, source)
                     if suite_imported_as_alias:
                         suite_alias = suite_imported_as_alias[-1].split("Suite")[-1].split("as")[-1].split(",")[0].strip()
                         self.__find_and_register_suite(suite_alias, source, file_path)
                         continue
 
-                    suite_imported = re.findall(RunnerCli.__REGEX_NO_ALIAS_IMPORT, source)
+                    suite_imported = re.findall(RunnerManager.__REGEX_NO_ALIAS_IMPORT, source)
                     if suite_imported:
                         self.__find_and_register_suite("Suite", source, file_path)
                         continue
@@ -80,9 +81,19 @@ class RunnerCli:
 
     def run_suites(self, args):
 
-        print self.suites
         if self.suites:
-            runner = Runner(self.suites)
-            runner.run()
+            runner = Runner(suites=self.suites,
+                            html=args.html,
+                            xml=args.xml,
+                            config=ConfigManager().path)
+            runner.run(test_multithreading_limit=args.test_multithreading_limit,
+                       suite_multithreading_limit=args.suite_multithreading_limit,
+                       owners=args.owners,
+                       components=args.components,
+                       features=args.features,
+                       tag_config={"run_on_match_all": args.run_on_match_all,
+                                   "run_on_match_any": args.run_on_match_any,
+                                   "skip_on_match_all": args.skip_on_match_all,
+                                   "skip_on_match_any": args.skip_on_match_any})
         else:
             print "No test suites found in: ", self.root

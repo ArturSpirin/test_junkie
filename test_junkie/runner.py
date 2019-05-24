@@ -1,5 +1,6 @@
 import copy
 import inspect
+import pprint
 import threading
 import time
 import traceback
@@ -15,6 +16,7 @@ from test_junkie.parallels import ParallelProcessor
 from test_junkie.builder import Builder
 from test_junkie.reporter.html_reporter import Reporter
 from test_junkie.reporter.xml_reporter import XmlReporter
+from test_junkie.settings import Settings
 
 
 class Runner:
@@ -39,7 +41,7 @@ class Runner:
             Runner.__process_owners(suite_object)
 
         self.__kwargs = kwargs
-
+        self.__settings = None
         self.__processor = None
         self.__run_config = {}
 
@@ -141,7 +143,11 @@ class Runner:
                 resource_monitor = ResourceMonitor()
                 resource_monitor.start()
             self.__run_config = kwargs
-            self.__processor = ParallelProcessor(**kwargs)
+            init_kwargs = self.__kwargs
+            init_kwargs.update(self.__run_config)
+            pprint.pprint(init_kwargs)
+            self.__settings = Settings(init_kwargs)
+            self.__processor = ParallelProcessor(self.__settings)
 
             parallels = []
             while self.__suites:
@@ -281,8 +287,8 @@ class Runner:
 
                                 test_start_time = time.time()  # will use in case of a failure in context of this loop
 
-                                if not Runner.__positive_skip_condition(test=test, run_config=self.__run_config) and \
-                                        Runner.__runnable_tags(test=test, run_config=self.__run_config):
+                                if not self.__positive_skip_condition(test=test) and \
+                                        Runner.__runnable_tags(test=test, tag_config=self.__settings.tags):
 
                                     if not test.is_parallelized():
                                         LogJunkie.debug("Cant run test: {} in parallel with any other tests"
@@ -309,8 +315,8 @@ class Runner:
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None and \
                                                 not test.is_qualified_for_retry(param, class_param=class_param):
-                                                # If does not qualify with current parameter, will move to the next
-                                                continue
+                                            # If does not qualify with current parameter, will move to the next
+                                            continue
                                         if ((self.__processor.test_multithreading()
                                              and param is None) or (self.__processor.test_multithreading()
                                                                     and test.parallelized_parameters()
@@ -655,40 +661,56 @@ class Runner:
                                     .format(custom_function, DocumentationLinks.LISTENERS, trace))
 
     @staticmethod
-    def __runnable_tags(test, run_config):
+    def __runnable_tags(test, tag_config):
         """
         This function evaluates if test should be executed based on its tags and the tag config
         :param test: TestObject
-        :param run_config: DICT
+        :param tag_config: DICT
         :return: BOOLEAN
         """
-        test_tags = test.get_tags()
-        tag_config = run_config.get("tag_config", {})
 
-        def __config_set(config):
-            return tag_config.get(config, None) is not None
+        def __config_set():
+            """
+            Checks if tag config was defined for any of the following settings:
+            - skip_on_match_all
+            - skip_on_match_any
+            - run_on_match_all
+            - run_on_match_any
+            :return: BOOLEAN, if any of of the settings are set, tag config is considered set
+            """
+            for setting in ["skip_on_match_all", "skip_on_match_any", "run_on_match_all", "run_on_match_any"]:
+                val = tag_config.get(setting, None) is not None
+                if val is True:
+                    return True
+            return False
 
-        def __full_match(config):
-            for tag in tag_config[config]:
+        def __full_match(prop):
+            tags = tag_config.get(prop, [])
+            if not tags:
+                return False
+            for tag in tags:
                 if tag not in test_tags:
                     return False
             return True
 
-        def __partial_match(config):
-            for tag in tag_config[config]:
+        def __partial_match(prop):
+            tags = tag_config.get(prop, [])
+            if not tags:
+                return False
+            for tag in tags:
                 if tag in test_tags:
                     return True
 
+        test_tags = test.get_tags()
         if tag_config is not None:
             try:
-                if __config_set("skip_on_match_all") and __full_match("skip_on_match_all"):
-                    return False
-                elif __config_set("skip_on_match_any") and __partial_match("skip_on_match_any"):
-                    return False
-                elif __config_set("run_on_match_all") and __full_match("run_on_match_all"):
-                    return True
-                elif __config_set("run_on_match_any") and __partial_match("run_on_match_any"):
-                    return True
+                if __config_set():
+                    if __full_match("skip_on_match_all") or __partial_match("skip_on_match_any"):
+                        return False
+                    elif __full_match("run_on_match_all") or __partial_match("run_on_match_any"):
+                        return True
+                    else:
+                        return False
             except Exception:
                 trace = ""
                 if sys.version_info[0] < 3:
@@ -697,21 +719,16 @@ class Runner:
                                   "see documentation: {}{}".format(DocumentationLinks.TAGS, trace))
         return True
 
-    @staticmethod
-    def __positive_skip_condition(test, run_config):
+    def __positive_skip_condition(self, test):
         """
         This function will evaluate inputs for skip parameter whether its a function or a boolean
         :param test: TestObject object
-        :param run_config: DICT
         :return: BOOLEAN
         """
         val = test.can_skip()
-        components = run_config.get("components", None)
-        owners = run_config.get("owners", None)
-        tests = run_config.get("tests", None)
 
         # Run only tests that were requested
-        if val is False and tests is not None:
+        if val is False and self.__settings.tests is not None:
             if sys.version_info[0] < 3:
                 """
                 While both in Python 2 and 3 function objects look like, tests.junkie_suites.SkipSuites
@@ -722,18 +739,18 @@ class Runner:
                 So oddly enough in Python 2 the regular check did not work, thus this hack
                 """
                 val = True
-                for t in tests:
+                for t in self.__settings.tests:
                     if inspect.getsource(test.get_function_object()) == inspect.getsource(t):
                         val = False
                         break
             else:
-                val = not test.get_function_object() in tests
+                val = not test.get_function_object() in self.__settings.tests
 
         # Run only components that were requested
-        if val is False and components is not None:
-            val = not test.get_component() in components
+        if val is False and self.__settings.components is not None:
+            val = not test.get_component() in self.__settings.components
 
         # Run only tests that belong to the owners requested
-        if val is False and owners is not None:
-            val = not test.get_owner() in owners
+        if val is False and self.__settings.owners is not None:
+            val = not test.get_owner() in self.__settings.owners
         return val

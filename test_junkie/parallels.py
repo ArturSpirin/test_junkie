@@ -11,17 +11,23 @@ class ParallelProcessor:
     __PARALLELS = {}
     __REVERSE_PARALLEL_RESTRICTIONS = {}
 
-    def __init__(self, **kwargs):
+    def __init__(self, settings):
 
-        self.__test_limit = int(kwargs.get("test_multithreading_limit", 1))
-        if self.__test_limit == 0:
-            LogJunkie.warn("Thread limit for tests cannot be 0, falling back to limit of 1 thread per test case.")
+        # self.__test_limit = int(kwargs.get("test_multithreading_limit", 1))
+        self.__test_limit = settings.test_thread_limit
+        if self.__test_limit == 0 or self.__test_limit is None:
+            LogJunkie.warn("Thread limit for tests cannot be 0 or None, "
+                           "falling back to limit of 1 thread per test case.")
             self.__test_limit = 1
 
-        self.__suite_limit = int(kwargs.get("suite_multithreading_limit", 1))
-        if self.__suite_limit == 0:
-            LogJunkie.warn("Thread limit for suites cannot be 0, falling back to limit of 1 thread per test suite.")
+        # self.__suite_limit = int(kwargs.get("suite_multithreading_limit", 1))
+        self.__suite_limit = settings.suite_thread_limit
+        if self.__suite_limit == 0 or self.__suite_limit is None:
+            LogJunkie.warn("Thread limit for suites cannot be 0 or None, "
+                           "falling back to limit of 1 thread per test suite.")
             self.__suite_limit = 1
+
+        print "Test: {} Suite: {}".format(self.__test_limit, self.__suite_limit)
 
         LogJunkie.debug("=======================Parallel Processor Settings=============================")
         LogJunkie.debug(">> Suite level multi-threading enabled: {}".format(self.suite_multithreading()))
