@@ -50,7 +50,7 @@ root=None
 
         with open(self.path, "w+") as cfg:
             cfg.write(ConfigManager.__DEFAULTS)
-        print "Restored!"
+        print("Restored!")
 
     def update(self):
         # TODO May want to generalize addition of certain update & run args with extensive help
@@ -93,7 +93,7 @@ root=None
                                  .format(link=DocumentationLinks.TAGS))
         args = parser.parse_args(self.args[3:])
         if not self.args[3:]:
-            print "What do you want to update?\n"
+            print("What do you want to update?\n")
             parser.print_help()
             exit(0)
 
@@ -105,11 +105,11 @@ root=None
                 try:
                     ast.literal_eval(str(value))
                     config.set('runtime', option, str(value))
-                    print "{}\t{}\t[OK]".format(option, value)
+                    print("{}\t{}\t[OK]".format(option, value))
                 except:
-                    print "Make sure value: {} is valid Python datatype. " \
-                          "It must pass ast.literal_eval()\t[ERROR]\n".format(value)
-                    print traceback.format_exc()
+                    print("Make sure value: {} is valid Python datatype. "
+                          "It must pass ast.literal_eval()\t[ERROR]\n".format(value))
+                    print(traceback.format_exc())
                     exit(120)
         with open(self.path, 'wb') as doc:
             config.write(doc)
@@ -129,7 +129,7 @@ root=None
         CliUtils.add_standard_tj_args(parser)
         args = parser.parse_args(self.args[3:])
         if not self.args[3:]:
-            print "What do you want to update?\n"
+            print("What do you want to update?\n")
             parser.print_help()
             exit(0)
         if args.all:

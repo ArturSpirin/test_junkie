@@ -27,8 +27,6 @@ class ParallelProcessor:
                            "falling back to limit of 1 thread per test suite.")
             self.__suite_limit = 1
 
-        print "Test: {} Suite: {}".format(self.__test_limit, self.__suite_limit)
-
         LogJunkie.debug("=======================Parallel Processor Settings=============================")
         LogJunkie.debug(">> Suite level multi-threading enabled: {}".format(self.suite_multithreading()))
         LogJunkie.debug(">> Suite level multi-threading limit: {}".format(self.__suite_limit))

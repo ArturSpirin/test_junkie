@@ -96,4 +96,4 @@ class RunnerManager:
                                    "skip_on_match_all": args.skip_on_match_all,
                                    "skip_on_match_any": args.skip_on_match_any})
         else:
-            print "No test suites found in: ", self.root
+            print("No test suites found in: ", self.root)

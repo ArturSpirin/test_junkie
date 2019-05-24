@@ -30,7 +30,7 @@ Use: tj COMMAND -h to display COMMAND specific help
         # exclude the rest of the args too, or validation will fail
         args = parser.parse_args(sys.argv[1:2])
         if not hasattr(self, args.command):
-            print 'test-junkie: \'{}\' is not a test-junkie command\n'.format(args.command)
+            print('test-junkie: \'{}\' is not a test-junkie command\n'.format(args.command))
             parser.print_help()
             exit(1)
         if args.command:
@@ -152,13 +152,13 @@ Use: tj config COMMAND -h to display COMMAND specific help
                 from test_junkie.cli.config_manager import ConfigManager
                 return ConfigManager(command, sys.argv)
             else:
-                print parser.print_help()
+                parser.print_help()
         except:
-            print parser.print_help()
+            parser.print_help()
 
 
     def version(self):
-        print "Test Junkie {}".format(pkg_resources.require("test-junkie")[0].version)
+        print("Test Junkie {}".format(pkg_resources.require("test-junkie")[0].version))
 
 
 class CliUtils:
