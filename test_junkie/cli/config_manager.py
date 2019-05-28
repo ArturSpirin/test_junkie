@@ -1,12 +1,17 @@
-import ConfigParser
 import argparse
 import ast
-import traceback
-
 from appdirs import *
 
+from test_junkie.settings import Settings
 from test_junkie.cli.cli import CliUtils
-from test_junkie.constants import DocumentationLinks
+
+
+if sys.version_info[0] < 3:
+    # Python 2
+    import ConfigParser as configparser
+else:
+    # Python 3, module was renamed to configparser
+    import configparser
 
 
 class ConfigManager:
@@ -20,7 +25,7 @@ test_multithreading_limit=1
 suite_multithreading_limit=1
 html=None
 xml=None
-monitor_ resources=False
+monitor_resources=None
 features=None
 components=None
 owners=None
@@ -43,97 +48,94 @@ root=None
         if command is not None and args is not None:
             if not os.path.exists(self.path):
                 self.restore()
-
+            self.config = configparser.ConfigParser()
+            self.config.read(self.path)
             getattr(self, command)()
 
     def __set_default_config(self):
 
-        with open(self.path, "w+") as cfg:
-            cfg.write(ConfigManager.__DEFAULTS)
-        print("Restored!")
+        with open(self.path, "w+") as doc:
+            doc.write(ConfigManager.__DEFAULTS)
+            print("Config restored to default settings!")
+
+    def __restore_value(self, option, value):
+
+        try:
+            ast.literal_eval(str(value))
+            self.config.set('runtime', option, str(value))
+            with open(self.path, 'w+') as doc:
+                self.config.write(doc)
+            print("[{status}]\t{option}={value}".format(
+                status=CliUtils.format_color_string(value="OK", color="green"), option=option, value=value))
+        except:
+            print("[{status}]\tUnexpected error occurred during update of {setting}={value}"
+                  .format(status=CliUtils.format_color_string(value="ERROR", color="red"), setting=option, value=value))
+            CliUtils.print_color_traceback()
+            exit(120)
+
+    def __print_value(self, option):
+
+        if option in self.config.options("runtime"):
+            if sys.version_info[0] < 3:
+                # Python 2
+                value = self.config.get("runtime", option, Settings.UNDEFINED)
+            else:
+                # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
+                value = self.config.get("runtime", option, fallback=Settings.UNDEFINED)
+            if value != Settings.UNDEFINED:
+                print("{option}={value}".format(option=option, value=ast.literal_eval(value)))
 
     def update(self):
-        # TODO May want to generalize addition of certain update & run args with extensive help
-        #      text that would apply to both areas
 
         parser = argparse.ArgumentParser(description="Update configuration settings for individual properties",
                                          usage="tj config update [OPTIONS]")
-
-        parser.add_argument("-T", "--test_multithreading_limit", type=int, default=None,
-                            help="Will allocated N number of threads and enable test level multi threading")
-
-        parser.add_argument("-S", "--suite_multithreading_limit", type=int, default=None,
-                            help="Will allocated N number of threads and enable suite level multi threading")
-
-        parser.add_argument("--html", type=str, default=None,
-                            help="Will set path to FILE or DIRECTORY where to save HTML report after test execution")
-
-        parser.add_argument("--xml", type=str, default=None,
-                            help="Will set path to FILE or DIRECTORY where to save XML report after test execution")
-
-        parser.add_argument("-s", "--source", type=str, default=None, help="Will set path to source")
-        parser.add_argument("-f", "--features", nargs="+", default=None, help="Will set features list")
-        parser.add_argument("-c", "--components", nargs="+", default=None, help="Will set components list")
-        parser.add_argument("-o", "--owners", nargs="+", default=None, help="Will set owners list")
-
-        parser.add_argument("-l", "--run_on_match_all", nargs="+", default=None,
-                            help="Test Junkie will RUN tests that match ALL of the tags. Read more about it: {link}"
-                                 .format(link=DocumentationLinks.TAGS))
-
-        parser.add_argument("-k", "--run_on_match_any", nargs="+", default=None,
-                            help="Test Junkie will RUN tests that match ANY of the tags. Read more about it: {link}"
-                                 .format(link=DocumentationLinks.TAGS))
-
-        parser.add_argument("-j", "--skip_on_match_all", nargs="+", default=None,
-                            help="Test Junkie will SKIP tests that match ALL of the tags. Read more about it: {link}"
-                                 .format(link=DocumentationLinks.TAGS))
-
-        parser.add_argument("-g", "--skip_on_match_any", nargs="+", default=None,
-                            help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
-                                 .format(link=DocumentationLinks.TAGS))
-        args = parser.parse_args(self.args[3:])
-        if not self.args[3:]:
-            print("What do you want to update?\n")
-            parser.print_help()
-            exit(0)
-
-        config = ConfigParser.ConfigParser()
-        config.read(self.path)
-
-        for option, value in args.__dict__.items():
-            if value:
-                try:
-                    ast.literal_eval(str(value))
-                    config.set('runtime', option, str(value))
-                    print("{}\t{}\t[OK]".format(option, value))
-                except:
-                    print("Make sure value: {} is valid Python datatype. "
-                          "It must pass ast.literal_eval()\t[ERROR]\n".format(value))
-                    print(traceback.format_exc())
-                    exit(120)
-        with open(self.path, 'wb') as doc:
-            config.write(doc)
-
-    def show(self):
-        argparse.ArgumentParser(description='Display current configuration for Test-Junkie')
-        print("Config is located at: {}".format(self.path))
-        with open(self.path, "r") as cfg:
-            print(cfg.read())
-
-    def restore(self):
-        # TODO add all of the options that can be restored so you can do
-        #      tj config restore -k : to restore tag config for example
-        parser = argparse.ArgumentParser(description='Restore config settings to it\'s original values')
-        parser.add_argument("-a", "--all", action="store_true", default=False,
-                            help="Will restore all config settings to its default values")
         CliUtils.add_standard_tj_args(parser)
         args = parser.parse_args(self.args[3:])
         if not self.args[3:]:
-            print("What do you want to update?\n")
+            print("[{status}]\tWhat do you want to update?\n".format(
+                status=CliUtils.format_color_string(value="ERROR", color="red")))
             parser.print_help()
             exit(0)
+        for option, value in args.__dict__.items():
+            if value is not Settings.UNDEFINED:
+                self.__restore_value(option, value)
+
+    def show(self):
+
+        parser = argparse.ArgumentParser(description='Display current configuration for Test-Junkie',
+                                         usage="tj config show [OPTIONS]")
+        parser.add_argument("-a", "--all", action="store_true", default=False,
+                            help="Will restore all config settings to its default values")
+        CliUtils.add_standard_boolean_tj_args(parser)
+        args = parser.parse_args(self.args[3:])
+        if args.all or not self.args[3:]:
+            print("Config is located at: {}".format(self.path))
+            with open(self.path, "r") as cfg:
+                print(cfg.read())
+            return
+        for option, value in args.__dict__.items():
+            if value is True:
+                self.__print_value(option)
+
+    def restore(self):
+
+        parser = argparse.ArgumentParser(description='Restore config settings to it\'s original values',
+                                         usage="tj config restore [OPTIONS]")
+        parser.add_argument("-a", "--all", action="store_true", default=False,
+                            help="Will restore all config settings to its default values")
+        CliUtils.add_standard_boolean_tj_args(parser)
+        args = parser.parse_args(self.args[3:])
+        if not self.args[3:]:
+            print("[{status}]\tWhat do you want to restore?\n".format(
+                status=CliUtils.format_color_string(value="ERROR", color="red")))
+            parser.print_help()
+            return
         if args.all:
             if not os.path.exists(self.root):
                 os.makedirs(self.root)
             os.remove(self.path)
             self.__set_default_config()
+            return
+        for option, value in args.__dict__.items():
+            if value is True:
+                self.__restore_value(option, None)

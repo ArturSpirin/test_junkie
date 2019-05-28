@@ -1,6 +1,5 @@
 import copy
 import inspect
-import pprint
 import threading
 import time
 import traceback
@@ -43,7 +42,6 @@ class Runner:
         self.__kwargs = kwargs
         self.__settings = None
         self.__processor = None
-        self.__run_config = {}
 
         self.__cancel = False
 
@@ -53,10 +51,6 @@ class Runner:
         self.__group_rules = Builder.build_group_definitions(self.__suites)
 
         self.__before_group_failure_records = {}
-
-    def __monitoring_enabled(self):
-
-        return self.__kwargs.get("monitor_resources", False)
 
     def __create_html_report(self, reporter):
 
@@ -136,17 +130,13 @@ class Runner:
         Initiates the execution process that runs tests
         :return: None
         """
+        self.__settings = Settings(runner_kwargs=self.__kwargs, run_kwargs=kwargs)
         initial_start_time = time.time()
         resource_monitor = None
         try:
-            if self.__monitoring_enabled():
+            if self.__settings.monitor_resources:
                 resource_monitor = ResourceMonitor()
                 resource_monitor.start()
-            self.__run_config = kwargs
-            init_kwargs = self.__kwargs
-            init_kwargs.update(self.__run_config)
-            pprint.pprint(init_kwargs)
-            self.__settings = Settings(init_kwargs)
             self.__processor = ParallelProcessor(self.__settings)
 
             parallels = []
@@ -159,8 +149,8 @@ class Runner:
                                 if self.__processor.suite_qualifies(suite_object):
                                     time.sleep(Limiter.get_suite_throttling())
                                     self.__executed_suites.append(suite_object)
-                                    parallels.append(ParallelProcessor
-                                                     .run_suite_in_a_thread(self.__run_suite, suite_object))
+                                    parallels.append(ParallelProcessor.run_suite_in_a_thread(
+                                        self.__run_suite, suite_object))
                                     self.__suites.remove(suite)
                                     break
                                 elif suite_object.get_priority() is None:
@@ -187,14 +177,14 @@ class Runner:
             for parallel in parallels:
                 parallel.join()
         finally:
-            if self.__monitoring_enabled():
+            if self.__settings.monitor_resources:
                 resource_monitor.shutdown()
 
         runtime = time.time() - initial_start_time
         print("========== Test Junkie finished in {:0.2f} seconds ==========".format(runtime))
         aggregator = Aggregator(self.get_executed_suites())
         Aggregator.present_console_output(aggregator)
-        if self.__kwargs.get("html_report", False):
+        if self.__settings.html_report:
             reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
                                 if resource_monitor is not None else None,
                                 runtime=runtime,
@@ -258,9 +248,7 @@ class Runner:
                     self.__before_group_failure_records.update(result)
                     exception = result[list(result.keys())[0]]["trace"]
 
-        if not suite.can_skip(self.__run_config.get("features", None)) and \
-                not self.__cancel and \
-                not exception:
+        if not suite.can_skip(self.__settings.features) and not self.__cancel and not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
