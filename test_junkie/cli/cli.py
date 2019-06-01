@@ -1,12 +1,14 @@
 import argparse
+import pprint
 import sys
 import traceback
 
 import pkg_resources
 
+from test_junkie.builder import Builder
 from test_junkie.settings import Settings
 from test_junkie.constants import DocumentationLinks
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 
 
 class Cli(object):
@@ -19,7 +21,8 @@ class Cli(object):
 Modern Testing Framework
 
 Commands:
-run\t Run tests in any directory recursively via cmd 
+run\t Run tests in any directory (recursive)
+scan\t Scan and get information regarding tests in any directory (recursive) 
 config\t Configure Test Junkie
 version\t Display current version
 
@@ -58,37 +61,59 @@ Use: tj COMMAND -h to display COMMAND specific help
         tj.scan()
         tj.run_suites(args)
 
-#     def scan(self):
-#
-#         parser = argparse.ArgumentParser(usage="""tj scan [OPTIONS]
-#
-# Scan for tests from command line
-#
-# Commands:
-# show\t Display current configuration for Test-Junkie
-# update\t Update configuration settings for individual properties via cli
-# restore\t Will restore config to it\'s original values
-#
-# Use: tj config COMMAND -h to display COMMAND specific help
-# """)
-#
-#         parser.add_argument("-s", "--source", type=str, default=None, required=True,  # unless defined in the config
-#                             help="Path to DIRECTORY where you have your tests. "
-#                                  "Test Junkie will traverse this directory looking for test suites")
-#
-#         parser.add_argument("-f", "--features", nargs="+",
-#                             help="Will filter out all of the tests that do not belong to the features listed")
-#
-#         parser.add_argument("-c", "--components", nargs="+",
-#                             help="Will filter out all of the tests that do not belong to the components listed")
-#
-#         parser.add_argument("-o", "--owners", nargs="+",
-#                             help="Will filter out all of the tests that do not belong to the owners listed")
-#
-#         args = parser.parse_args(sys.argv[2:])
-#         from test_junkie.cli.runner_manager import RunnerManager
-#         tj = RunnerManager(root=args.source, ignore=[".git"])
-#         tj.scan()
+    def scan(self):
+        # TODO find should be its own function cant have positional commands and optional args for scan & find
+        parser = argparse.ArgumentParser(usage="""tj scan [OPTIONS]
+
+Scan and display test information 
+
+Commands:
+find\t Find tests or suites matching specific conditions 
+
+Use: tj scan COMMAND -h to display COMMAND specific help
+""")
+
+        parser.add_argument("-s", "--source", type=str, default=None, required=True,  # unless defined in the config
+                            help="Path to DIRECTORY where you have your tests. "
+                                 "Test Junkie will traverse this directory looking for test suites")
+        CliUtils.add_standard_tj_args(parser)
+        args = parser.parse_args(sys.argv[2:])
+        from test_junkie.cli.runner_manager import RunnerManager
+        tj = RunnerManager(root=args.source, ignore=[".git"])
+        tj.scan()
+
+        # detect if too many tests per suite?
+        # rules defined? --no-rule return all suites with no rules
+        # listener defined? --no-listener return all suites with no listeners
+        # retry defined? --no-retry return all tests/suites with retry == 1
+        # no meta defined? --no-meta return all tests/suites with no meta
+        # no owner defined? --no-owner return all tests/suites with no owner
+        # skip defined? --skip return all tests/suites with a skip condition
+        # pr defined? --pr return all tests/suites with a pr condition
+        # skipping rules? --skip-before-rule return all tests which skip before/after rules
+        # no skipping rules? --no-skip-before-test-rule return all tests which don't skip before/after rules
+        # skipping before/after? --skip-before-test return all tests which skip before/after function
+        # no skipping before/after? --no-skip-before-test return all tests which skip before/after function
+        data = {"absolute_by_tag": {},
+                "absolute_by_feature": {},
+                "absolute_by_component": {},
+                "absolute_by_owner": {},
+                "absolute_by_priority": {},
+                "absolute_by_retry": {},
+
+                "context_by_feature": {},
+                "context_by_owner": {},
+
+                "absolute_test_count": 0,  # parameterized tests will be treated as 1 test
+                "parameterized_test_count": 0,
+                "absolute_suite_count": 0,
+                "parameterized_suite_count": 0,
+                }
+
+        roster = Builder.get_execution_roster()
+        for suite, suite_object in roster.items():
+            print(suite_object.get_data_by_tags())
+        # pprint.pprint(roster)
 
     def config(self):
         parser = argparse.ArgumentParser(usage="""tj config COMMAND

@@ -31,9 +31,7 @@ class Runner:
 
         self.__stats = {}
 
-        self.__suites = suites
-
-        self.__suites = self.__prioritize(suites=self.__suites)
+        self.__suites = self.__prioritize(suites=suites)
         for suite in self.__suites:
             suite_object = Builder.get_execution_roster().get(suite, None)
             suite_object.update_test_objects(self.__prioritize(suite_object=suite_object))
