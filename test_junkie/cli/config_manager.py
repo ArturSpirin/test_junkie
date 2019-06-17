@@ -79,14 +79,20 @@ root=None
     def __print_value(self, option):
 
         if option in self.config.options("runtime"):
-            if sys.version_info[0] < 3:
-                # Python 2
-                value = self.config.get("runtime", option, Settings.UNDEFINED)
-            else:
-                # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
-                value = self.config.get("runtime", option, fallback=Settings.UNDEFINED)
+            value = ConfigManager.get_value(self.config, option)
             if value != Settings.UNDEFINED:
                 print("{option}={value}".format(option=option, value=ast.literal_eval(value)))
+
+    @staticmethod
+    def get_value(config, option):
+
+        if sys.version_info[0] < 3:
+            # Python 2
+            value = config.get("runtime", option, Settings.UNDEFINED)
+        else:
+            # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
+            value = config.get("runtime", option, fallback=Settings.UNDEFINED)
+        return value
 
     def update(self):
 

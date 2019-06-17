@@ -1,6 +1,7 @@
 import ast
 import sys
 
+from test_junkie.cli.config_manager import ConfigManager
 from test_junkie.constants import DocumentationLinks
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
@@ -99,12 +100,7 @@ class Settings:
         if value is Settings.UNDEFINED and self.config is not None:
             source = "DEFAULTS"
             if key in self.config.options("runtime"):
-                if sys.version_info[0] < 3:
-                    # Python 2
-                    value = self.config.get("runtime", key, Settings.UNDEFINED)
-                else:
-                    # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
-                    value = self.config.get("runtime", key, fallback=Settings.UNDEFINED)
+                value = ConfigManager.get_value(self.config, key)
                 if value is not Settings.UNDEFINED:
                     value = ast.literal_eval(value)
                     source = "CONFIG @ {}".format(self.kwargs.get("config"))
