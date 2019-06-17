@@ -252,7 +252,6 @@ class Runner:
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
 
-                    tests = list(suite.get_test_objects())
                     for class_param in suite.get_parameters(process_functions=True):
 
                         LogJunkie.debug("Running suite: {}".format(suite.get_class_object()))
@@ -268,7 +267,7 @@ class Runner:
                             if not unsuccessful_tests:
                                 break
                         parallels = []
-
+                        tests = list(suite.get_test_objects())
                         while tests:
                             for test in list(tests):
 
