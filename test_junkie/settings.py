@@ -1,6 +1,9 @@
 import ast
 import sys
+
+from test_junkie.constants import DocumentationLinks
 from test_junkie.debugger import LogJunkie
+from test_junkie.errors import BadParameters
 
 if sys.version_info[0] < 3:
     # Python 2
@@ -60,7 +63,8 @@ class Settings:
     def __print_settings(self):
 
         LogJunkie.debug("============= Runtime Settings =============")
-        LogJunkie.debug("Test Thread Limit: {value}".format(value=self.test_thread_limit))
+        LogJunkie.debug("Test Thread Limit: {value}:({type})".format(value=self.test_thread_limit,
+                                                                    type=type(self.test_thread_limit)))
         LogJunkie.debug("Suite Thread Limit: {value}".format(value=self.suite_thread_limit))
         LogJunkie.debug("Features: {value}".format(value=self.features))
         LogJunkie.debug("Components: {value}".format(value=self.components))
@@ -68,8 +72,8 @@ class Settings:
         LogJunkie.debug("Tests: {value}".format(value=self.tests))
         LogJunkie.debug("Tags: {value}".format(value=self.tags))
         LogJunkie.debug("Monitor Resources: {value}".format(value=self.monitor_resources))
-        LogJunkie.debug("HTML Report: {value}".format(value=self.html_report))
-        LogJunkie.debug("XML Report: {value}".format(value=self.xml_report))
+        LogJunkie.debug("HTML Report: {value}:({type})".format(value=self.html_report, type=type(self.html_report)))
+        LogJunkie.debug("XML Report: {value}:({type})".format(value=self.xml_report, type=type(self.xml_report)))
         LogJunkie.debug("============================================")
 
     def __get_value(self, key, default):
@@ -178,11 +182,19 @@ class Settings:
     @property
     def html_report(self):
         if self.__html_report is Settings.UNDEFINED:
-            self.__html_report = self.__get_value(key="html", default=Settings.__DEFAULT_HTML)
+            self.__html_report = self.__get_value(key="html_report", default=Settings.__DEFAULT_HTML)
+        if self.__html_report and not self.__html_report.endswith(".html"):
+            raise BadParameters("\"html_report\" parameter requires full path with a file name and .html extension "
+                                "for example: /var/www/html/my_report.html. For more info, see documentation: {link}"
+                                .format(link=DocumentationLinks.HTML_REPORT))
         return self.__html_report
 
     @property
     def xml_report(self):
         if self.__xml_report is Settings.UNDEFINED:
-            self.__xml_report = self.__get_value(key="xml", default=Settings.__DEFAULT_XML)
+            self.__xml_report = self.__get_value(key="xml_report", default=Settings.__DEFAULT_XML)
+        if self.__xml_report and not self.__xml_report.endswith(".xml"):
+            raise BadParameters("\"xml_report\" parameter requires full path with a file name and .html extension "
+                                "for example: /var/www/html/my_report.xml. For more info, see documentation: {link}"
+                                .format(link=DocumentationLinks.XML_REPORT))
         return self.__xml_report

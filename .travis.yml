@@ -1,9 +1,5 @@
 language: python
 
-branches:
-  only:
-  - master
-
 python:
   - "2.7"
   - "3.5"
@@ -12,6 +8,8 @@ python:
   - "3.7-dev"
 install:
   - pip install -r requirements.txt
+before_script:
+  - export PYTHONPATH=$PYTHONPATH:$(pwd)
 script:
   - if [[ $TRAVIS_PYTHON_VERSION != 2.7 ]]; then (py.test --cov=test_junkie tests/); fi
   # Abnormal issues when using pytest on python 2, such as deadlocks and threads not starting.

@@ -1,13 +1,11 @@
 import argparse
-import pprint
 import sys
 import traceback
-
 import pkg_resources
 
 from test_junkie.builder import Builder
-from test_junkie.settings import Settings
 from test_junkie.constants import DocumentationLinks
+from test_junkie.settings import Settings
 from colorama import Fore, Style
 
 
@@ -129,16 +127,17 @@ Use: tj config COMMAND -h to display COMMAND specific help
 """)
         parser.add_argument('command', default=None, help="command to run")
         try:
-            command = str(sys.argv[2:3][0])
-            if command in ["show", "update", "restore"]:
-                from test_junkie.cli.config_manager import ConfigManager
-                return ConfigManager(command, sys.argv)
-            else:
-                parser.print_help()
-        except:
-            CliUtils.print_color_traceback()
+            if len(sys.argv) >= 3:
+                command = str(sys.argv[2:3][0])
+                if command in ["show", "update", "restore"]:
+                    from test_junkie.cli.config_manager import ConfigManager
+                    return ConfigManager(command, sys.argv)
             parser.print_help()
-            exit(120)
+        except:
+            if "SystemExit:" not in traceback.format_exc():
+                CliUtils.print_color_traceback()
+                parser.print_help()
+                exit(120)
 
     def version(self):
         print("Test Junkie {} (Python{})".format(pkg_resources.require("test-junkie")[0].version, sys.version_info[0]))
@@ -161,6 +160,10 @@ class CliUtils:
         parser.add_argument("-S", "--suite_multithreading_limit", type=int, default=Settings.UNDEFINED,
                             help="Suite level multi threading allows to run multiple suites concurrently.")
 
+        parser.add_argument("-t", "--tests", nargs="+", default=Settings.UNDEFINED,
+                            help="Test Junkie can run specific tests. "
+                                 "Provide the names of the tests that you want to run.")
+
         parser.add_argument("-f", "--features", nargs="+", default=Settings.UNDEFINED,
                             help="Test suites can be defined with a feature that they are testing. "
                                  "Use features to narrow down execution of test suites only to those that "
@@ -179,11 +182,11 @@ class CliUtils:
         parser.add_argument("-m", "--monitor_resources", action="store_true", default=Settings.UNDEFINED,
                             help="Test Junkie can track resource usage for CPU & Memory as it runs tests")
 
-        parser.add_argument("--html", type=str, default=Settings.UNDEFINED,
+        parser.add_argument("--html_report", type=str, default=Settings.UNDEFINED,
                             help="Path to FILE. This will enable HTML report generation and when ready, "
                                  "the report will be saved to the specified file")
 
-        parser.add_argument("--xml", type=str, default=Settings.UNDEFINED,
+        parser.add_argument("--xml_report", type=str, default=Settings.UNDEFINED,
                             help="Path to FILE. This will enable XML report generation and when ready, "
                                  "the report will be saved to the specified file")
 
@@ -214,6 +217,10 @@ class CliUtils:
         parser.add_argument("-S", "--suite_multithreading_limit", action="store_true", default=False,
                             help="Suite level multi threading allows to run multiple suites concurrently.")
 
+        parser.add_argument("-t", "--tests", nargs="+", default=Settings.UNDEFINED,
+                            help="Test Junkie can run specific tests. "
+                                 "Provide the names of the tests that you want to run.")
+
         parser.add_argument("-f", "--features", action="store_true", default=False,
                             help="Test suites can be defined with a feature that they are testing. "
                                  "Use features to narrow down execution of test suites only to those that "
@@ -233,11 +240,11 @@ class CliUtils:
         parser.add_argument("-m", "--monitor_resources", action="store_true", default=False,
                             help="Test Junkie can track resource usage for CPU & Memory as it runs tests")
 
-        parser.add_argument("--html", action="store_true", default=False,
+        parser.add_argument("--html_report", action="store_true", default=False,
                             help="Path to FILE. This will enable HTML report generation and when ready, "
                                  "the report will be saved to the specified file")
 
-        parser.add_argument("--xml", action="store_true", default=False,
+        parser.add_argument("--xml_report", action="store_true", default=False,
                             help="Path to FILE. This will enable XML report generation and when ready, "
                                  "the report will be saved to the specified file")
 
@@ -268,3 +275,8 @@ class CliUtils:
         print(Style.BRIGHT + Fore.RED)
         print(traceback.format_exc())
         print(Style.RESET_ALL)
+
+
+if "__main__" == __name__:
+
+    Cli()

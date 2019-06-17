@@ -84,6 +84,7 @@ class DocumentationLinks:
     GROUP_RULES = "{}/documentation/#GroupRules".format(__DOMAIN)
     THREADING = "{}/documentation/#parallel_execution".format(__DOMAIN)
     HTML_REPORT = "{}/documentation/#html_report".format(__DOMAIN)
+    XML_REPORT = "{}/documentation/#xml_report".format(__DOMAIN)
     RETRY = "{}/documentation/#retry".format(__DOMAIN)
     FEATURES = "{}/documentation/#features".format(__DOMAIN)
     COMPONENTS = "{}/documentation/#components".format(__DOMAIN)

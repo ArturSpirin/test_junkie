@@ -4,6 +4,7 @@ import threading
 import time
 from datetime import datetime
 
+from test_junkie.cli.config_manager import ConfigManager
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import SuiteCategory, TestCategory
 
@@ -332,10 +333,11 @@ class Aggregator(object):
 
 class ResourceMonitor(threading.Thread):
 
-    def __init__(self, file_path=None,):
+    def __init__(self):
 
-        self.file_path = "{dir}{sep}.resources".format(dir=os.path.dirname(os.path.abspath(__file__)),
-                                                       sep=os.sep) if file_path is None else file_path
+        self.file_path = "{dir}{sep}.resources_{timestamp}".format(dir=ConfigManager.get_root_dir(),
+                                                                   sep=os.sep,
+                                                                   timestamp=time.time())
 
         threading.Thread.__init__(self)
         self.exit = multiprocessing.Event()
@@ -358,3 +360,6 @@ class ResourceMonitor(threading.Thread):
 
     def shutdown(self):
         self.exit.set()
+
+    def cleanup(self):
+        os.remove(self.file_path)

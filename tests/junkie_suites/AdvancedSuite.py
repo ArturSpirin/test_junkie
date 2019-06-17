@@ -28,7 +28,7 @@ class AdvancedSuite:
     def after_class(self, suite_parameter):
         pass
 
-    @test(retry=2, parameters=[10, 20], tags=["critical", "v1"],
+    @test(retry=2, parameters=[10, 20], tags=["critical2", "v1"],
           meta=meta(name="No Retry", expected="Test must pass on 1st go, thus should not be retried"))
     def no_retry(self, parameter, suite_parameter):
         assert parameter is not None
@@ -37,14 +37,14 @@ class AdvancedSuite:
                     name="No Retry 1", expected="updated")
         Meta.get_meta(self, parameter=parameter, suite_parameter=suite_parameter)
 
-    @test(retry=2, parameters=[10, 20], tags=["critical", "v1"], parallalized_parameters=True,
+    @test(retry=2, parameters=[10, 20], tags=["critical2", "v1"], parallalized_parameters=True,
           meta=meta(name="No Retry", expected="Test must pass on 1st go, thus should not be retried"))
     def no_retry2(self, parameter):
         assert parameter is not None
         Meta.update(self, parameter=parameter, name="No Retry 2", expected="updated")
         Meta.get_meta(self, parameter=parameter)
 
-    @test(retry=2, tags=["critical", "v1"],
+    @test(retry=2, tags=["critical2", "v1"],
           meta=meta(name="No Retry", expected="Test must pass on 1st go, thus should not be retried"))
     def no_retry3(self, suite_parameter):
         assert suite_parameter is not None
@@ -63,7 +63,7 @@ class AdvancedSuite:
         Meta.get_meta(self)
         assert True is False, "Expected Assertion Error 2"
 
-    @test(retry=2, parameters=[10, 20], tags=["critical", "v1"],
+    @test(retry=2, parameters=[10, 20], tags=["critical", "v2"],
           meta=meta(name="Retry 3", expected="Test must fail and be retried"))
     def retry3(self, parameter, suite_parameter):
         assert parameter is not None
@@ -74,7 +74,7 @@ class AdvancedSuite:
         if suite_parameter == 1 and parameter == 10:
             raise Exception("On purpose")
 
-    @test(retry=2, parameters=[10, 20], tags=["critical", "v1"],
+    @test(retry=2, parameters=[10, 20], tags=["critical", "v2"],
           meta=meta(name="Retry 3", expected="Test must fail and be retried"))
     def retry4(self, parameter):
         assert parameter is not None
@@ -83,7 +83,7 @@ class AdvancedSuite:
         if parameter == 10:
             raise Exception("On purpose")
 
-    @test(retry=2, tags=["critical", "v1"],
+    @test(retry=2, tags=["critical", "v2"],
           meta=meta(name="Retry 3", expected="Test must fail and be retried"))
     def retry5(self, suite_parameter):
         assert suite_parameter is not None

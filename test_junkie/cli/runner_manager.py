@@ -33,7 +33,7 @@ class RunnerManager:
                     if name == decorated_class and inspect.isclass(data):
                         self.suites.append(data)
 
-        matches = re.findall("@{alias}((.|\n)*?):".format(alias=_suite_alias), _source)
+        matches = re.findall("@{alias}((.|\n)*?):\n".format(alias=_suite_alias), _source)
         for match in matches:
             if isinstance(match, tuple):
                 for item in match:
@@ -100,11 +100,12 @@ class RunnerManager:
             print("Running tests ...\n")
             try:
                 runner = Runner(suites=self.suites,
-                                html=args.html,
-                                xml=args.xml,
+                                html_report=args.html_report,
+                                xml_report=args.xml_report,
                                 config=ConfigManager().path)
                 runner.run(test_multithreading_limit=args.test_multithreading_limit,
                            suite_multithreading_limit=args.suite_multithreading_limit,
+                           tests=args.tests,
                            owners=args.owners,
                            components=args.components,
                            features=args.features,

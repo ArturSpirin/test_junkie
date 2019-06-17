@@ -190,8 +190,9 @@ class Runner:
                                 multi_threading_enabled=self.__processor.test_multithreading()
                                 or self.__processor.suite_multithreading())
             self.__create_html_report(reporter)
-        XmlReporter.create_xml_report(write_file=self.__kwargs.get("xml_report", None),
-                                      suites=self.get_executed_suites())
+        XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
+        if self.__settings.monitor_resources:
+            resource_monitor.cleanup()
         return aggregator
 
     @staticmethod
@@ -251,6 +252,7 @@ class Runner:
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
 
+                    tests = list(suite.get_test_objects())
                     for class_param in suite.get_parameters(process_functions=True):
 
                         LogJunkie.debug("Running suite: {}".format(suite.get_class_object()))
@@ -267,7 +269,6 @@ class Runner:
                                 break
                         parallels = []
 
-                        tests = list(suite.get_test_objects())
                         while tests:
                             for test in list(tests):
 
@@ -655,7 +656,7 @@ class Runner:
         :return: BOOLEAN
         """
 
-        def __config_set():
+        def __config_set(prop=None):
             """
             Checks if tag config was defined for any of the following settings:
             - skip_on_match_all
@@ -664,7 +665,8 @@ class Runner:
             - run_on_match_any
             :return: BOOLEAN, if any of of the settings are set, tag config is considered set
             """
-            for setting in ["skip_on_match_all", "skip_on_match_any", "run_on_match_all", "run_on_match_any"]:
+            props = ["skip_on_match_all", "skip_on_match_any", "run_on_match_all", "run_on_match_any"]
+            for setting in props if not prop else [prop]:
                 val = tag_config.get(setting, None) is not None
                 if val is True:
                     return True
@@ -696,7 +698,10 @@ class Runner:
                     elif __full_match("run_on_match_all") or __partial_match("run_on_match_any"):
                         return True
                     else:
+                        if not __config_set("run_on_match_all") and not __config_set("run_on_match_any"):
+                            return True
                         return False
+
             except Exception:
                 trace = ""
                 if sys.version_info[0] < 3:
@@ -711,10 +716,11 @@ class Runner:
         :param test: TestObject object
         :return: BOOLEAN
         """
-        val = test.can_skip()
+        can_skip = test.can_skip()
 
         # Run only tests that were requested
-        if val is False and self.__settings.tests is not None:
+        if can_skip is False and self.__settings.tests is not None:
+            requested = False
             if sys.version_info[0] < 3:
                 """
                 While both in Python 2 and 3 function objects look like, tests.junkie_suites.SkipSuites
@@ -724,19 +730,27 @@ class Runner:
                     [<function SkipTests.test_1 at 0x0438A780>, <function SkipTests.test_2 at 0x0438A7C8>]
                 So oddly enough in Python 2 the regular check did not work, thus this hack
                 """
-                val = True
+
                 for t in self.__settings.tests:
-                    if inspect.getsource(test.get_function_object()) == inspect.getsource(t):
-                        val = False
-                        break
+                    if not isinstance(t, str):
+                        if inspect.getsource(test.get_function_object()) == inspect.getsource(t):
+                            requested = True
+                            break
+                    else:
+                        if test.get_function_name() in self.__settings.tests:
+                            requested = True
+                            break
             else:
-                val = not test.get_function_object() in self.__settings.tests
+                requested = test.get_function_object() in self.__settings.tests or \
+                                test.get_function_name() in self.__settings.tests
 
-        # Run only components that were requested
-        if val is False and self.__settings.components is not None:
-            val = not test.get_component() in self.__settings.components
+            can_skip = not requested  # if test was not requested as part of the tests set, we can skip it
 
-        # Run only tests that belong to the owners requested
-        if val is False and self.__settings.owners is not None:
-            val = not test.get_owner() in self.__settings.owners
-        return val
+        # Out of those tests, run only components that were requested
+        if can_skip is False and self.__settings.components is not None:
+            can_skip = not test.get_component() in self.__settings.components
+
+        # Out of those tests, run only those that belong to the owners requested
+        if can_skip is False and self.__settings.owners is not None:
+            can_skip = not test.get_owner() in self.__settings.owners
+        return can_skip

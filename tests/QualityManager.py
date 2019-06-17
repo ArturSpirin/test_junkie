@@ -28,7 +28,8 @@ class QualityManager:
                             expected_aftertest_performance_time=0,
                             expected_beforetest_performance_time=0):
 
-        assert metrics["retry"] == expected_retry_count
+        assert metrics["retry"] == expected_retry_count, \
+            "Expected retry count: {} Actual retry count: {}".format(expected_retry_count, metrics["retry"])
         assert metrics["status"] == expected_status
         assert metrics["runtime"] >= expected_runtime
 
@@ -87,7 +88,8 @@ class QualityManager:
                            expected_performance_count=1,
                            expected_performance=0):
 
-        assert metrics["status"] == expected_status
+        assert metrics["status"] == expected_status, \
+            "Expected status: {} Actual Status: {}".format(expected_status, metrics["status"])
         assert metrics["retry"] == expected_retry_count
         assert str(metrics["param"]) == str(expected_param)
         assert str(metrics["class_param"]) == str(expected_class_param)

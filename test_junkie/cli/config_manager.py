@@ -21,11 +21,12 @@ class ConfigManager:
 
     __DEFAULTS = """
 [runtime]
-test_multithreading_limit=1
-suite_multithreading_limit=1
-html=None
-xml=None
+test_multithreading_limit=None
+suite_multithreading_limit=None
+html_report=None
+xml_report=None
 monitor_resources=None
+tests=None
 features=None
 components=None
 owners=None
@@ -40,9 +41,8 @@ root=None
 
     def __init__(self, command=None, args=None):
 
-        self.root = user_data_dir("Test-Junkie")
         self.config_name = "tj.cfg"
-        self.path = "{root}{sep}{name}".format(root=self.root, name=self.config_name, sep=os.sep)
+        self.path = "{root}{sep}{name}".format(root=ConfigManager.get_root_dir(), name=self.config_name, sep=os.sep)
         self.args = args
 
         if command is not None and args is not None:
@@ -51,6 +51,10 @@ root=None
             self.config = configparser.ConfigParser()
             self.config.read(self.path)
             getattr(self, command)()
+
+    @staticmethod
+    def get_root_dir():
+        return user_data_dir("Test-Junkie")
 
     def __set_default_config(self):
 
@@ -61,7 +65,6 @@ root=None
     def __restore_value(self, option, value):
 
         try:
-            ast.literal_eval(str(value))
             self.config.set('runtime', option, str(value))
             with open(self.path, 'w+') as doc:
                 self.config.write(doc)
@@ -95,7 +98,7 @@ root=None
             print("[{status}]\tWhat do you want to update?\n".format(
                 status=CliUtils.format_color_string(value="ERROR", color="red")))
             parser.print_help()
-            exit(0)
+            return
         for option, value in args.__dict__.items():
             if value is not Settings.UNDEFINED:
                 self.__restore_value(option, value)
@@ -131,8 +134,8 @@ root=None
             parser.print_help()
             return
         if args.all:
-            if not os.path.exists(self.root):
-                os.makedirs(self.root)
+            if not os.path.exists(ConfigManager.get_root_dir()):
+                os.makedirs(ConfigManager.get_root_dir())
             os.remove(self.path)
             self.__set_default_config()
             return
