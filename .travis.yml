@@ -9,7 +9,6 @@ python:
 install:
   - pip install -r requirements.txt
 before_script:
-  - mkdir -p /home/travis/.local/share/Test-Junkie/
   - export PYTHONPATH=$PYTHONPATH:$(pwd)
 script:
   - if [[ $TRAVIS_PYTHON_VERSION != 2.7 ]]; then (py.test --cov=test_junkie tests/); fi

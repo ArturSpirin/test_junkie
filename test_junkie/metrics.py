@@ -1,3 +1,4 @@
+import errno
 import multiprocessing
 import os
 import threading
@@ -346,8 +347,18 @@ class ResourceMonitor(threading.Thread):
 
         return self.file_path
 
+    def mkdir_p(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exc:  # Python >2.5
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+            else:
+                raise
+
     def run(self):
         import psutil
+        self.mkdir_p(ConfigManager.get_root_dir())
         with open(self.file_path, "w+") as records:
             records.write("")
         while not self.exit.is_set():

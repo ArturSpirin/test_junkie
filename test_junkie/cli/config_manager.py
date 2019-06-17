@@ -47,7 +47,7 @@ root=None
 
         if command is not None and args is not None:
             if not os.path.exists(self.path):
-                self.restore()
+                self.restore(new=True)
             self.config = configparser.ConfigParser()
             self.config.read(self.path)
             getattr(self, command)()
@@ -120,7 +120,7 @@ root=None
             if value is True:
                 self.__print_value(option)
 
-    def restore(self):
+    def restore(self, new=False):
 
         parser = argparse.ArgumentParser(description='Restore config settings to it\'s original values',
                                          usage="tj config restore [OPTIONS]")
@@ -128,16 +128,17 @@ root=None
                             help="Will restore all config settings to its default values")
         CliUtils.add_standard_boolean_tj_args(parser)
         args = parser.parse_args(self.args[3:])
+        if args.all or new:
+            if not os.path.exists(ConfigManager.get_root_dir()):
+                os.makedirs(ConfigManager.get_root_dir())
+            if os.path.exists(self.path):
+                os.remove(self.path)
+            self.__set_default_config()
+            return
         if not self.args[3:]:
             print("[{status}]\tWhat do you want to restore?\n".format(
                 status=CliUtils.format_color_string(value="ERROR", color="red")))
             parser.print_help()
-            return
-        if args.all:
-            if not os.path.exists(ConfigManager.get_root_dir()):
-                os.makedirs(ConfigManager.get_root_dir())
-            os.remove(self.path)
-            self.__set_default_config()
             return
         for option, value in args.__dict__.items():
             if value is True:
