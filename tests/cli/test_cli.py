@@ -129,15 +129,25 @@ def test_config_show_all():
                 "Command: {} produced exception. {}".format(cmd, output)
 
 
+def validate_output(expected, output):
+
+    for item in list(expected):
+        for line in output:
+            if item[0] in line and item[1] in line:
+                expected.remove(item)
+    if expected:
+        raise AssertionError("Not verified: {}".format(expected))
+
 def test_run_with_cmd_args():
 
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
     output = Cmd.run(['python', EXE, 'run', '-s', TESTS, '-k', 'api'])
     pprint.pprint(output)
-    assert "[6/16 37.50%] SUCCESS" in output
-    assert "[SUCCESS] [0/5 0%]" in output[-4] and "CliTestSuite.ShoppingCartSuite" in output[-4]
-    assert "[SUCCESS] [0/5 0%]" in output[-3] and "CliTestSuite.NewProductsSuite" in output[-3]
-    assert "[SUCCESS] [6/6 100.00%]" in output[-2] and "CliTestSuite.AuthApiSuite" in output[-2]
+    validate_output(expected=[["[6/16 37.50%]", "SUCCESS"],
+                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.ShoppingCartSuite"],
+                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
+                              ["[SUCCESS] [6/6 100.00%]", "CliTestSuite.AuthApiSuite"]],
+                    output=output)
 
 
 def test_run_with_config_and_cmd_args():
@@ -147,10 +157,11 @@ def test_run_with_config_and_cmd_args():
     Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
     output = Cmd.run(['python', EXE, 'run', '-s', TESTS, '-k', 'api'])
     pprint.pprint(output)
-    assert "[4/16 25.00%] SUCCESS" in output
-    assert "[SUCCESS] [0/5 0%]" in output[-4] and "CliTestSuite.ShoppingCartSuite" in output[-4]
-    assert "[SUCCESS] [0/5 0%]" in output[-3] and "CliTestSuite.NewProductsSuite" in output[-3]
-    assert "[SUCCESS] [4/6 66.67%]" in output[-2] and "CliTestSuite.AuthApiSuite" in output[-2]
+    validate_output(expected=[["[4/16 25.00%]", "SUCCESS"],
+                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.ShoppingCartSuite"],
+                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
+                              ["[SUCCESS] [4/6 66.67%]", "CliTestSuite.AuthApiSuite"]],
+                    output=output)
 
 
 def test_run_with_config():
@@ -160,10 +171,11 @@ def test_run_with_config():
     Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
     output = Cmd.run(['python', EXE, 'run', '-s', TESTS])
     pprint.pprint(output)
-    assert "[9/16 56.25%] SUCCESS" in output
-    assert "[SUCCESS] [5/5 100.00%]" in output[-4] and "CliTestSuite.ShoppingCartSuite" in output[-4]
-    assert "[SUCCESS] [0/5 0%]" in output[-3] and "CliTestSuite.NewProductsSuite" in output[-3]
-    assert "[SUCCESS] [4/6 66.67%]" in output[-2] and "CliTestSuite.AuthApiSuite" in output[-2]
+    validate_output(expected=[["[9/16 56.25%]", "SUCCESS"],
+                              ["[SUCCESS] [5/5 100.00%]", "CliTestSuite.ShoppingCartSuite"],
+                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
+                              ["[SUCCESS] [4/6 66.67%]", "CliTestSuite.AuthApiSuite"]],
+                    output=output)
 
 
 def test_runner_with_config():
