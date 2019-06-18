@@ -29,7 +29,8 @@ Use: tj COMMAND -h to display COMMAND specific help
         parser.add_argument('command', help='command to run')
         args = parser.parse_args(sys.argv[1:2])
         if not hasattr(self, args.command):
-            print('test-junkie: \'{}\' is not a test-junkie command\n'.format(args.command))
+            print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
+                status=CliUtils.format_color_string(value="ERROR", color="red"), command=args.command))
             parser.print_help()
             exit(1)
         if args.command:
@@ -40,8 +41,12 @@ Use: tj COMMAND -h to display COMMAND specific help
                                          usage="tj run -s SOURCE [OPTIONS]")
 
         parser.add_argument("-s", "--source", type=str, default=None, required=True,  # unless defined in the config
-                            help="Path to DIRECTORY where you have your tests. "
-                                 "Test Junkie will traverse this directory looking for test suites")
+                            help="Path to DIRECTORY or FILE where you have your tests. "
+                                 "Test Junkie will traverse this source looking for test suites")
+
+        parser.add_argument("-x", "--suites", nargs="+", default=None,
+                            help="Test Junkie will only run suites provided, "
+                                 "given that they are found in the SOURCE")
 
         parser.add_argument("-v", "--verbose", action="store_true", default=False,
                             help="Enables Test Junkie's logs for debugging purposes")
@@ -55,7 +60,7 @@ Use: tj COMMAND -h to display COMMAND specific help
             LogJunkie.enable_logging(10)
 
         from test_junkie.cli.runner_manager import RunnerManager
-        tj = RunnerManager(root=args.source, ignore=[".git"])
+        tj = RunnerManager(root=args.source, ignore=[".git"], suites=args.suites)
         tj.scan()
         tj.run_suites(args)
 
@@ -72,12 +77,17 @@ Use: tj scan COMMAND -h to display COMMAND specific help
 """)
 
         parser.add_argument("-s", "--source", type=str, default=None, required=True,  # unless defined in the config
-                            help="Path to DIRECTORY where you have your tests. "
-                                 "Test Junkie will traverse this directory looking for test suites")
+                            help="Path to DIRECTORY or FILE where you have your tests. "
+                                 "Test Junkie will traverse this source looking for test suites")
+
+        parser.add_argument("-x", "--suites", nargs="+", default=None,
+                            help="Test Junkie will only run suites provided, "
+                                 "given that they are found in the SOURCE")
+
         CliUtils.add_standard_tj_args(parser)
         args = parser.parse_args(sys.argv[2:])
         from test_junkie.cli.runner_manager import RunnerManager
-        tj = RunnerManager(root=args.source, ignore=[".git"])
+        tj = RunnerManager(root=args.source, ignore=[".git"], suites=args.suites)
         tj.scan()
 
         # detect if too many tests per suite?

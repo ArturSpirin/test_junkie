@@ -15,12 +15,13 @@ class RunnerManager:
     __REGEX_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite as.*?\n"
     __REGEX_NO_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite.*?\n"
 
-    def __init__(self, root, ignore):
+    def __init__(self, root, ignore, suites):
 
         self.root = root
         self.tjignore = ignore
         self.detected_suites = {}
         self.suites = []
+        self.requested_suites = suites
 
     def __find_and_register_suite(self, _suite_alias, _source, _file_path):
 
@@ -31,7 +32,9 @@ class RunnerManager:
                 module = imp.load_source(module_name, _file_path)
                 for name, data in inspect.getmembers(module):
                     if name == decorated_class and inspect.isclass(data):
-                        self.suites.append(data)
+                        if not self.requested_suites or \
+                                self.requested_suites and decorated_class in self.requested_suites:
+                            self.suites.append(data)
 
         matches = re.findall("@{alias}((.|\n)*?):\n".format(alias=_suite_alias), _source)
         for match in matches:
@@ -55,27 +58,34 @@ class RunnerManager:
 
     def scan(self):
 
+        def parse_file(_file):
+            with open(_file) as doc:
+                source = doc.read()
+
+                suite_imported_as_alias = re.findall(RunnerManager.__REGEX_ALIAS_IMPORT, source)
+                if suite_imported_as_alias:
+                    suite_alias = suite_imported_as_alias[-1].split("Suite")[-1].split("as")[-1].split(",")[0].strip()
+                    self.__find_and_register_suite(suite_alias, source, _file)
+                    return True
+
+                suite_imported = re.findall(RunnerManager.__REGEX_NO_ALIAS_IMPORT, source)
+                if suite_imported:
+                    self.__find_and_register_suite("Suite", source, _file)
+                    return True
+
         print("\nScanning: {} ...".format(CliUtils.format_color_string(value=self.root, color="green")))
         start = time.time()
         try:
-            for dirName, subdirList, fileList in os.walk(self.root, topdown=True):
+            if self.root.endswith(".py"):
+                parse_file(self.root)
+            else:
+                for dirName, subdirList, fileList in os.walk(self.root, topdown=True):
 
-                if self.__skip(dirName):
-                    continue
+                    if self.__skip(dirName):
+                        continue
 
-                for file_path in glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
-                    with open(file_path) as doc:
-                        source = doc.read()
-
-                        suite_imported_as_alias = re.findall(RunnerManager.__REGEX_ALIAS_IMPORT, source)
-                        if suite_imported_as_alias:
-                            suite_alias = suite_imported_as_alias[-1].split("Suite")[-1].split("as")[-1].split(",")[0].strip()
-                            self.__find_and_register_suite(suite_alias, source, file_path)
-                            continue
-
-                        suite_imported = re.findall(RunnerManager.__REGEX_NO_ALIAS_IMPORT, source)
-                        if suite_imported:
-                            self.__find_and_register_suite("Suite", source, file_path)
+                    for file_path in glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
+                        if parse_file(file_path)is True:
                             continue
         except:
             print("[{status}] Unexpected error during scan for test suites.".format(
