@@ -60,7 +60,8 @@ root=None
 
         with open(self.path, "w+") as doc:
             doc.write(ConfigManager.__DEFAULTS)
-            print("Config restored to default settings!")
+            print("[{status}] Config restored to default settings!"
+                  .format(status=CliUtils.format_color_string(value="OK", color="green")))
 
     def __restore_value(self, option, value):
 
@@ -118,7 +119,8 @@ root=None
         CliUtils.add_standard_boolean_tj_args(parser)
         args = parser.parse_args(self.args[3:])
         if args.all or not self.args[3:]:
-            print("Config is located at: {}".format(self.path))
+            print("Config is located at: {path}"
+                  .format(path=CliUtils.format_color_string(value=self.path, color="green")))
             with open(self.path, "r") as cfg:
                 print(cfg.read())
             return

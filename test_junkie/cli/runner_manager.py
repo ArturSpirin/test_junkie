@@ -36,14 +36,14 @@ class RunnerManager:
                     splitter = "{sep}{dir}{sep}".format(
                         sep=os.sep, dir=str(error).replace("No module named ", "").split(".")[0].replace("'", ""))
                     assumed_root = _file_path.split(splitter)[0]
-                    print("\n[{status}] Import error: {error}"
+                    print("[{status}] Import error: {error}"
                           .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
                                   error=error))
                     print("[{status}] Trying again with assumption that this is your project root: {assumed_root}"
                           .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
                                   assumed_root=CliUtils.format_color_string(value=assumed_root, color="yellow")))
                     print("[{status}] This may or may not work but if the import error is for a package in your "
-                          "project, make sure that project is included in {pythonpath}.\n"
+                          "project, make sure that project is included in {pythonpath}."
                           .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
                                   pythonpath=CliUtils.format_color_string(value="PYTHONPATH", color="yellow")))
                     sys.path.insert(0, assumed_root)
@@ -92,7 +92,9 @@ class RunnerManager:
                     self.__find_and_register_suite("Suite", source, doc.name)
                     return True
 
-        print("\nScanning: {} ...".format(CliUtils.format_color_string(value=self.root, color="green")))
+        print("\n[{status}] Scanning: {location} ..."
+              .format(location=CliUtils.format_color_string(value=self.root, color="green"),
+                      status=CliUtils.format_color_string(value="INFO", color="blue")))
         start = time.time()
         try:
             if self.root.endswith(".py"):
@@ -111,7 +113,9 @@ class RunnerManager:
                 status=CliUtils.format_color_string(value="ERROR", color="red")))
             CliUtils.print_color_traceback()
             exit(120)
-        print("Scan finished in: {} seconds. Found: {} suite(s).\n".format(time.time() - start, len(self.suites)))
+        print("[{status}] Scan finished in: {time} seconds. Found: {suites} suite(s)."
+              .format(status=CliUtils.format_color_string(value="INFO", color="blue"),
+                      time=time.time() - start, suites=len(self.suites)))
 
     def run_suites(self, args):
 
@@ -126,7 +130,8 @@ class RunnerManager:
             return None
 
         if self.suites:
-            print("Running tests ...\n")
+            print("[{status}] Running tests ...\n"
+                  .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
             try:
                 runner = Runner(suites=self.suites,
                                 html_report=args.html_report,
