@@ -1,6 +1,7 @@
 import imp
 import inspect
 import os
+import sys
 import time
 import re
 from setuptools.glob import glob
@@ -29,7 +30,24 @@ class RunnerManager:
             if "\nclass " in _item:
                 decorated_class = item.split("\nclass ")[-1].strip()
                 module_name = os.path.splitext(os.path.basename(_file_path))[0]
-                module = imp.load_source(module_name, _file_path)
+                try:
+                    module = imp.load_source(module_name, _file_path)
+                except ImportError as error:
+                    splitter = "{sep}{dir}{sep}".format(
+                        sep=os.sep, dir=str(error).replace("No module named ", "").split(".")[0].replace("'", ""))
+                    assumed_root = _file_path.split(splitter)[0]
+                    print("\n[{status}] Import error: {error}"
+                          .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
+                                  error=error))
+                    print("[{status}] Trying again with assumption that this is your project root: {assumed_root}"
+                          .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
+                                  assumed_root=CliUtils.format_color_string(value=assumed_root, color="yellow")))
+                    print("[{status}] This may or may not work but if the import error is for a package in your "
+                          "project, make sure that project is included in {pythonpath}.\n"
+                          .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
+                                  pythonpath=CliUtils.format_color_string(value="PYTHONPATH", color="yellow")))
+                    sys.path.insert(0, assumed_root)
+                    module = imp.load_source(module_name, _file_path)
                 for name, data in inspect.getmembers(module):
                     if name == decorated_class and inspect.isclass(data):
                         if not self.requested_suites or \
@@ -60,17 +78,18 @@ class RunnerManager:
 
         def parse_file(_file):
             with open(_file) as doc:
+
                 source = doc.read()
 
                 suite_imported_as_alias = re.findall(RunnerManager.__REGEX_ALIAS_IMPORT, source)
                 if suite_imported_as_alias:
                     suite_alias = suite_imported_as_alias[-1].split("Suite")[-1].split("as")[-1].split(",")[0].strip()
-                    self.__find_and_register_suite(suite_alias, source, _file)
+                    self.__find_and_register_suite(suite_alias, source, doc.name)
                     return True
 
                 suite_imported = re.findall(RunnerManager.__REGEX_NO_ALIAS_IMPORT, source)
                 if suite_imported:
-                    self.__find_and_register_suite("Suite", source, _file)
+                    self.__find_and_register_suite("Suite", source, doc.name)
                     return True
 
         print("\nScanning: {} ...".format(CliUtils.format_color_string(value=self.root, color="green")))

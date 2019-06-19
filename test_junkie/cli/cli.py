@@ -276,7 +276,7 @@ class CliUtils:
 
     @staticmethod
     def format_color_string(value, color):
-        colors = {"red": Fore.RED, "green": Fore.GREEN}
+        colors = {"red": Fore.RED, "green": Fore.GREEN, "yellow": Fore.YELLOW}
         return "{style}{color}{value}{reset}".format(style=Style.BRIGHT, color=colors[color],
                                                      value=value, reset=Style.RESET_ALL)
 
