@@ -19,8 +19,7 @@ class Cli(object):
 Modern Testing Framework
 
 Commands:
-run\t Run tests in any directory (recursive)
-scan\t Scan and get information regarding tests in any directory (recursive) 
+run\t Run tests in any directory (recursive) 
 config\t Configure Test Junkie
 version\t Display current version
 
