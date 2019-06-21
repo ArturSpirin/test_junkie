@@ -25,6 +25,12 @@ class BadParameters(TestJunkieExecutionError):
         TestJunkieExecutionError.__init__(self, message)
 
 
+class BadCliParameters(TestJunkieExecutionError):
+
+    def __init__(self, message):
+        TestJunkieExecutionError.__init__(self, message)
+
+
 class BadSignature(Exception):
 
     def __init__(self, message):

@@ -1,3 +1,4 @@
+import ast
 import imp
 import inspect
 import os
@@ -8,7 +9,9 @@ from setuptools.glob import glob
 
 from test_junkie.cli.cli import CliUtils
 from test_junkie.cli.config_manager import ConfigManager
+from test_junkie.errors import BadCliParameters
 from test_junkie.runner import Runner
+from test_junkie.settings import Settings
 
 
 class RunnerManager:
@@ -16,13 +19,26 @@ class RunnerManager:
     __REGEX_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite as.*?\n"
     __REGEX_NO_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite.*?\n"
 
-    def __init__(self, root, ignore, suites):
+    def __init__(self, sources, ignore, suites):
 
-        self.root = root
+        self.__sources = sources
         self.tjignore = ignore
         self.detected_suites = {}
         self.suites = []
         self.requested_suites = suites
+
+    @property
+    def sources(self):
+        if self.__sources == Settings.UNDEFINED:
+            config = ConfigManager.get_config_parser(ConfigManager.get_config_path())
+            self.__sources = ConfigManager.get_value(config, "sources")
+            self.__sources = ast.literal_eval(self.__sources)
+        if self.__sources == Settings.UNDEFINED or not isinstance(self.__sources, list):
+            raise BadCliParameters("Sources is a required parameter. You can set it in the config via tj config "
+                                   "update -s / --sources to persist or pass it in directly to the command you "
+                                   "are running via -s / --sources"
+                                   .format(config=ConfigManager.get_config_path()))
+        return self.__sources
 
     def __find_and_register_suite(self, _suite_alias, _source, _file_path):
 
@@ -62,9 +78,9 @@ class RunnerManager:
             else:
                 load_module(match)
 
-    def __skip(self, directory):
+    def __skip(self, source, directory):
 
-        if self.root not in directory:
+        if source not in directory:
             print("{} is not part of the root directory!".format(directory))
             return True
 
@@ -93,21 +109,22 @@ class RunnerManager:
                     return True
 
         print("\n[{status}] Scanning: {location} ..."
-              .format(location=CliUtils.format_color_string(value=self.root, color="green"),
+              .format(location=CliUtils.format_color_string(value=self.sources, color="green"),
                       status=CliUtils.format_color_string(value="INFO", color="blue")))
         start = time.time()
         try:
-            if self.root.endswith(".py"):
-                parse_file(self.root)
-            else:
-                for dirName, subdirList, fileList in os.walk(self.root, topdown=True):
+            for source in self.sources:
+                if source.endswith(".py"):
+                    parse_file(source)
+                else:
+                    for dirName, subdirList, fileList in os.walk(source, topdown=True):
 
-                    if self.__skip(dirName):
-                        continue
-
-                    for file_path in glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
-                        if parse_file(file_path)is True:
+                        if self.__skip(source, dirName):
                             continue
+
+                        for file_path in glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
+                            if parse_file(file_path)is True:
+                                continue
         except:
             print("[{status}] Unexpected error during scan for test suites.".format(
                 status=CliUtils.format_color_string(value="ERROR", color="red")))

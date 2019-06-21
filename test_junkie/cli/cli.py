@@ -5,6 +5,7 @@ import pkg_resources
 
 from test_junkie.builder import Builder
 from test_junkie.constants import DocumentationLinks
+from test_junkie.errors import BadCliParameters
 from test_junkie.settings import Settings
 from colorama import Fore, Style
 
@@ -37,11 +38,7 @@ Use: tj COMMAND -h to display COMMAND specific help
 
     def run(self):
         parser = argparse.ArgumentParser(description='Run tests from command line',
-                                         usage="tj run -s SOURCE [OPTIONS]")
-
-        parser.add_argument("-s", "--source", type=str, default=None, required=True,  # unless defined in the config
-                            help="Path to DIRECTORY or FILE where you have your tests. "
-                                 "Test Junkie will traverse this source looking for test suites")
+                                         usage="tj run [OPTIONS]")
 
         parser.add_argument("-x", "--suites", nargs="+", default=None,
                             help="Test Junkie will only run suites provided, "
@@ -59,8 +56,12 @@ Use: tj COMMAND -h to display COMMAND specific help
             LogJunkie.enable_logging(10)
 
         from test_junkie.cli.runner_manager import RunnerManager
-        tj = RunnerManager(root=args.source, ignore=[".git"], suites=args.suites)
-        tj.scan()
+        try:
+            tj = RunnerManager(sources=args.sources, ignore=[".git"], suites=args.suites)
+            tj.scan()
+        except BadCliParameters as error:
+            print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
+            return
         tj.run_suites(args)
 
     def scan(self):
@@ -75,10 +76,6 @@ find\t Find tests or suites matching specific conditions
 Use: tj scan COMMAND -h to display COMMAND specific help
 """)
 
-        parser.add_argument("-s", "--source", type=str, default=None, required=True,  # unless defined in the config
-                            help="Path to DIRECTORY or FILE where you have your tests. "
-                                 "Test Junkie will traverse this source looking for test suites")
-
         parser.add_argument("-x", "--suites", nargs="+", default=None,
                             help="Test Junkie will only run suites provided, "
                                  "given that they are found in the SOURCE")
@@ -86,8 +83,12 @@ Use: tj scan COMMAND -h to display COMMAND specific help
         CliUtils.add_standard_tj_args(parser)
         args = parser.parse_args(sys.argv[2:])
         from test_junkie.cli.runner_manager import RunnerManager
-        tj = RunnerManager(root=args.source, ignore=[".git"], suites=args.suites)
-        tj.scan()
+        try:
+            tj = RunnerManager(sources=args.sources, ignore=[".git"], suites=args.suites)
+            tj.scan()
+        except BadCliParameters as error:
+            print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
+            return
 
         # detect if too many tests per suite?
         # rules defined? --no-rule return all suites with no rules
@@ -215,11 +216,20 @@ class CliUtils:
                             help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
                             .format(link=DocumentationLinks.TAGS))
 
+        parser.add_argument("-s", "--sources", nargs="+", default=Settings.UNDEFINED,
+                            help="Paths to DIRECTORY or FILE where you have your tests. "
+                                 "Test Junkie will traverse this source(s) looking for test suites")
+
     @staticmethod
     def add_standard_boolean_tj_args(parser):
         """
         Generic parser args used to show and restore config settings
         """
+
+        parser.add_argument("-s", "--sources", action="store_true", default=False,
+                            help="Paths to DIRECTORY or FILE where you have your tests. "
+                                 "Test Junkie will traverse this source(s) looking for test suites")
+
         parser.add_argument("-T", "--test_multithreading_limit", action="store_true", default=False,
                             help="Test level multi threading allows to run multiple tests concurrently.")
 
@@ -238,8 +248,7 @@ class CliUtils:
         parser.add_argument("-c", "--components", action="store_true", default=False,
                             help="Tests can be defined with a component that they are testing. "
                                  "Use components to narrow down execution of tests only to those that "
-                                 "match this filter. Learn more @ {link}".format(
-                                link=DocumentationLinks.COMPONENTS))
+                                 "match this filter. Learn more @ {link}".format(link=DocumentationLinks.COMPONENTS))
 
         parser.add_argument("-o", "--owners", action="store_true", default=False,
                             help="Tests & test suites can be defined with an assignee. "

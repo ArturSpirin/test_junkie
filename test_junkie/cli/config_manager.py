@@ -1,24 +1,15 @@
 import argparse
 import ast
 from appdirs import *
-
 from test_junkie.settings import Settings
 from test_junkie.cli.cli import CliUtils
-
-
-if sys.version_info[0] < 3:
-    # Python 2
-    import ConfigParser as configparser
-else:
-    # Python 3, module was renamed to configparser
-    import configparser
 
 
 class ConfigManager:
     """
     only use for cli, do not use for parsing the config when running tests
     """
-
+    __CONFIG_NAME = "tj.cfg"
     __DEFAULTS = """
 [runtime]
 test_multithreading_limit=None
@@ -34,27 +25,41 @@ run_on_match_all=None
 run_on_match_any=None
 skip_on_match_all=None
 skip_on_match_any=None
-artifacts=None
-source=None
-root=None
+sources=None
 """
 
     def __init__(self, command=None, args=None):
 
-        self.config_name = "tj.cfg"
-        self.path = "{root}{sep}{name}".format(root=ConfigManager.get_root_dir(), name=self.config_name, sep=os.sep)
+        self.path = ConfigManager.get_config_path()
         self.args = args
 
         if command is not None and args is not None:
             if not os.path.exists(self.path):
                 self.restore(new=True)
-            self.config = configparser.ConfigParser()
-            self.config.read(self.path)
+            self.config = ConfigManager.get_config_parser(self.path)
             getattr(self, command)()
 
     @staticmethod
     def get_root_dir():
         return user_data_dir("Test-Junkie")
+
+    @staticmethod
+    def get_config_path():
+        return "{root}{sep}{name}".format(root=ConfigManager.get_root_dir(),
+                                          name=ConfigManager.__CONFIG_NAME,
+                                          sep=os.sep)
+
+    @staticmethod
+    def get_config_parser(path):
+        if sys.version_info[0] < 3:
+            # Python 2
+            import ConfigParser as configparser
+        else:
+            # Python 3, module was renamed to configparser
+            import configparser
+        config = configparser.ConfigParser()
+        config.read(path)
+        return config
 
     def __set_default_config(self):
 
@@ -109,6 +114,8 @@ root=None
         for option, value in args.__dict__.items():
             if value is not Settings.UNDEFINED:
                 self.__restore_value(option, value)
+        print("[{status}]\tRestore original value with tj config restore [OPTION]. tj config restore -h for more info."
+              .format(status=CliUtils.format_color_string(value="TIP", color="blue")))
 
     def show(self):
 
@@ -119,7 +126,7 @@ root=None
         CliUtils.add_standard_boolean_tj_args(parser)
         args = parser.parse_args(self.args[3:])
         if args.all or not self.args[3:]:
-            print("Config is located at: {path}"
+            print("Config is located at: {path}\n"
                   .format(path=CliUtils.format_color_string(value=self.path, color="green")))
             with open(self.path, "r") as cfg:
                 print(cfg.read())

@@ -71,14 +71,14 @@ def test_config_update():
                 ]
     for cmd in commands:
         output = Cmd.run(cmd)
-        for line in output:
-            prop = cmd[4].replace("--", "")
-            value = cmd[5] if len(cmd) == 6 else "True"
-            assert "Traceback (most recent call last)" not in line, \
-                "Command: {} produced exception. {}".format(cmd, output)
-            assert "OK" in line
-            assert prop in line, "Command: {} did not update property: {}".format(cmd, prop)
-            assert value in line, "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
+
+        prop = cmd[4].replace("--", "")
+        value = cmd[5] if len(cmd) == 6 else "True"
+        assert "Traceback (most recent call last)" not in output[-2], \
+            "Command: {} produced exception. {}".format(cmd, output)
+        assert "OK" in output[-2]
+        assert prop in output[-2], "Command: {} did not update property: {}".format(cmd, prop)
+        assert value in output[-2], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
 
 
 def test_config_restore():
