@@ -10,13 +10,13 @@
 # Test Junkie [![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Checkout+this+new+awesome+test+runner+for+Python!&url=https%3A%2F%2Fgithub.com%2FArturSpirin%2Ftest_junkie&hashtags=github,python,programming,pythonprogramming&original_referer=http%3A%2F%2Fgithub.com%2F&tw_p=tweetbutton)
 [![Test Junkie Logo](https://www.test-junkie.com/static/media/logo.png)](https://www.test-junkie.com/)
 
-**Installation**
+## Installation
 
 From your favorite terminal:
 
 `pip install test-junkie` or `python -m pip install test-junkie`
 
-**Basic Usage**
+## Basic Usage
 
 Save code bellow into a Python file. Lets say `C:\Development\TestJunkie\demo.py`.
 ```python
@@ -56,15 +56,24 @@ class ExampleTestSuite:
         pass
         
         
-# and to run this marvel, all you need to do . . .
+# and to run this marvel programmatically, all you need to do . . .
 if "__main__" == __name__:
     runner = Runner([ExampleTestSuite])
     runner.run()
+# You can also run it through Test Junkie's CLI and then you don't need this "if" block
 ```
 
 You can either run this suite via your favourite IDE or via the CMD like you would run any other Python program.
 
-**Output Example**
+## CLI
+
+In version `0.6a6` there is now full CLI support and one of the things it offers is the `run` command.
+
+Thus the above test suite can, also, be executed with `tj run -s C:\Development\TestJunkie\demo.py`
+
+To see what else CLI offers type `tj -h`. Each sub command from there on has its own help menu.
+
+## Output Example
 [![Test Junkie Console Output](https://www.test-junkie.com/static/media/console_out.jpg)](https://www.test-junkie.com/static/media/console_out.jpg)
 
 Full documentation is available on **[test-junkie.com](https://www.test-junkie.com/)**  
