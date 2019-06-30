@@ -304,12 +304,16 @@ class CliUtils:
 
     @staticmethod
     def format_color_string(value, color):
+        import colorama
+        colorama.init()
         colors = {"red": Fore.RED, "green": Fore.GREEN, "yellow": Fore.YELLOW, "blue": Fore.BLUE}
         return "{style}{color}{value}{reset}".format(style=Style.BRIGHT, color=colors[color],
                                                      value=value, reset=Style.RESET_ALL)
 
     @staticmethod
     def print_color_traceback():
+        import colorama
+        colorama.init()
         print(Style.BRIGHT + Fore.RED)
         print(traceback.format_exc())
         print(Style.RESET_ALL)
