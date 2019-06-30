@@ -3,7 +3,7 @@ import sys
 import traceback
 import pkg_resources
 
-from test_junkie.builder import Builder
+from test_junkie.cli.cli_aggregator import CliAggregator
 from test_junkie.constants import DocumentationLinks
 from test_junkie.errors import BadCliParameters
 from test_junkie.settings import Settings
@@ -21,6 +21,7 @@ Modern Testing Framework
 
 Commands:
 run\t Run tests in any directory (recursive) 
+audit\t Audit your tests in any directory (recursive) 
 config\t Configure Test Junkie
 version\t Display current version
 
@@ -55,7 +56,7 @@ Use: tj COMMAND -h to display COMMAND specific help
             from test_junkie.debugger import LogJunkie
             LogJunkie.enable_logging(10)
 
-        from test_junkie.cli.runner_manager import RunnerManager
+        from test_junkie.cli.cli_runner import RunnerManager
         try:
             tj = RunnerManager(sources=args.sources, ignore=[".git"], suites=args.suites)
             tj.scan()
@@ -64,64 +65,78 @@ Use: tj COMMAND -h to display COMMAND specific help
             return
         tj.run_suites(args)
 
-    def scan(self):
-        # TODO find should be its own function cant have positional commands and optional args for scan & find
-        parser = argparse.ArgumentParser(usage="""tj scan [OPTIONS]
+    def audit(self):
+        parser = argparse.ArgumentParser(usage="""tj audit [OPTIONS]
 
-Scan and display test information 
-
-Commands:
-find\t Find tests or suites matching specific conditions 
-
-Use: tj scan COMMAND -h to display COMMAND specific help
+Scan and display aggregated and/or filtered test information
 """)
+
+        parser.add_argument("--by-tags", action="store_true", default=False,
+                            help="Present aggregated data broken down by tags")
+
+        parser.add_argument("--by-suites", action="store_true", default=False,
+                            help="Present aggregated data broken down by suites")
+
+        parser.add_argument("--by-owners", action="store_true", default=False,
+                            help="Present aggregated data broken down by owners")
+
+        parser.add_argument("--by-components", action="store_true", default=False,
+                            help="Present aggregated data broken down by components")
+
+        parser.add_argument("--by-features", action="store_true", default=False,
+                            help="Present aggregated data broken down by features")
+
+        parser.add_argument("--no-rules", action="store_true", default=False,
+                            help="Aggregate data only for suites that do not have any rules set")
+
+        parser.add_argument("--no-listeners", action="store_true", default=False,
+                            help="Aggregate data only for suites that do not have any event listeners set")
+
+        parser.add_argument("--no-suite-retries", action="store_true", default=False,
+                            help="Aggregate data only for suites that do not have retries set")
+
+        parser.add_argument("--no-test-retries", action="store_true", default=False,
+                            help="Aggregate data only for tests that do not have retries set")
+
+        parser.add_argument("--no-suite-meta", action="store_true", default=False,
+                            help="Aggregate data only for suites that do not have any meta information set")
+
+        parser.add_argument("--no-test-meta", action="store_true", default=False,
+                            help="Aggregate data only for tests that do not have any meta information set")
+
+        parser.add_argument("--no-owners", action="store_true", default=False,
+                            help="Aggregate data only for tests that do not have any owners defined")
+
+        parser.add_argument("--no-features", action="store_true", default=False,
+                            help="Aggregate data only for suites that do not have features defined")
+
+        parser.add_argument("--no-components", action="store_true", default=False,
+                            help="Aggregate data only for tests that do not have any components defined")
 
         parser.add_argument("-x", "--suites", nargs="+", default=None,
                             help="Test Junkie will only run suites provided, "
                                  "given that they are found in the SOURCE")
 
-        CliUtils.add_standard_tj_args(parser)
+        parser.add_argument("-v", "--verbose", action="store_true", default=False,
+                            help="Enables Test Junkie's logs for debugging purposes")
+
+        CliUtils.add_standard_tj_args(parser, audit=True)
         args = parser.parse_args(sys.argv[2:])
-        from test_junkie.cli.runner_manager import RunnerManager
+
+        if args.verbose:
+            from test_junkie.debugger import LogJunkie
+            LogJunkie.enable_logging(10)
+
+        from test_junkie.cli.cli_runner import RunnerManager
         try:
             tj = RunnerManager(sources=args.sources, ignore=[".git"], suites=args.suites)
             tj.scan()
         except BadCliParameters as error:
             print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
             return
-
-        # detect if too many tests per suite?
-        # rules defined? --no-rule return all suites with no rules
-        # listener defined? --no-listener return all suites with no listeners
-        # retry defined? --no-retry return all tests/suites with retry == 1
-        # no meta defined? --no-meta return all tests/suites with no meta
-        # no owner defined? --no-owner return all tests/suites with no owner
-        # skip defined? --skip return all tests/suites with a skip condition
-        # pr defined? --pr return all tests/suites with a pr condition
-        # skipping rules? --skip-before-rule return all tests which skip before/after rules
-        # no skipping rules? --no-skip-before-test-rule return all tests which don't skip before/after rules
-        # skipping before/after? --skip-before-test return all tests which skip before/after function
-        # no skipping before/after? --no-skip-before-test return all tests which skip before/after function
-        data = {"absolute_by_tag": {},
-                "absolute_by_feature": {},
-                "absolute_by_component": {},
-                "absolute_by_owner": {},
-                "absolute_by_priority": {},
-                "absolute_by_retry": {},
-
-                "context_by_feature": {},
-                "context_by_owner": {},
-
-                "absolute_test_count": 0,  # parameterized tests will be treated as 1 test
-                "parameterized_test_count": 0,
-                "absolute_suite_count": 0,
-                "parameterized_suite_count": 0,
-                }
-
-        roster = Builder.get_execution_roster()
-        for suite, suite_object in roster.items():
-            print(suite_object.get_data_by_tags())
-        # pprint.pprint(roster)
+        aggregator = CliAggregator(suites=tj.suites, args=args)
+        aggregator.aggregate()
+        aggregator.print_results()
 
     def config(self):
         parser = argparse.ArgumentParser(usage="""tj config COMMAND
@@ -140,7 +155,7 @@ Use: tj config COMMAND -h to display COMMAND specific help
             if len(sys.argv) >= 3:
                 command = str(sys.argv[2:3][0])
                 if command in ["show", "update", "restore"]:
-                    from test_junkie.cli.config_manager import ConfigManager
+                    from test_junkie.cli.cli_config import ConfigManager
                     return ConfigManager(command, sys.argv)
             parser.print_help()
         except:
@@ -160,61 +175,66 @@ class CliUtils:
         pass
 
     @staticmethod
-    def add_standard_tj_args(parser):
+    def add_standard_tj_args(parser, audit=False):
         """
         Generic parser args used to configure execution or set config settings
         """
-        parser.add_argument("-T", "--test_multithreading_limit", type=int, default=Settings.UNDEFINED,
-                            help="Test level multi threading allows to run multiple tests concurrently.")
+        if not audit:
+            parser.add_argument("-T", "--test_multithreading_limit", type=int, default=Settings.UNDEFINED,
+                                help="Test level multi threading allows to run multiple tests concurrently.")
 
-        parser.add_argument("-S", "--suite_multithreading_limit", type=int, default=Settings.UNDEFINED,
-                            help="Suite level multi threading allows to run multiple suites concurrently.")
+            parser.add_argument("-S", "--suite_multithreading_limit", type=int, default=Settings.UNDEFINED,
+                                help="Suite level multi threading allows to run multiple suites concurrently.")
 
-        parser.add_argument("-t", "--tests", nargs="+", default=Settings.UNDEFINED,
-                            help="Test Junkie can run specific tests. "
-                                 "Provide the names of the tests that you want to run.")
+            parser.add_argument("-t", "--tests", nargs="+", default=Settings.UNDEFINED,
+                                help="Test Junkie can run specific tests. "
+                                     "Provide the names of the tests that you want to execute/audit.")
 
         parser.add_argument("-f", "--features", nargs="+", default=Settings.UNDEFINED,
                             help="Test suites can be defined with a feature that they are testing. "
-                                 "Use features to narrow down execution of test suites only to those that "
+                                 "Use features to narrow down execution/audit of test suites only to those that "
                                  "match this filter. Learn more @ {link}".format(link=DocumentationLinks.FEATURES))
 
         parser.add_argument("-c", "--components", nargs="+", default=Settings.UNDEFINED,
                             help="Tests can be defined with a component that they are testing. "
-                                 "Use components to narrow down execution of tests only to those that "
+                                 "Use components to narrow down execution/audit of tests only to those that "
                                  "match this filter. Learn more @ {link}".format(link=DocumentationLinks.COMPONENTS))
 
         parser.add_argument("-o", "--owners", nargs="+", default=Settings.UNDEFINED,
                             help="Tests & test suites can be defined with an assignee. "
-                                 "Use owners to narrow down execution of tests only to those that "
+                                 "Use owners to narrow down execution/audit of tests only to those that "
                                  "match this filter. Learn more @ {link}".format(link=DocumentationLinks.ASSIGNEES))
 
-        parser.add_argument("-m", "--monitor_resources", action="store_true", default=Settings.UNDEFINED,
-                            help="Test Junkie can track resource usage for CPU & Memory as it runs tests")
+        if not audit:
+            parser.add_argument("-m", "--monitor_resources", action="store_true", default=Settings.UNDEFINED,
+                                help="Test Junkie can track resource usage for CPU & Memory as it runs tests")
 
-        parser.add_argument("--html_report", type=str, default=Settings.UNDEFINED,
-                            help="Path to FILE. This will enable HTML report generation and when ready, "
-                                 "the report will be saved to the specified file")
+            parser.add_argument("--html_report", type=str, default=Settings.UNDEFINED,
+                                help="Path to FILE. This will enable HTML report generation and when ready, "
+                                     "the report will be saved to the specified file")
 
-        parser.add_argument("--xml_report", type=str, default=Settings.UNDEFINED,
-                            help="Path to FILE. This will enable XML report generation and when ready, "
-                                 "the report will be saved to the specified file")
+            parser.add_argument("--xml_report", type=str, default=Settings.UNDEFINED,
+                                help="Path to FILE. This will enable XML report generation and when ready, "
+                                     "the report will be saved to the specified file")
 
-        parser.add_argument("-l", "--run_on_match_all", nargs="+", default=Settings.UNDEFINED,
-                            help="Test Junkie will RUN tests that match ALL of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
+            parser.add_argument("-l", "--run_on_match_all", nargs="+", default=Settings.UNDEFINED,
+                                help="Test Junkie will RUN tests that match ALL of the tags. Read more about it: {link}"
+                                .format(link=DocumentationLinks.TAGS))
 
-        parser.add_argument("-k", "--run_on_match_any", nargs="+", default=Settings.UNDEFINED,
-                            help="Test Junkie will RUN tests that match ANY of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
+            parser.add_argument("-k", "--run_on_match_any", nargs="+", default=Settings.UNDEFINED,
+                                help="Test Junkie will RUN tests that match ANY of the tags. Read more about it: {link}"
+                                .format(link=DocumentationLinks.TAGS))
 
-        parser.add_argument("-j", "--skip_on_match_all", nargs="+", default=Settings.UNDEFINED,
-                            help="Test Junkie will SKIP tests that match ALL of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
+            parser.add_argument("-j", "--skip_on_match_all", nargs="+", default=Settings.UNDEFINED,
+                                help="Test Junkie will SKIP tests that match ALL of the tags. Read more about it: {link}"
+                                .format(link=DocumentationLinks.TAGS))
 
-        parser.add_argument("-g", "--skip_on_match_any", nargs="+", default=Settings.UNDEFINED,
-                            help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
+            parser.add_argument("-g", "--skip_on_match_any", nargs="+", default=Settings.UNDEFINED,
+                                help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
+                                .format(link=DocumentationLinks.TAGS))
+        else:
+            parser.add_argument("-l", "--tags", nargs="+", default=Settings.UNDEFINED,
+                                help="Test Junkie will audit tests that match those tags.")
 
         parser.add_argument("-s", "--sources", nargs="+", default=Settings.UNDEFINED,
                             help="Paths to DIRECTORY or FILE where you have your tests. "

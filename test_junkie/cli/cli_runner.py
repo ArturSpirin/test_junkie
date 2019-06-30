@@ -8,7 +8,7 @@ import re
 from setuptools.glob import glob
 
 from test_junkie.cli.cli import CliUtils
-from test_junkie.cli.config_manager import ConfigManager
+from test_junkie.cli.cli_config import ConfigManager
 from test_junkie.errors import BadCliParameters
 from test_junkie.runner import Runner
 from test_junkie.settings import Settings
@@ -42,15 +42,15 @@ class RunnerManager:
 
     def __find_and_register_suite(self, _suite_alias, _source, _file_path):
 
-        def load_module(_item):
-            if "\nclass " in _item:
-                decorated_class = item.split("\nclass ")[-1].strip()
-                module_name = os.path.splitext(os.path.basename(_file_path))[0]
-                try:
-                    module = imp.load_source(module_name, _file_path)
-                except ImportError as error:
-                    splitter = "{sep}{dir}{sep}".format(
-                        sep=os.sep, dir=str(error).replace("No module named ", "").split(".")[0].replace("'", ""))
+        def load_module(_decorated_classes):
+
+            module_name = os.path.splitext(os.path.basename(_file_path))[0]
+            try:
+                module = imp.load_source(module_name, _file_path)
+            except ImportError as error:
+                splitter = "{sep}{dir}{sep}".format(
+                    sep=os.sep, dir=str(error).replace("No module named ", "").split(".")[0].replace("'", ""))
+                if splitter in _file_path:
                     assumed_root = _file_path.split(splitter)[0]
                     print("[{status}] Import error: {error}"
                           .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
@@ -64,19 +64,32 @@ class RunnerManager:
                                   pythonpath=CliUtils.format_color_string(value="PYTHONPATH", color="yellow")))
                     sys.path.insert(0, assumed_root)
                     module = imp.load_source(module_name, _file_path)
-                for name, data in inspect.getmembers(module):
-                    if name == decorated_class and inspect.isclass(data):
-                        if not self.requested_suites or \
-                                self.requested_suites and decorated_class in self.requested_suites:
-                            self.suites.append(data)
+                else:
+                    print("[{status}] You have an Import Error in one of your suites. Try again once its resolved."
+                          .format(status=CliUtils.format_color_string(value="WARNING", color="yellow")))
+                    print("[{status}] If the import error is for a package in your "
+                          "project, make sure that project is included in {pythonpath}."
+                          .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
+                                  pythonpath=CliUtils.format_color_string(value="PYTHONPATH", color="yellow")))
+                    raise
+            for name, data in inspect.getmembers(module):
+
+                if name in _decorated_classes and inspect.isclass(data):
+                    if not self.requested_suites or \
+                            (self.requested_suites and name in self.requested_suites):
+                        self.suites.append(data)
 
         matches = re.findall("@{alias}((.|\n)*?):\n".format(alias=_suite_alias), _source)
+        decorated_classes = []
         for match in matches:
             if isinstance(match, tuple):
                 for item in match:
-                    load_module(item)
+                    if "\nclass " in item:
+                        decorated_classes.append(item.split("\nclass ")[-1].strip())
             else:
-                load_module(match)
+                if "\nclass " in match:
+                    decorated_classes.append(match.split("\nclass ")[-1].strip())
+        load_module(decorated_classes)
 
     def __skip(self, source, directory):
 
@@ -86,13 +99,13 @@ class RunnerManager:
 
         for ignored_item in self.tjignore:
             if ignored_item in directory:
-                print("{} is ignored!".format(directory))
                 return True
         return False
 
     def scan(self):
 
         def parse_file(_file):
+
             with open(_file) as doc:
 
                 source = doc.read()
@@ -109,7 +122,7 @@ class RunnerManager:
                     return True
 
         print("\n[{status}] Scanning: {location} ..."
-              .format(location=CliUtils.format_color_string(value=self.sources, color="green"),
+              .format(location=CliUtils.format_color_string(value=",".join(self.sources), color="green"),
                       status=CliUtils.format_color_string(value="INFO", color="blue")))
         start = time.time()
         try:
@@ -132,7 +145,7 @@ class RunnerManager:
             exit(120)
         print("[{status}] Scan finished in: {time} seconds. Found: {suites} suite(s)."
               .format(status=CliUtils.format_color_string(value="INFO", color="blue"),
-                      time=time.time() - start, suites=len(self.suites)))
+                      time="{0:.2f}".format(time.time() - start), suites=len(self.suites)))
 
     def run_suites(self, args):
 

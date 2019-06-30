@@ -67,7 +67,7 @@ You can either run this suite via your favourite IDE or via the CMD like you wou
 
 ## CLI
 
-In version `0.6a6` there is now full CLI support and one of the things it offers is the `run` command.
+Starting from version `0.6a6` there is now full CLI support and one of the things it offers is the `run` command.
 
 Thus the above test suite can, also, be executed with `tj run -s C:\Development\TestJunkie\demo.py`
 

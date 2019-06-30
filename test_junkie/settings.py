@@ -99,7 +99,7 @@ class Settings:
         if value is Settings.UNDEFINED and self.config is not None:
             source = "DEFAULTS"
             if key in self.config.options("runtime"):
-                from test_junkie.cli.config_manager import ConfigManager
+                from test_junkie.cli.cli_config import ConfigManager
                 value = ConfigManager.get_value(self.config, key)
                 if value is not Settings.UNDEFINED:
                     value = ast.literal_eval(value)

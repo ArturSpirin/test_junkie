@@ -2,7 +2,7 @@ import os
 import pprint
 
 from test_junkie.runner import Runner
-from test_junkie.cli.config_manager import ConfigManager
+from test_junkie.cli.cli_config import ConfigManager
 from tests.QualityManager import QualityManager
 from tests.cli.CliTestSuite import AuthApiSuite, ShoppingCartSuite, NewProductsSuite
 from tests.cli.Cmd import Cmd
@@ -16,7 +16,7 @@ def test_help():
 
     commands = [['python', EXE, '-h'],
                 ['python', EXE, 'run', '-h'],
-                ['python', EXE, 'scan', '-h'],
+                ['python', EXE, 'audit', '-h'],
                 ['python', EXE, 'config', '-h'],
                 ['python', EXE, 'version', '-h']]
     for cmd in commands:
@@ -28,7 +28,7 @@ def test_help():
 
 def test_sub_command_help():
 
-    commands = [['python', EXE, 'scan', 'find', '-h'],
+    commands = [['python', EXE, 'audit', 'find', '-h'],
                 ['python', EXE, 'config', 'update', '-h'],
                 ['python', EXE, 'config', 'show', '-h'],
                 ['python', EXE, 'config', 'restore', '-h']]
@@ -108,6 +108,150 @@ def test_config_restore():
             assert value in line, "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
 
 
+def test_audit_all():
+
+    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
+    commands = [['python', EXE, 'audit', '-s', TESTS],
+                ['python', EXE, 'audit', '-s', TESTS, '--by-suites', '--by-tags',
+                 '--by-owners', '--by-features', '--by-components', '--by-suites']]
+    for cmd in commands:
+        output = Cmd.run(cmd)
+        not_validated = ["FEATURES", "OWNERS", "SUITES", "COMPONENTS", "TAGS"]
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+            assert "ERROR" not in line
+            for validate in list(not_validated):
+                if validate in line:
+                    not_validated.remove(validate)
+        assert len(not_validated) == 0
+
+
+def test_audit_by_owner():
+
+    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
+    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-owners'],
+                ['python', EXE, 'audit', '-s', TESTS, '--by-owners', '-o', 'Mike']]
+    for cmd in commands:
+        output = Cmd.run(cmd)
+        assert_not_in = ["FEATURES", "SUITES", "COMPONENTS", "TAGS"]
+        if "Mike" in cmd:
+            assert_not_in.append("Victor")
+            assert_not_in.append("George")
+            assert_not_in.append("None")
+            assert_not_in.append("Owners:")
+        not_validated = ["OWNERS", "Mike", "Suites:", "Features:", "Components:", "Tags:"]
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+            assert "ERROR" not in line
+            for item in assert_not_in:
+                assert item not in line
+            for validate in list(not_validated):
+                if validate in line:
+                    not_validated.remove(validate)
+        assert len(not_validated) == 0
+
+
+def test_audit_by_suite():
+
+    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
+    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-suites'],
+                ['python', EXE, 'audit', '-s', TESTS, '--by-suites', '-o', 'Mike']]
+    for cmd in commands:
+        output = Cmd.run(cmd)
+        assert_not_in = ["FEATURES", "OWNERS", "COMPONENTS", "TAGS"]
+        if "Mike" in cmd:
+            assert_not_in.append("Victor")
+            assert_not_in.append("George")
+            assert_not_in.append("None")
+            assert_not_in.append("Suites:")
+        not_validated = ["SUITES", "Mike", "Owners:", "Feature:", "Components:", "Tags:"]
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+            assert "ERROR" not in line
+            for item in assert_not_in:
+                assert item not in line
+            for validate in list(not_validated):
+                if validate in line:
+                    not_validated.remove(validate)
+        assert len(not_validated) == 0
+
+
+def test_audit_by_tags():
+    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
+    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-tags'],
+                ['python', EXE, 'audit', '-s', TESTS, '--by-tags', '-l', 'sso']]
+    for cmd in commands:
+        output = Cmd.run(cmd)
+        assert_not_in = ["FEATURES", "OWNERS", "COMPONENTS", "SUITES"]
+        if "Mike" in cmd:
+            assert_not_in.append("Victor")
+            assert_not_in.append("George")
+            assert_not_in.append("None")
+            assert_not_in.append("Tags:")
+        not_validated = ["TAGS", "Mike", "Owners:", "Features:", "Suites:", "Components:", "API(2)"]
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+            assert "ERROR" not in line
+            for item in assert_not_in:
+                assert item not in line
+            for validate in list(not_validated):
+                if validate in line:
+                    not_validated.remove(validate)
+        assert len(not_validated) == 0
+
+
+def test_audit_by_features():
+    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
+    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-features'],
+                ['python', EXE, 'audit', '-s', TESTS, '--by-features', '-f', 'Store']]
+    for cmd in commands:
+        output = Cmd.run(cmd)
+        assert_not_in = ["SUITES", "OWNERS", "COMPONENTS", "SUITES", "TAGS"]
+        if "Mike" in cmd:
+            assert_not_in.append("Mike")
+            assert_not_in.append("None")
+            assert_not_in.append("Features:")
+        not_validated = ["FEATURES", "Mike(5)", "George(5)", "Owners:", "Tags:", "Suites:", "Components:"]
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+            assert "ERROR" not in line
+            for item in assert_not_in:
+                assert item not in line
+            for validate in list(not_validated):
+                if validate in line:
+                    not_validated.remove(validate)
+        assert len(not_validated) == 0
+
+
+def test_audit_by_components():
+    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
+    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-components'],
+                ['python', EXE, 'audit', '-s', TESTS, '--by-components', '-c', 'Admin']]
+    for cmd in commands:
+        output = Cmd.run(cmd)
+        assert_not_in = ["SUITES", "OWNERS", "FEATURES", "SUITES", "TAGS"]
+        if "Mike" in cmd:
+            assert_not_in.append("George")
+            assert_not_in.append("None")
+            assert_not_in.append("Features:")
+        not_validated = ["COMPONENTS", "Mike(5)", "Owners:", "Tags:", "Suites:", "Features:"]
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+            assert "ERROR" not in line
+            for item in assert_not_in:
+                assert item not in line
+            for validate in list(not_validated):
+                if validate in line:
+                    not_validated.remove(validate)
+        assert len(not_validated) == 0
+
+
 def test_config_restore_all():
 
     commands = [['python', EXE, 'config', 'restore', '--all']]
@@ -137,6 +281,7 @@ def validate_output(expected, output):
                 expected.remove(item)
     if expected:
         raise AssertionError("Not verified: {}".format(expected))
+
 
 def test_run_with_cmd_args():
 

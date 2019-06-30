@@ -5,7 +5,7 @@ import threading
 import time
 from datetime import datetime
 
-from test_junkie.cli.config_manager import ConfigManager
+from test_junkie.cli.cli_config import ConfigManager
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import SuiteCategory, TestCategory
 
