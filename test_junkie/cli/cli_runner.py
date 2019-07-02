@@ -199,7 +199,7 @@ class CliRunner:
                 run_command.append("-v")
 
             for cmd in [run_command]:
-                process = subprocess.Popen(cmd, shell=True)
+                process = subprocess.Popen(" ".join(cmd), shell=True)
                 process.communicate()
                 if process.wait():
                     exit(120)
@@ -251,12 +251,3 @@ if "__main__" == __name__:
         except:
             CliUtils.print_color_traceback()
             exit(120)
-    shutil.copy2("C:\\Users\\aspir\\AppData\\Local\\Test-Junkie\\Test-Junkie\\.tj.cfg",
-                 "C:\\Users\\aspir\\AppData\\Local\\Test-Junkie\\Test-Junkie\\.tj-cov.cfg")
-
-    # tj_cov_config = Config(config_name=CliConstants.TJ_COV_CONFIG_NAME)
-    # tj_config = Config(config_name=CliConstants.TJ_CONFIG_NAME)
-    # tj_cov_config.restore(tj_config.read())
-    # print(tj_config.path)
-    # print(tj_cov_config.path)
-    # shutil.copy2(tj_config.path, tj_cov_config.path)

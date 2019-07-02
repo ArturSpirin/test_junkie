@@ -36,7 +36,6 @@ class Config:
         :param data: STRING, Optional data to put in the config
         :return: None
         """
-        print(data if not data else 3)
         self.remove()
         with open(self.path, "w+") as doc:
             doc.write(data if data else CliConstants.DEFAULTS)
