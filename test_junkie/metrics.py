@@ -3,9 +3,13 @@ import multiprocessing
 import os
 import threading
 import time
+import traceback
 from datetime import datetime
 
-from test_junkie.cli.cli_config import ConfigManager
+from test_junkie.cli.cli import CliUtils
+
+from test_junkie.cli.cli_config import Config
+from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import SuiteCategory, TestCategory
 
@@ -267,18 +271,23 @@ class Aggregator(object):
         test_report = report["tests"]
         suite_report = report["suites"]
         for status in TestCategory.ALL:
-            print("[{part}/{total} {percent}%] {status}"
-                  .format(part=test_report[status], total=test_report["total"], status=status.upper(),
-                          percent=Aggregator.percentage(test_report["total"], test_report[status])))
+            value = "[{part}/{total} {percent}%] {status}".format(part=test_report[status],
+                                                                  total=test_report["total"],
+                                                                  status=status.upper(),
+                                                                  percent=Aggregator.percentage(test_report["total"],
+                                                                                                test_report[status]))
+            if test_report[status]:
+                value = CliUtils.format_bold_string(value)
+            print(value)
         print("")
         for suite, stats in suite_report.items():
             status = suite.metrics.get_metrics()["status"]
             if status is None:  # this means that something went wrong with custom event processing
                 status = "*"+SuiteCategory.ERROR
             print(">> [{status}] [{passed}/{total} {rate}%] [{runtime:0.2f}s] {module}.{name}"
-                  .format(module=suite.get_class_module(),
-                          name=suite.get_class_name(),
-                          status=status.upper(),
+                  .format(module=CliUtils.format_bold_string(suite.get_class_module()),
+                          name=CliUtils.format_bold_string(suite.get_class_name()),
+                          status=CliUtils.format_bold_string(status.upper()),
                           runtime=suite.get_runtime(),
                           rate=Aggregator.percentage(stats["total"], stats[TestCategory.SUCCESS]),
                           passed=stats[TestCategory.SUCCESS],
@@ -289,7 +298,7 @@ class Aggregator(object):
                 tests = suite.get_unsuccessful_tests()
                 for test in tests:
                     test_metrics = test.metrics.get_metrics()
-                    print("\t|__ test: {name}()".format(name=test.get_function_name()))
+                    print("\t|__ test: {name}()".format(name=CliUtils.format_bold_string(test.get_function_name())))
                     for class_param, class_param_data in test_metrics.items():
                         if class_param != "None":
                             print("\t\t|__ class parameter: {class_parameter}".format(class_parameter=class_param))
@@ -300,7 +309,7 @@ class Aggregator(object):
                                 trace = param_data["tracebacks"][index]
                                 print("\t\t\t\t|__ run #{num} [{status}] [{runtime:0.2f}s] :: Traceback: {exception}"
                                       .format(num=index + 1,
-                                              exception=parse_exception(trace),
+                                              exception=CliUtils.format_color_string(parse_exception(trace), "red"),
                                               runtime=param_data["performance"][index],
                                               status=param_data["status"].upper()))
         print("============================================================\n\n\n")
@@ -336,7 +345,7 @@ class ResourceMonitor(threading.Thread):
 
     def __init__(self):
 
-        self.file_path = "{dir}{sep}.resources_{timestamp}".format(dir=ConfigManager.get_root_dir(),
+        self.file_path = "{dir}{sep}.resources_{timestamp}".format(dir=Config.get_root_dir(),
                                                                    sep=os.sep,
                                                                    timestamp=time.time())
 
@@ -358,7 +367,7 @@ class ResourceMonitor(threading.Thread):
 
     def run(self):
         import psutil
-        self.mkdir_p(ConfigManager.get_root_dir())
+        self.mkdir_p(Config.get_root_dir())
         with open(self.file_path, "w+") as records:
             records.write("")
         while not self.exit.is_set():
@@ -373,4 +382,7 @@ class ResourceMonitor(threading.Thread):
         self.exit.set()
 
     def cleanup(self):
-        os.remove(self.file_path)
+        try:
+            os.remove(self.file_path)
+        except:
+            LogJunkie.error(traceback.format_exc())

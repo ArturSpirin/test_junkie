@@ -4,7 +4,7 @@ import traceback
 import pkg_resources
 
 from test_junkie.cli.cli_aggregator import CliAggregator
-from test_junkie.constants import DocumentationLinks
+from test_junkie.constants import DocumentationLinks, CliConstants
 from test_junkie.errors import BadCliParameters
 from test_junkie.settings import Settings
 from colorama import Fore, Style
@@ -45,6 +45,9 @@ Use: tj COMMAND -h to display COMMAND specific help
                             help="Test Junkie will only run suites provided, "
                                  "given that they are found in the SOURCE")
 
+        parser.add_argument("--code-cov", action="store_true", default=False,
+                            help="Measure code coverage with coverage.py")
+
         parser.add_argument("-v", "--verbose", action="store_true", default=False,
                             help="Enables Test Junkie's logs for debugging purposes")
 
@@ -56,10 +59,11 @@ Use: tj COMMAND -h to display COMMAND specific help
             from test_junkie.debugger import LogJunkie
             LogJunkie.enable_logging(10)
 
-        from test_junkie.cli.cli_runner import RunnerManager
+        from test_junkie.cli.cli_runner import CliRunner
         try:
-            tj = RunnerManager(sources=args.sources, ignore=[".git"], suites=args.suites)
-            tj.scan()
+            tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites)
+            if not args.code_cov:
+                tj.scan()
         except BadCliParameters as error:
             print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
             return
@@ -127,9 +131,9 @@ Scan and display aggregated and/or filtered test information
             from test_junkie.debugger import LogJunkie
             LogJunkie.enable_logging(10)
 
-        from test_junkie.cli.cli_runner import RunnerManager
+        from test_junkie.cli.cli_runner import CliRunner
         try:
-            tj = RunnerManager(sources=args.sources, ignore=[".git"], suites=args.suites)
+            tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites)
             tj.scan()
         except BadCliParameters as error:
             print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
@@ -155,8 +159,8 @@ Use: tj config COMMAND -h to display COMMAND specific help
             if len(sys.argv) >= 3:
                 command = str(sys.argv[2:3][0])
                 if command in ["show", "update", "restore"]:
-                    from test_junkie.cli.cli_config import ConfigManager
-                    return ConfigManager(command, sys.argv)
+                    from test_junkie.cli.cli_config import CliConfig
+                    return CliConfig(CliConstants.TJ_CONFIG_NAME, command, sys.argv)
             parser.print_help()
         except:
             if "SystemExit:" not in traceback.format_exc():
@@ -169,6 +173,10 @@ Use: tj config COMMAND -h to display COMMAND specific help
 
 
 class CliUtils:
+
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
 
     def __init__(self):
 
@@ -232,6 +240,10 @@ class CliUtils:
             parser.add_argument("-g", "--skip_on_match_any", nargs="+", default=Settings.UNDEFINED,
                                 help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
                                 .format(link=DocumentationLinks.TAGS))
+
+            parser.add_argument("--cov-rcfile", type=str, default=Settings.UNDEFINED,
+                                help="Path to configuration FILE for coverage.py "
+                                     "See https://coverage.readthedocs.io/en/v4.5.x/config.html#syntax")
         else:
             parser.add_argument("-l", "--tags", nargs="+", default=Settings.UNDEFINED,
                                 help="Test Junkie will audit tests that match those tags.")
@@ -311,12 +323,20 @@ class CliUtils:
                                                      value=value, reset=Style.RESET_ALL)
 
     @staticmethod
-    def print_color_traceback():
+    def print_color_traceback(trace=None):
         import colorama
         colorama.init()
         print(Style.BRIGHT + Fore.RED)
-        print(traceback.format_exc())
+        if trace is None:
+            print(traceback.format_exc())
+        else:
+            print(trace)
         print(Style.RESET_ALL)
+
+    @staticmethod
+    def format_bold_string(value):
+
+        return "{bold}{value}{end}".format(bold=CliUtils.BOLD, value=value, end=CliUtils.END)
 
 
 if "__main__" == __name__:

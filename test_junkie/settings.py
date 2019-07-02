@@ -1,16 +1,7 @@
 import ast
-import sys
-
 from test_junkie.constants import DocumentationLinks
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
-
-if sys.version_info[0] < 3:
-    # Python 2
-    import ConfigParser as configparser
-else:
-    # Python 3, module was renamed to configparser
-    import configparser
 
 
 class Undefined(object):
@@ -44,8 +35,8 @@ class Settings:
 
         self.config = None
         if self.kwargs.get("config", None) is not None:
-            self.config = configparser.ConfigParser()
-            self.config.read(self.kwargs.get("config"))
+            from test_junkie.cli.cli_config import Config
+            self.config = Config(config_name=self.kwargs["config"])
 
         self.__tag_config = Settings.UNDEFINED
         self.__test_thread_limit = Settings.UNDEFINED
@@ -98,12 +89,11 @@ class Settings:
         # if value is still __undefined__ and config provided, will check the config for a value to use
         if value is Settings.UNDEFINED and self.config is not None:
             source = "DEFAULTS"
-            if key in self.config.options("runtime"):
-                from test_junkie.cli.cli_config import ConfigManager
-                value = ConfigManager.get_value(self.config, key)
+            if key in self.config.config.options("runtime"):
+                value = self.config.get_value(key)
                 if value is not Settings.UNDEFINED:
                     value = ast.literal_eval(value)
-                    source = "CONFIG @ {}".format(self.kwargs.get("config"))
+                    source = "CONFIG @ {}".format(self.config.path)
 
         LogJunkie.debug("Setting: {setting} Source: {source}".format(setting=key, source=source))
         # if value is still __undefined__, will return default value

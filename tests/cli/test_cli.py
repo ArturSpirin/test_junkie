@@ -1,8 +1,9 @@
 import os
 import pprint
 
+from test_junkie.constants import CliConstants
 from test_junkie.runner import Runner
-from test_junkie.cli.cli_config import ConfigManager
+from test_junkie.cli.cli_config import Config
 from tests.QualityManager import QualityManager
 from tests.cli.CliTestSuite import AuthApiSuite, ShoppingCartSuite, NewProductsSuite
 from tests.cli.Cmd import Cmd
@@ -260,7 +261,7 @@ def test_config_restore_all():
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-            assert "Config restored to default settings!" in line, "Wrong message: {}".format(line)
+        assert "Config restored to default settings!" in output[-1], "Wrong message: {}".format(output[-1])
 
 
 def test_config_show_all():
@@ -286,13 +287,19 @@ def validate_output(expected, output):
 def test_run_with_cmd_args():
 
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    output = Cmd.run(['python', EXE, 'run', '-s', TESTS, '-k', 'api'])
-    pprint.pprint(output)
-    validate_output(expected=[["[6/16 37.50%]", "SUCCESS"],
-                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.ShoppingCartSuite"],
-                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
-                              ["[SUCCESS] [6/6 100.00%]", "CliTestSuite.AuthApiSuite"]],
-                    output=output)
+    for cmd in [['python', EXE, 'run', '-s', TESTS, '-k', 'api'],
+                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov']]:
+        output = Cmd.run(cmd)
+        pprint.pprint(output)
+        validate_output(expected=[["[6/16 37.50%]", "SUCCESS"],
+                                  ["[SUCCESS] [0/5 0%]", "CliTestSuite.ShoppingCartSuite"],
+                                  ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
+                                  ["[SUCCESS] [6/6 100.00%]", "CliTestSuite.AuthApiSuite"]],
+                        output=output)
+        if "--code-cov" in cmd:
+            validate_output(expected=[["Coverage reports can be accessed via coverage cli",
+                                       "Try \"coverage report -m\". For more see \"coverage -h\""]],
+                            output=output)
 
 
 def test_run_with_config_and_cmd_args():
@@ -328,7 +335,8 @@ def test_runner_with_config():
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
     Cmd.run(['python', EXE, 'config', 'update', '-k', 'ui'])
     Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
-    runner = Runner(suites=[ShoppingCartSuite, AuthApiSuite], config=ConfigManager().path)
+    runner = Runner(suites=[ShoppingCartSuite, AuthApiSuite],
+                    config=Config.get_config_path(CliConstants.TJ_CONFIG_NAME))
     runner.run()
 
     results = runner.get_executed_suites()

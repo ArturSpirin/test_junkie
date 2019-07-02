@@ -106,3 +106,28 @@ class Color:
                TestCategory.IGNORE: IGNORE,
                TestCategory.SKIP: SKIP,
                TestCategory.CANCEL: CANCEL}
+
+
+class CliConstants:
+
+    TJ_CONFIG_NAME = ".tj.cfg"
+    TJ_COV_CONFIG_NAME = ".tj-cov.cfg"
+    CODE_COV_CONFIG_NAME = ".code-cov.cfg"
+
+    DEFAULTS = """
+[runtime]
+test_multithreading_limit=None
+suite_multithreading_limit=None
+html_report=None
+xml_report=None
+monitor_resources=None
+tests=None
+features=None
+components=None
+owners=None
+run_on_match_all=None
+run_on_match_any=None
+skip_on_match_all=None
+skip_on_match_any=None
+sources=None
+"""

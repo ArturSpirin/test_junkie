@@ -1,56 +1,87 @@
 import argparse
 import ast
 from appdirs import *
+
+from test_junkie.constants import CliConstants
 from test_junkie.settings import Settings
 from test_junkie.cli.cli import CliUtils
 
 
-class ConfigManager:
-    """
-    only use for cli, do not use for parsing the config when running tests
-    """
-    __CONFIG_NAME = "tj.cfg"
-    __DEFAULTS = """
-[runtime]
-test_multithreading_limit=None
-suite_multithreading_limit=None
-html_report=None
-xml_report=None
-monitor_resources=None
-tests=None
-features=None
-components=None
-owners=None
-run_on_match_all=None
-run_on_match_any=None
-skip_on_match_all=None
-skip_on_match_any=None
-sources=None
-"""
+class Config:
 
-    def __init__(self, command=None, args=None):
+    def __init__(self, config_name):
 
-        self.path = ConfigManager.get_config_path()
-        self.args = args
+        if os.path.isfile(config_name):
+            self.path = config_name
+        else:
+            self.path = "{root}{sep}{file}".format(root=Config.get_root_dir(), file=config_name, sep=os.sep)
 
-        if command is not None and args is not None:
-            if not os.path.exists(self.path):
-                self.restore(new=True)
-            self.config = ConfigManager.get_config_parser(self.path)
-            getattr(self, command)()
+        if not os.path.exists(Config.get_root_dir()):
+            os.makedirs(Config.get_root_dir())
+        if not os.path.exists(self.path):
+            self.restore()
+        self.config = self.__get_parser()
+
+    def remove(self):
+        """
+        Will remove config from file storage
+        :return: None
+        """
+        if os.path.exists(self.path):
+            os.remove(self.path)
+
+    def restore(self, data=None):
+        """
+        Overrides the config with provided data or defaults
+        :param data: STRING, Optional data to put in the config
+        :return: None
+        """
+        print(data if not data else 3)
+        self.remove()
+        with open(self.path, "w+") as doc:
+            doc.write(data if data else CliConstants.DEFAULTS)
+
+    def set_value(self, option, value):
+
+        self.config.set('runtime', option, str(value))
+        with open(self.path, 'w+') as doc:
+            self.config.write(doc)
+
+    def get_value(self, option):
+
+        if sys.version_info[0] < 3:
+            # Python 2
+            value = self.config.get("runtime", option, Settings.UNDEFINED)
+        else:
+            # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
+            value = self.config.get("runtime", option, fallback=Settings.UNDEFINED)
+        return value
+
+    def read(self):
+
+        with open(self.path, 'r') as doc:
+            return doc.read()
 
     @staticmethod
     def get_root_dir():
+        """
+        :return: STRING, root directory for TJ to store its configs and other assets
+        """
         return user_data_dir("Test-Junkie")
 
     @staticmethod
-    def get_config_path():
-        return "{root}{sep}{name}".format(root=ConfigManager.get_root_dir(),
-                                          name=ConfigManager.__CONFIG_NAME,
-                                          sep=os.sep)
+    def get_config_path(config_name):
+        """
+        :param config_name: STRING, name of the config that you want to get the path for
+        :return: STRING, path to the requested config
+        """
+        return "{root}{sep}{name}".format(root=Config.get_root_dir(), name=config_name, sep=os.sep)
 
-    @staticmethod
-    def get_config_parser(path):
+    def __get_parser(self):
+        """
+        :param path: STRING, path to the config file
+        :return: ConfigParser object
+        """
         if sys.version_info[0] < 3:
             # Python 2
             import ConfigParser as configparser
@@ -58,22 +89,25 @@ sources=None
             # Python 3, module was renamed to configparser
             import configparser
         config = configparser.ConfigParser()
-        config.read(path)
+        config.read(self.path)
         return config
 
-    def __set_default_config(self):
 
-        with open(self.path, "w+") as doc:
-            doc.write(ConfigManager.__DEFAULTS)
-            print("[{status}] Config restored to default settings!"
-                  .format(status=CliUtils.format_color_string(value="OK", color="green")))
+class CliConfig:
+    """
+    only use for cli, do not use for parsing the config when running tests
+    """
+
+    def __init__(self, config_name, command, args):
+
+        self.args = args
+        self.config = Config(config_name=config_name)
+        getattr(self, command)()
 
     def __restore_value(self, option, value):
 
         try:
-            self.config.set('runtime', option, str(value))
-            with open(self.path, 'w+') as doc:
-                self.config.write(doc)
+            self.config.set_value(option, value)
             print("[{status}]\t{option}={value}".format(
                 status=CliUtils.format_color_string(value="OK", color="green"), option=option, value=value))
         except:
@@ -84,21 +118,10 @@ sources=None
 
     def __print_value(self, option):
 
-        if option in self.config.options("runtime"):
-            value = ConfigManager.get_value(self.config, option)
+        if option in self.config.config.options("runtime"):
+            value = self.config.get_value(option)
             if value != Settings.UNDEFINED:
                 print("{option}={value}".format(option=option, value=ast.literal_eval(value)))
-
-    @staticmethod
-    def get_value(config, option):
-
-        if sys.version_info[0] < 3:
-            # Python 2
-            value = config.get("runtime", option, Settings.UNDEFINED)
-        else:
-            # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
-            value = config.get("runtime", option, fallback=Settings.UNDEFINED)
-        return value
 
     def update(self):
 
@@ -127,15 +150,15 @@ sources=None
         args = parser.parse_args(self.args[3:])
         if args.all or not self.args[3:]:
             print("Config is located at: {path}\n"
-                  .format(path=CliUtils.format_color_string(value=self.path, color="green")))
-            with open(self.path, "r") as cfg:
+                  .format(path=CliUtils.format_color_string(value=self.config.path, color="green")))
+            with open(self.config.path, "r") as cfg:
                 print(cfg.read())
             return
         for option, value in args.__dict__.items():
             if value is True:
                 self.__print_value(option)
 
-    def restore(self, new=False):
+    def restore(self):
 
         parser = argparse.ArgumentParser(description='Restore config settings to it\'s original values',
                                          usage="tj config restore [OPTIONS]")
@@ -143,12 +166,10 @@ sources=None
                             help="Will restore all config settings to its default values")
         CliUtils.add_standard_boolean_tj_args(parser)
         args = parser.parse_args(self.args[3:])
-        if args.all or new:
-            if not os.path.exists(ConfigManager.get_root_dir()):
-                os.makedirs(ConfigManager.get_root_dir())
-            if os.path.exists(self.path):
-                os.remove(self.path)
-            self.__set_default_config()
+        if args.all:
+            self.config.restore()
+            print("[{status}] Config restored to default settings!"
+                  .format(status=CliUtils.format_color_string(value="OK", color="green")))
             return
         if not self.args[3:]:
             print("[{status}]\tWhat do you want to restore?\n".format(

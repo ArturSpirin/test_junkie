@@ -7,10 +7,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.6a9",
+    version="0.7a0",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
-    description="Advanced test runner with built in reporting and analytics",
+    description="Modern Testing Framework",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.test-junkie.com/",
@@ -30,7 +30,8 @@ setuptools.setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: Utilities"
     ],
-    install_requires=["statistics", "psutil", "appdirs", "configparser", "colorama"],
+    install_requires=["statistics", "psutil", "appdirs", "configparser",
+                      "colorama", "coverage"],
     keywords=["automation", "testing", "tests", "test-runner"],
     entry_points={
           'console_scripts': [

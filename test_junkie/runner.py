@@ -26,7 +26,7 @@ class Runner:
 
         if not suites or not isinstance(suites, list):
             raise BadParameters("Runner needs to be initiated with a mandatory argument \"suites\" which must be of "
-                                "type {}. Instead got: {}. Please see documentation: {}"
+                                "type {} and it can not be empty. Instead got: {}. Please see documentation: {}"
                                 .format(list, suites, DocumentationLinks.RUNNER_OBJECT))
 
         self.__stats = {}
