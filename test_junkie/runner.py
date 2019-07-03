@@ -5,7 +5,7 @@ import time
 import traceback
 import sys
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks
-from test_junkie.debugger import LogJunkie
+from test_junkie.debugger import LogJunkie, suppress_stdout
 from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
 from test_junkie.listener import Listener
@@ -138,42 +138,43 @@ class Runner:
             self.__processor = ParallelProcessor(self.__settings)
 
             parallels = []
-            while self.__suites:
-                for suite in list(self.__suites):
-                    suite_object = Builder.get_execution_roster().get(suite, None)
-                    if suite_object is not None:
-                        if self.__processor.suite_multithreading() and suite_object.is_parallelized():
-                            while True:
-                                if self.__processor.suite_qualifies(suite_object):
-                                    time.sleep(Limiter.get_suite_throttling())
-                                    self.__executed_suites.append(suite_object)
-                                    parallels.append(ParallelProcessor.run_suite_in_a_thread(
-                                        self.__run_suite, suite_object))
-                                    self.__suites.remove(suite)
-                                    break
-                                elif suite_object.get_priority() is None:
-                                    break
-                                else:
-                                    time.sleep(1)
+            with suppress_stdout(self.__settings.quiet):
+                while self.__suites:
+                    for suite in list(self.__suites):
+                        suite_object = Builder.get_execution_roster().get(suite, None)
+                        if suite_object is not None:
+                            if self.__processor.suite_multithreading() and suite_object.is_parallelized():
+                                while True:
+                                    if self.__processor.suite_qualifies(suite_object):
+                                        time.sleep(Limiter.get_suite_throttling())
+                                        self.__executed_suites.append(suite_object)
+                                        parallels.append(ParallelProcessor.run_suite_in_a_thread(
+                                            self.__run_suite, suite_object))
+                                        self.__suites.remove(suite)
+                                        break
+                                    elif suite_object.get_priority() is None:
+                                        break
+                                    else:
+                                        time.sleep(1)
+                            else:
+                                if not suite_object.is_parallelized():
+                                    LogJunkie.debug("Cant run suite: {} in parallel with any other suites. Waiting for "
+                                                    "parallel suites to finish so I can run it by itself."
+                                                    .format(suite_object.get_class_object()))
+                                    ParallelProcessor.wait_for_parallels_to_finish(parallels)
+                                self.__executed_suites.append(suite_object)
+                                self.__run_suite(suite_object)
+                                self.__suites.remove(suite)
                         else:
-                            if not suite_object.is_parallelized():
-                                LogJunkie.debug("Cant run suite: {} in parallel with any other suites. Waiting for "
-                                                "parallel suites to finish so I can run it by itself."
-                                                .format(suite_object.get_class_object()))
-                                ParallelProcessor.wait_for_parallels_to_finish(parallels)
-                            self.__executed_suites.append(suite_object)
-                            self.__run_suite(suite_object)
+                            LogJunkie.warn("Suite: {} not found! Make sure that your input is correct. "
+                                           "If it is, make sure the use of Test Junkie's decorators "
+                                           "is correct.".format(suite))
                             self.__suites.remove(suite)
-                    else:
-                        LogJunkie.warn("Suite: {} not found! Make sure that your input is correct. "
-                                       "If it is, make sure the use of Test Junkie's decorators "
-                                       "is correct.".format(suite))
-                        self.__suites.remove(suite)
-                LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
-                time.sleep(1)
+                    LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
+                    time.sleep(1)
 
-            for parallel in parallels:
-                parallel.join()
+                for parallel in parallels:
+                    parallel.join()
         finally:
             if self.__settings.monitor_resources:
                 resource_monitor.shutdown()

@@ -70,10 +70,8 @@ Use: tj COMMAND -h to display COMMAND specific help
         tj.run_suites(args)
 
     def audit(self):
-        parser = argparse.ArgumentParser(usage="""tj audit [OPTIONS]
-
-Scan and display aggregated and/or filtered test information
-""")
+        parser = argparse.ArgumentParser(description='Scan and display aggregated and/or filtered test information',
+                                         usage="tj audit [OPTIONS]")
 
         parser.add_argument("--by-tags", action="store_true", default=False,
                             help="Present aggregated data broken down by tags")
@@ -161,6 +159,13 @@ Use: tj config COMMAND -h to display COMMAND specific help
                 if command in ["show", "update", "restore"]:
                     from test_junkie.cli.cli_config import CliConfig
                     return CliConfig(CliConstants.TJ_CONFIG_NAME, command, sys.argv)
+                else:
+                    print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
+                          status=CliUtils.format_color_string(value="ERROR", color="red"),
+                          command=command))
+            else:
+                print("[{status}]\tDude, what do you want to do with the config?".format(
+                      status=CliUtils.format_color_string(value="ERROR", color="red")))
             parser.print_help()
         except:
             if "SystemExit:" not in traceback.format_exc():
@@ -169,7 +174,9 @@ Use: tj config COMMAND -h to display COMMAND specific help
                 exit(120)
 
     def version(self):
-        print("Test Junkie {} (Python{})".format(pkg_resources.require("test-junkie")[0].version, sys.version_info[0]))
+        print("Test Junkie {} (Python{})\n{}".format(pkg_resources.require("test-junkie")[0].version,
+                                                     sys.version_info[0],
+                                                     DocumentationLinks.DOMAIN))
 
 
 class CliUtils:
@@ -244,6 +251,8 @@ class CliUtils:
             parser.add_argument("--cov-rcfile", type=str, default=Settings.UNDEFINED,
                                 help="Path to configuration FILE for coverage.py "
                                      "See https://coverage.readthedocs.io/en/v4.5.x/config.html#syntax")
+            parser.add_argument("-q", "--quiet", action="store_true", default=Settings.UNDEFINED,
+                                help="Suppress all standard output from tests")
         else:
             parser.add_argument("-l", "--tags", nargs="+", default=Settings.UNDEFINED,
                                 help="Test Junkie will audit tests that match those tags.")
@@ -313,6 +322,8 @@ class CliUtils:
         parser.add_argument("-g", "--skip_on_match_any", action="store_true", default=False,
                             help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
                             .format(link=DocumentationLinks.TAGS))
+        parser.add_argument("-q", "--quiet", action="store_true", default=False,
+                            help="Suppress all standard output from tests")
 
     @staticmethod
     def format_color_string(value, color):
@@ -335,7 +346,8 @@ class CliUtils:
 
     @staticmethod
     def format_bold_string(value):
-
+        import colorama
+        colorama.init()
         return "{bold}{value}{end}".format(bold=CliUtils.BOLD, value=value, end=CliUtils.END)
 
 

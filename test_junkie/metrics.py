@@ -264,7 +264,7 @@ class Aggregator(object):
             if value is not None:
                 error = ""
                 for line in value.split("\n"):
-                    error += "\n\t\t\t\t\t\t{}".format(line)
+                    error += "\n\t\t  {}".format(line)
                 return error
 
         report = aggregator.get_basic_report()
@@ -301,13 +301,13 @@ class Aggregator(object):
                     print("\t|__ test: {name}()".format(name=CliUtils.format_bold_string(test.get_function_name())))
                     for class_param, class_param_data in test_metrics.items():
                         if class_param != "None":
-                            print("\t\t|__ class parameter: {class_parameter}".format(class_parameter=class_param))
+                            print("\t  |__ class parameter: {class_parameter}".format(class_parameter=class_param))
                         for param, param_data in class_param_data.items():
                             if param != "None":
-                                print("\t\t\t|__ parameter: {parameter}".format(parameter=param))
+                                print("\t    |__ parameter: {parameter}".format(parameter=param))
                             for index in range(param_data["retry"]):
                                 trace = param_data["tracebacks"][index]
-                                print("\t\t\t\t|__ run #{num} [{status}] [{runtime:0.2f}s] :: Traceback: {exception}"
+                                print("\t      |__ run #{num} [{status}] [{runtime:0.2f}s] :: Traceback: {exception}"
                                       .format(num=index + 1,
                                               exception=CliUtils.format_color_string(parse_exception(trace), "red"),
                                               runtime=param_data["performance"][index],

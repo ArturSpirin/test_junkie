@@ -197,12 +197,17 @@ class CliRunner:
                 run_command.append(args.cov_rcfile)
             if args.verbose:
                 run_command.append("-v")
+            if args.quiet:
+                run_command.append("-q")
 
             for cmd in [run_command]:
-                process = subprocess.Popen(" ".join(cmd), shell=True)
+                process = subprocess.Popen(cmd)
                 process.communicate()
-                if process.wait():
-                    exit(120)
+                code = process.wait()
+                if code:
+                    print("[{status}] Exitcode: {code}".format(status=CliUtils.format_color_string("ERROR", "red"),
+                                                               code=CliUtils.format_color_string(code, "red")))
+                    exit(code)
             return
 
         if self.suites:
@@ -219,7 +224,38 @@ class CliRunner:
                            owners=args.owners,
                            components=args.components,
                            features=args.features,
-                           tag_config=tags())
+                           tag_config=tags(),
+                           quiet=args.quiet)
+            except:
+                CliUtils.print_color_traceback()
+                exit(120)
+
+    @staticmethod
+    def run_suites_with_code_cov():
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-v", "--verbose", action="store_true", default=False,
+                            help="Enable verbose mode for debugging")
+        parser.add_argument("-q", "--quiet", action="store_true", default=False,
+                            help="Suppress all standard output from tests")
+        args = parser.parse_args()
+        if args.verbose:
+            from test_junkie.debugger import LogJunkie
+            LogJunkie.enable_logging(10)
+
+        config = Config(config_name=CliConstants.TJ_COV_CONFIG_NAME)
+        sources = ast.literal_eval(config.get_value("sources"))
+        scanner = CliRunner(sources, [".git"], None)
+        scanner.scan()
+        if scanner.suites:
+            print("[{status}] Running tests ...\n"
+                  .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
+            try:
+                runner = Runner(suites=scanner.suites, config=config.path)
+                runner.run(quiet=args.quiet)
+                print("[{status}] Coverage reports can be accessed via coverage cli. Try \"coverage report -m\". "
+                      "For more see \"coverage -h\"\n"
+                      .format(status=CliUtils.format_color_string(value="TIP", color="blue")))
             except:
                 CliUtils.print_color_traceback()
                 exit(120)
@@ -227,27 +263,4 @@ class CliRunner:
 
 if "__main__" == __name__:
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose", action="store_true", default=False,
-                        help="Enable verbose mode for debugging")
-    args = parser.parse_args()
-    if args.verbose:
-        from test_junkie.debugger import LogJunkie
-        LogJunkie.enable_logging(10)
-
-    config = Config(config_name=CliConstants.TJ_COV_CONFIG_NAME)
-    sources = ast.literal_eval(config.get_value("sources"))
-    scanner = CliRunner(sources, [".git"], None)
-    scanner.scan()
-    if scanner.suites:
-        print("[{status}] Running tests ...\n"
-              .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
-        try:
-            runner = Runner(suites=scanner.suites, config=config.path)
-            runner.run()
-            print("[{status}] Coverage reports can be accessed via coverage cli. Try \"coverage report -m\". "
-                  "For more see \"coverage -h\"\n"
-                  .format(status=CliUtils.format_color_string(value="TIP", color="blue")))
-        except:
-            CliUtils.print_color_traceback()
-            exit(120)
+    CliRunner.run_suites_with_code_cov()

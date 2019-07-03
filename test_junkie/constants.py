@@ -72,23 +72,23 @@ class Event:
 
 class DocumentationLinks:
 
-    __DOMAIN = "https://www.test-junkie.com"
-    SUITE_DECORATOR = "{}/documentation/#suite".format(__DOMAIN)
-    TEST_DECORATOR = "{}/documentation/#test".format(__DOMAIN)
-    ON_CLASS_IGNORE = "{}/documentation/#on_class_ignore".format(__DOMAIN)
-    ON_TEST_IGNORE = "{}/documentation/#on_ignore".format(__DOMAIN)
-    PARAMETERIZED_TESTS = "{}/documentation/#parameters".format(__DOMAIN)
-    LISTENERS = "{}/documentation/#listeners".format(__DOMAIN)
-    TAGS = "{}/documentation/#tags".format(__DOMAIN)
-    RUNNER_OBJECT = "{}/documentation/#runner".format(__DOMAIN)
-    GROUP_RULES = "{}/documentation/#GroupRules".format(__DOMAIN)
-    THREADING = "{}/documentation/#parallel_execution".format(__DOMAIN)
-    HTML_REPORT = "{}/documentation/#html_report".format(__DOMAIN)
-    XML_REPORT = "{}/documentation/#xml_report".format(__DOMAIN)
-    RETRY = "{}/documentation/#retry".format(__DOMAIN)
-    FEATURES = "{}/documentation/#features".format(__DOMAIN)
-    COMPONENTS = "{}/documentation/#components".format(__DOMAIN)
-    ASSIGNEES = "{}/documentation/#assignees".format(__DOMAIN)
+    DOMAIN = "https://www.test-junkie.com"
+    SUITE_DECORATOR = "{}/documentation/#suite".format(DOMAIN)
+    TEST_DECORATOR = "{}/documentation/#test".format(DOMAIN)
+    ON_CLASS_IGNORE = "{}/documentation/#on_class_ignore".format(DOMAIN)
+    ON_TEST_IGNORE = "{}/documentation/#on_ignore".format(DOMAIN)
+    PARAMETERIZED_TESTS = "{}/documentation/#parameters".format(DOMAIN)
+    LISTENERS = "{}/documentation/#listeners".format(DOMAIN)
+    TAGS = "{}/documentation/#tags".format(DOMAIN)
+    RUNNER_OBJECT = "{}/documentation/#runner".format(DOMAIN)
+    GROUP_RULES = "{}/documentation/#GroupRules".format(DOMAIN)
+    THREADING = "{}/documentation/#parallel_execution".format(DOMAIN)
+    HTML_REPORT = "{}/documentation/#html_report".format(DOMAIN)
+    XML_REPORT = "{}/documentation/#xml_report".format(DOMAIN)
+    RETRY = "{}/documentation/#retry".format(DOMAIN)
+    FEATURES = "{}/documentation/#features".format(DOMAIN)
+    COMPONENTS = "{}/documentation/#components".format(DOMAIN)
+    ASSIGNEES = "{}/documentation/#assignees".format(DOMAIN)
 
 
 class Color:
@@ -130,4 +130,5 @@ run_on_match_any=None
 skip_on_match_all=None
 skip_on_match_any=None
 sources=None
+quiet=None
 """

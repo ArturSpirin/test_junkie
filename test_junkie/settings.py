@@ -21,6 +21,7 @@ class Settings:
     __DEFAULT_XML = None
     __DEFAULT_TESTS = None
     __DEFAULT_RESOURCE_MON = False
+    __DEFAULT_QUIET = False
     UNDEFINED = Undefined
 
     def __init__(self, runner_kwargs, run_kwargs):
@@ -48,6 +49,7 @@ class Settings:
         self.__resources_mon = Settings.UNDEFINED
         self.__html_report = Settings.UNDEFINED
         self.__xml_report = Settings.UNDEFINED
+        self.__quiet = Settings.UNDEFINED
 
         self.__print_settings()
 
@@ -65,6 +67,7 @@ class Settings:
         LogJunkie.debug("Monitor Resources: {value}".format(value=self.monitor_resources))
         LogJunkie.debug("HTML Report: {value}:({type})".format(value=self.html_report, type=type(self.html_report)))
         LogJunkie.debug("XML Report: {value}:({type})".format(value=self.xml_report, type=type(self.xml_report)))
+        LogJunkie.debug("Quiet: {value}:({type})".format(value=self.quiet, type=type(self.quiet)))
         LogJunkie.debug("============================================")
 
     def __get_value(self, key, default):
@@ -164,6 +167,12 @@ class Settings:
         if self.__resources_mon is Settings.UNDEFINED:
             self.__resources_mon = self.__get_value(key="monitor_resources", default=Settings.__DEFAULT_RESOURCE_MON)
         return self.__resources_mon
+
+    @property
+    def quiet(self):
+        if self.__quiet is Settings.UNDEFINED:
+            self.__quiet = self.__get_value(key="quiet", default=Settings.__DEFAULT_QUIET)
+        return self.__quiet
 
     @property
     def html_report(self):

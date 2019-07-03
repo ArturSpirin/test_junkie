@@ -1,4 +1,8 @@
 import logging
+import os
+import sys
+from contextlib import contextmanager
+
 from test_junkie.decorators import synchronized
 
 
@@ -56,3 +60,17 @@ class LogJunkie:
 
         if LogJunkie.__ENABLED:
             LogJunkie.__get_logger().warning(msg)
+
+
+@contextmanager
+def suppress_stdout(suppress=False):
+    if suppress:
+        with open(os.devnull, "w") as devnull:
+            old_stdout = sys.stdout
+            sys.stdout = devnull
+            try:
+                yield
+            finally:
+                sys.stdout = old_stdout
+    else:
+        yield

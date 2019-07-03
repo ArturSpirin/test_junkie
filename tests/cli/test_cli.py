@@ -253,6 +253,23 @@ def test_audit_by_components():
         assert len(not_validated) == 0
 
 
+def test_bad_inputs():
+
+    commands = [['python', EXE, 'run'],
+                ['python', EXE, 'audit'],
+                ['python', EXE, 'config'],
+                ['python', EXE, 'configgg'],
+                ['python', EXE, 'config', 'restore'],
+                ['python', EXE, 'config', 'update'],
+                ['python', EXE, 'config', 'updateee']]
+    for cmd in commands:
+        output = Cmd.run(cmd)
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+        validate_output(expected=[["[ERROR]", ""]], output=output)
+
+
 def test_config_restore_all():
 
     commands = [['python', EXE, 'config', 'restore', '--all']]
@@ -288,7 +305,9 @@ def test_run_with_cmd_args():
 
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
     for cmd in [['python', EXE, 'run', '-s', TESTS, '-k', 'api'],
-                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov']]:
+                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '-q'],
+                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov'],
+                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov', '-q']]:
         output = Cmd.run(cmd)
         pprint.pprint(output)
         validate_output(expected=[["[6/16 37.50%]", "SUCCESS"],
