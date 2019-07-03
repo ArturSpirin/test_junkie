@@ -4,9 +4,8 @@ import traceback
 import pkg_resources
 
 from test_junkie.cli.cli_aggregator import CliAggregator
-from test_junkie.constants import DocumentationLinks, CliConstants
+from test_junkie.constants import DocumentationLinks, CliConstants, Undefined
 from test_junkie.errors import BadCliParameters
-from test_junkie.settings import Settings
 from colorama import Fore, Style
 
 
@@ -195,69 +194,69 @@ class CliUtils:
         Generic parser args used to configure execution or set config settings
         """
         if not audit:
-            parser.add_argument("-T", "--test_multithreading_limit", type=int, default=Settings.UNDEFINED,
+            parser.add_argument("-T", "--test_multithreading_limit", type=int, default=Undefined,
                                 help="Test level multi threading allows to run multiple tests concurrently.")
 
-            parser.add_argument("-S", "--suite_multithreading_limit", type=int, default=Settings.UNDEFINED,
+            parser.add_argument("-S", "--suite_multithreading_limit", type=int, default=Undefined,
                                 help="Suite level multi threading allows to run multiple suites concurrently.")
 
-            parser.add_argument("-t", "--tests", nargs="+", default=Settings.UNDEFINED,
+            parser.add_argument("-t", "--tests", nargs="+", default=Undefined,
                                 help="Test Junkie can run specific tests. "
                                      "Provide the names of the tests that you want to execute/audit.")
 
-        parser.add_argument("-f", "--features", nargs="+", default=Settings.UNDEFINED,
+        parser.add_argument("-f", "--features", nargs="+", default=Undefined,
                             help="Test suites can be defined with a feature that they are testing. "
                                  "Use features to narrow down execution/audit of test suites only to those that "
                                  "match this filter. Learn more @ {link}".format(link=DocumentationLinks.FEATURES))
 
-        parser.add_argument("-c", "--components", nargs="+", default=Settings.UNDEFINED,
+        parser.add_argument("-c", "--components", nargs="+", default=Undefined,
                             help="Tests can be defined with a component that they are testing. "
                                  "Use components to narrow down execution/audit of tests only to those that "
                                  "match this filter. Learn more @ {link}".format(link=DocumentationLinks.COMPONENTS))
 
-        parser.add_argument("-o", "--owners", nargs="+", default=Settings.UNDEFINED,
+        parser.add_argument("-o", "--owners", nargs="+", default=Undefined,
                             help="Tests & test suites can be defined with an assignee. "
                                  "Use owners to narrow down execution/audit of tests only to those that "
                                  "match this filter. Learn more @ {link}".format(link=DocumentationLinks.ASSIGNEES))
 
         if not audit:
-            parser.add_argument("-m", "--monitor_resources", action="store_true", default=Settings.UNDEFINED,
+            parser.add_argument("-m", "--monitor_resources", action="store_true", default=Undefined,
                                 help="Test Junkie can track resource usage for CPU & Memory as it runs tests")
 
-            parser.add_argument("--html_report", type=str, default=Settings.UNDEFINED,
+            parser.add_argument("--html_report", type=str, default=Undefined,
                                 help="Path to FILE. This will enable HTML report generation and when ready, "
                                      "the report will be saved to the specified file")
 
-            parser.add_argument("--xml_report", type=str, default=Settings.UNDEFINED,
+            parser.add_argument("--xml_report", type=str, default=Undefined,
                                 help="Path to FILE. This will enable XML report generation and when ready, "
                                      "the report will be saved to the specified file")
 
-            parser.add_argument("-l", "--run_on_match_all", nargs="+", default=Settings.UNDEFINED,
+            parser.add_argument("-l", "--run_on_match_all", nargs="+", default=Undefined,
                                 help="Test Junkie will RUN tests that match ALL of the tags. Read more about it: {link}"
                                 .format(link=DocumentationLinks.TAGS))
 
-            parser.add_argument("-k", "--run_on_match_any", nargs="+", default=Settings.UNDEFINED,
+            parser.add_argument("-k", "--run_on_match_any", nargs="+", default=Undefined,
                                 help="Test Junkie will RUN tests that match ANY of the tags. Read more about it: {link}"
                                 .format(link=DocumentationLinks.TAGS))
 
-            parser.add_argument("-j", "--skip_on_match_all", nargs="+", default=Settings.UNDEFINED,
+            parser.add_argument("-j", "--skip_on_match_all", nargs="+", default=Undefined,
                                 help="Test Junkie will SKIP tests that match ALL of the tags. Read more about it: {link}"
                                 .format(link=DocumentationLinks.TAGS))
 
-            parser.add_argument("-g", "--skip_on_match_any", nargs="+", default=Settings.UNDEFINED,
+            parser.add_argument("-g", "--skip_on_match_any", nargs="+", default=Undefined,
                                 help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
                                 .format(link=DocumentationLinks.TAGS))
 
-            parser.add_argument("--cov-rcfile", type=str, default=Settings.UNDEFINED,
+            parser.add_argument("--cov-rcfile", type=str, default=Undefined,
                                 help="Path to configuration FILE for coverage.py "
                                      "See https://coverage.readthedocs.io/en/v4.5.x/config.html#syntax")
-            parser.add_argument("-q", "--quiet", action="store_true", default=Settings.UNDEFINED,
+            parser.add_argument("-q", "--quiet", action="store_true", default=Undefined,
                                 help="Suppress all standard output from tests")
         else:
-            parser.add_argument("-l", "--tags", nargs="+", default=Settings.UNDEFINED,
+            parser.add_argument("-l", "--tags", nargs="+", default=Undefined,
                                 help="Test Junkie will audit tests that match those tags.")
 
-        parser.add_argument("-s", "--sources", nargs="+", default=Settings.UNDEFINED,
+        parser.add_argument("-s", "--sources", nargs="+", default=Undefined,
                             help="Paths to DIRECTORY or FILE where you have your tests. "
                                  "Test Junkie will traverse this source(s) looking for test suites")
 
@@ -277,7 +276,7 @@ class CliUtils:
         parser.add_argument("-S", "--suite_multithreading_limit", action="store_true", default=False,
                             help="Suite level multi threading allows to run multiple suites concurrently.")
 
-        parser.add_argument("-t", "--tests", nargs="+", default=Settings.UNDEFINED,
+        parser.add_argument("-t", "--tests", nargs="+", default=Undefined,
                             help="Test Junkie can run specific tests. "
                                  "Provide the names of the tests that you want to run.")
 

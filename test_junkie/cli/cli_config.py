@@ -2,8 +2,7 @@ import argparse
 import ast
 from appdirs import *
 
-from test_junkie.constants import CliConstants
-from test_junkie.settings import Settings
+from test_junkie.constants import CliConstants, Undefined
 from test_junkie.cli.cli import CliUtils
 
 
@@ -50,10 +49,10 @@ class Config:
 
         if sys.version_info[0] < 3:
             # Python 2
-            value = self.config.get("runtime", option, Settings.UNDEFINED)
+            value = self.config.get("runtime", option, Undefined)
         else:
             # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
-            value = self.config.get("runtime", option, fallback=Settings.UNDEFINED)
+            value = self.config.get("runtime", option, fallback=Undefined)
         return value
 
     def read(self):
@@ -119,7 +118,7 @@ class CliConfig:
 
         if option in self.config.config.options("runtime"):
             value = self.config.get_value(option)
-            if value != Settings.UNDEFINED:
+            if value != Undefined:
                 print("{option}={value}".format(option=option, value=ast.literal_eval(value)))
 
     def update(self):
@@ -134,7 +133,7 @@ class CliConfig:
             parser.print_help()
             return
         for option, value in args.__dict__.items():
-            if value is not Settings.UNDEFINED:
+            if value is not Undefined:
                 self.__restore_value(option, value)
         print("[{status}]\tRestore original value with tj config restore [OPTION]. tj config restore -h for more info."
               .format(status=CliUtils.format_color_string(value="TIP", color="blue")))

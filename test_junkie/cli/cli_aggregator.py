@@ -1,6 +1,5 @@
-import pprint
-
 from test_junkie.builder import Builder
+from test_junkie.constants import Undefined
 
 
 class CliAggregator:
@@ -29,7 +28,6 @@ class CliAggregator:
     def aggregate(self):
 
         def is_relevant(_suite=None, _test=None):
-            from test_junkie.settings import Settings
             if not _suite and not _test:
                 raise Exception("Must pass in either a SuiteObject or a TestObject!")
             elif _suite and not _test:
@@ -50,7 +48,7 @@ class CliAggregator:
                 if self.args.no_owners and _suite.get_owner():
                     return False
 
-                if self.args.features != Settings.UNDEFINED:
+                if self.args.features != Undefined:
                     if _suite.get_feature() in self.args.features:
                         return True
                     return False
@@ -63,17 +61,17 @@ class CliAggregator:
 
                 if self.args.no_owners and _test.get_owner():
                     return False
-                if self.args.owners != Settings.UNDEFINED:
+                if self.args.owners != Undefined:
                     if _test.get_owner() in self.args.owners:
                         return True
                     return False
 
-                if self.args.components != Settings.UNDEFINED:
+                if self.args.components != Undefined:
                     if _test.get_component() in self.args.components:
                         return True
                     return False
 
-                if self.args.tags != Settings.UNDEFINED:
+                if self.args.tags != Undefined:
                     for tag in self.args.tags:
                         if tag in _test.get_tags():
                             return True

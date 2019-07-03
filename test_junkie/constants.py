@@ -132,3 +132,8 @@ skip_on_match_any=None
 sources=None
 quiet=None
 """
+
+
+class Undefined(object):
+    def __init__(self):
+        pass

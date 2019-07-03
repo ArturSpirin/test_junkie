@@ -7,16 +7,14 @@ import shutil
 import sys
 import time
 import re
-from shutil import copyfile
 
 from setuptools.glob import glob
 
 from test_junkie.cli.cli import CliUtils
 from test_junkie.cli.cli_config import Config
-from test_junkie.constants import CliConstants
+from test_junkie.constants import CliConstants, Undefined
 from test_junkie.errors import BadCliParameters
 from test_junkie.runner import Runner
-from test_junkie.settings import Settings
 
 
 class CliRunner:
@@ -35,10 +33,10 @@ class CliRunner:
 
     @property
     def sources(self):
-        if self.__sources == Settings.UNDEFINED:
+        if self.__sources == Undefined:
             self.__sources = self.config.get_value("sources")
             self.__sources = ast.literal_eval(self.__sources)
-        if self.__sources == Settings.UNDEFINED or not isinstance(self.__sources, list):
+        if self.__sources == Undefined or not isinstance(self.__sources, list):
             raise BadCliParameters("Sources is a required parameter. You can set it in the config via tj config "
                                    "update -s / --sources to persist or pass it in directly to the command you "
                                    "are running via -s / --sources")
@@ -184,7 +182,7 @@ class CliRunner:
                            "skip_on_match_any",
                            "sources"]:
                 explicit_value = getattr(args, option)
-                if explicit_value != Settings.UNDEFINED:
+                if explicit_value != Undefined:
                     tj_cov_config.set_value(option, explicit_value)
 
         if args.code_cov:
@@ -192,7 +190,7 @@ class CliRunner:
             update_code_cov_config()
 
             run_command = ['coverage', 'run', __file__]
-            if args.cov_rcfile != Settings.UNDEFINED:
+            if args.cov_rcfile != Undefined:
                 run_command.append("--rcfile")
                 run_command.append(args.cov_rcfile)
             if args.verbose:
