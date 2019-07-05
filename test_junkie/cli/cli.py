@@ -3,7 +3,7 @@ import sys
 import traceback
 import pkg_resources
 
-from test_junkie.cli.cli_aggregator import CliAggregator
+from test_junkie.cli.cli_audit import CliAudit
 from test_junkie.constants import DocumentationLinks, CliConstants, Undefined
 from test_junkie.errors import BadCliParameters
 from colorama import Fore, Style
@@ -45,10 +45,14 @@ Use: tj COMMAND -h to display COMMAND specific help
                                  "given that they are found in the SOURCE")
 
         parser.add_argument("--code-cov", action="store_true", default=False,
-                            help="Measure code coverage with coverage.py")
+                            help="Measure code coverage")
 
         parser.add_argument("-v", "--verbose", action="store_true", default=False,
                             help="Enables Test Junkie's logs for debugging purposes")
+
+        parser.add_argument("--cov-rcfile", type=str, default=None,
+                            help="Path to configuration FILE for coverage.py "
+                                 "See https://coverage.readthedocs.io/en/v4.5.x/config.html#syntax")
 
         CliUtils.add_standard_tj_args(parser)
 
@@ -61,8 +65,7 @@ Use: tj COMMAND -h to display COMMAND specific help
         from test_junkie.cli.cli_runner import CliRunner
         try:
             tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites)
-            if not args.code_cov:
-                tj.scan()
+            tj.scan()
         except BadCliParameters as error:
             print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
             return
@@ -70,16 +73,20 @@ Use: tj COMMAND -h to display COMMAND specific help
 
     def audit(self):
         parser = argparse.ArgumentParser(description='Scan and display aggregated and/or filtered test information',
-                                         usage="tj audit [OPTIONS]")
+                                         usage="""tj audit [COMMAND] [OPTIONS]
 
-        parser.add_argument("--by-tags", action="store_true", default=False,
-                            help="Present aggregated data broken down by tags")
+Aggregate, pivot, and display data about your tests.
 
-        parser.add_argument("--by-suites", action="store_true", default=False,
-                            help="Present aggregated data broken down by suites")
+Commands:
+suites\t\t Pivot test information from suite's perspective
+features\t Pivot test information from feature's perspective
+components\t Pivot test information from component's perspective
+tags\t\t Pivot test information from tag's perspective
+owners\t\t Pivot test information from owner's perspective
 
-        parser.add_argument("--by-owners", action="store_true", default=False,
-                            help="Present aggregated data broken down by owners")
+usage: tj audit [COMMAND] [OPTIONS]
+""")
+        parser.add_argument('command', help='command to run')
 
         parser.add_argument("--by-components", action="store_true", default=False,
                             help="Present aggregated data broken down by components")
@@ -114,6 +121,9 @@ Use: tj COMMAND -h to display COMMAND specific help
         parser.add_argument("--no-components", action="store_true", default=False,
                             help="Aggregate data only for tests that do not have any components defined")
 
+        parser.add_argument("--no-tags", action="store_true", default=False,
+                            help="Aggregate data only for tests that do not have tags defined")
+
         parser.add_argument("-x", "--suites", nargs="+", default=None,
                             help="Test Junkie will only run suites provided, "
                                  "given that they are found in the SOURCE")
@@ -122,22 +132,36 @@ Use: tj COMMAND -h to display COMMAND specific help
                             help="Enables Test Junkie's logs for debugging purposes")
 
         CliUtils.add_standard_tj_args(parser, audit=True)
-        args = parser.parse_args(sys.argv[2:])
 
-        if args.verbose:
-            from test_junkie.debugger import LogJunkie
-            LogJunkie.enable_logging(10)
+        if len(sys.argv) >= 3:
+            args = parser.parse_args(sys.argv[2:])
+            command = args.command
+            if command not in ["suites", "features", "components", "tags", "owners"]:
+                print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
+                    status=CliUtils.format_color_string(value="ERROR", color="red"),
+                    command=command))
+                parser.print_help()
+                exit(120)
+            else:
+                if args.verbose:
+                    from test_junkie.debugger import LogJunkie
+                    LogJunkie.enable_logging(10)
 
-        from test_junkie.cli.cli_runner import CliRunner
-        try:
-            tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites)
-            tj.scan()
-        except BadCliParameters as error:
-            print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
-            return
-        aggregator = CliAggregator(suites=tj.suites, args=args)
-        aggregator.aggregate()
-        aggregator.print_results()
+                from test_junkie.cli.cli_runner import CliRunner
+                try:
+                    tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites)
+                    tj.scan()
+                except BadCliParameters as error:
+                    print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
+                    return
+                aggregator = CliAudit(suites=tj.suites, args=args)
+                aggregator.aggregate()
+                aggregator.print_results()
+                return
+        else:
+            print("[{status}]\tDude, what do you want to audit?".format(
+                status=CliUtils.format_color_string(value="ERROR", color="red")))
+        parser.print_help()
 
     def config(self):
         parser = argparse.ArgumentParser(usage="""tj config COMMAND
@@ -179,6 +203,8 @@ Use: tj config COMMAND -h to display COMMAND specific help
 
 
 class CliUtils:
+
+    __INITIALIZED = False
 
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
@@ -247,9 +273,6 @@ class CliUtils:
                                 help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
                                 .format(link=DocumentationLinks.TAGS))
 
-            parser.add_argument("--cov-rcfile", type=str, default=Undefined,
-                                help="Path to configuration FILE for coverage.py "
-                                     "See https://coverage.readthedocs.io/en/v4.5.x/config.html#syntax")
             parser.add_argument("-q", "--quiet", action="store_true", default=Undefined,
                                 help="Suppress all standard output from tests")
         else:
@@ -325,17 +348,22 @@ class CliUtils:
                             help="Suppress all standard output from tests")
 
     @staticmethod
+    def __initialize():
+        if not CliUtils.__INITIALIZED:
+            import colorama
+            colorama.init()
+            CliUtils.__INITIALIZED = True
+
+    @staticmethod
     def format_color_string(value, color):
-        import colorama
-        colorama.init()
+        CliUtils.__initialize()
         colors = {"red": Fore.RED, "green": Fore.GREEN, "yellow": Fore.YELLOW, "blue": Fore.BLUE}
         return "{style}{color}{value}{reset}".format(style=Style.BRIGHT, color=colors[color],
                                                      value=value, reset=Style.RESET_ALL)
 
     @staticmethod
     def print_color_traceback(trace=None):
-        import colorama
-        colorama.init()
+        CliUtils.__initialize()
         print(Style.BRIGHT + Fore.RED)
         if trace is None:
             print(traceback.format_exc())
@@ -345,8 +373,7 @@ class CliUtils:
 
     @staticmethod
     def format_bold_string(value):
-        import colorama
-        colorama.init()
+        CliUtils.__initialize()
         return "{bold}{value}{end}".format(bold=CliUtils.BOLD, value=value, end=CliUtils.END)
 
 

@@ -1,8 +1,10 @@
+import collections
+
 from test_junkie.builder import Builder
 from test_junkie.constants import Undefined
 
 
-class CliAggregator:
+class CliAudit:
 
     __SECTIONS = ["owners", "features", "suites", "components", "tags"]
 
@@ -48,6 +50,9 @@ class CliAggregator:
                 if self.args.no_owners and _suite.get_owner():
                     return False
 
+                if self.args.no_features and _suite.get_feature():
+                    return False
+
                 if self.args.features != Undefined:
                     if _suite.get_feature() in self.args.features:
                         return True
@@ -61,6 +66,13 @@ class CliAggregator:
 
                 if self.args.no_owners and _test.get_owner():
                     return False
+
+                if self.args.no_components and _test.get_component():
+                    return False
+
+                if self.args.no_tags and _test.get_tags():
+                    return False
+
                 if self.args.owners != Undefined:
                     if _test.get_owner() in self.args.owners:
                         return True
@@ -93,7 +105,8 @@ class CliAggregator:
                     feature: {"tags": {}, "owners": {}, "components": {}, "suites": {}, "total_tests": 0}})
             feature_context = self.aggregated_data["context_by_features"][feature]
             feature_context["total_tests"] += len(tests)
-            feature_context["suites"].update({suite_object.get_class_name(): len(tests)})
+            feature_context["suites"].update({"{}.{}".format(suite_object.get_class_module(),
+                                                             suite_object.get_class_name()): len(tests)})
 
             suite_context = {"total_tests": len(tests),
                              "tags": {},
@@ -114,9 +127,9 @@ class CliAggregator:
                     self.aggregated_data["parameterized_test_count"] += 1
 
                 for context in [feature_context, suite_context]:
-                    CliAggregator.process_tags(context, test)
-                    CliAggregator.process_property(context, "components", test.get_component())
-                    CliAggregator.process_property(context, "owners", test.get_owner())
+                    CliAudit.process_tags(context, test)
+                    CliAudit.process_property(context, "components", test.get_component())
+                    CliAudit.process_property(context, "owners", test.get_owner())
 
                 self.update_context(suite, test, feature)
             self.aggregated_data["context_by_suites"].update({suite_object.get_class_name(): suite_context})
@@ -141,18 +154,18 @@ class CliAggregator:
         def process_data_context(_data_context, _context):
 
             if _context != "tags":
-                CliAggregator.process_tags(_data_context, test)
+                CliAudit.process_tags(_data_context, test)
             if _context != "components":
-                CliAggregator.process_property(_data_context, "components", test.get_component())
+                CliAudit.process_property(_data_context, "components", test.get_component())
             if _context != "owners":
-                CliAggregator.process_property(_data_context, "owners", test.get_owner())
+                CliAudit.process_property(_data_context, "owners", test.get_owner())
 
-            CliAggregator.process_property(_data_context, "features", feature)
-            CliAggregator.process_property(_data_context, "suites", suite.__name__)
+            CliAudit.process_property(_data_context, "features", feature)
+            CliAudit.process_property(_data_context, "suites", "{}.{}".format(suite.__module__, suite.__name__))
 
         def get_template(_context):
             template = {"total_tests": 0}
-            for attribute in CliAggregator.__SECTIONS:
+            for attribute in CliAudit.__SECTIONS:
                 if attribute != _context:
                     template.update({attribute: {}})
             return template
@@ -176,59 +189,60 @@ class CliAggregator:
 
     def print_results(self):
 
-        def requested(_data_context):
-
-            _all = True
-            for arg in CliAggregator.__SECTIONS:
-                if getattr(self.args, "by_{}".format(arg)):
-                    _all = False
-            if not _all:
-                return getattr(self.args, "by_{}".format(_data_context))
-            return True
-
         from test_junkie.cli.cli import CliUtils
         match_found = False
         output = []
-        for data_context in CliAggregator.__SECTIONS:
-            if not requested(data_context):
-                continue
-            data = self.aggregated_data["context_by_{context}".format(context=data_context)]
-            if data:
-                section = ["\n[{status}] =============== AGGREGATION by {type} ==============="
-                           .format(status=CliUtils.format_color_string("INFO", "blue"),
-                                   type=data_context.upper())]
-                for primary_key, context in data.items():
-                    details = []
-                    if data_context == "suites":
-                        details.append("Suite: {value} Feature: {feature}"
-                                          .format(value=primary_key, feature=context["feature"]))
-                    elif data_context == "features":
-                        details.append("Feature: {value}".format(value=primary_key))
-                    elif data_context == "owners":
-                        details.append("Owner: {value}".format(value=primary_key))
-                    elif data_context == "components":
-                        details.append("Component: {value}".format(value=primary_key))
-                    elif data_context == "tags":
-                        details.append("Tag: {value}".format(value=primary_key))
+        for data_context in CliAudit.__SECTIONS:
+            if data_context == self.args.command:
+                data = self.aggregated_data["context_by_{context}".format(context=data_context)]
+                if data:
+                    section = []
+                    _sorted_data = sorted(data.items(), key=lambda x: x[1]["total_tests"])
+                    _sorted_data.reverse()
+                    _sorted_data = collections.OrderedDict(_sorted_data)
+                    for primary_key, context in _sorted_data.items():
+                        details = []
+                        if data_context == "suites":
+                            details.append("\nSuite: {value} Feature: {feature}"
+                                           .format(value=CliUtils.format_bold_string(primary_key),
+                                                   feature=CliUtils.format_bold_string(context["feature"])))
+                        else:
+                            parent = "".join(list(data_context)[:-1]).capitalize()  # exp: features > Feature
+                            if primary_key is None:
+                                primary_key = CliUtils.format_color_string(primary_key, "red")
+                            else:
+                                primary_key = CliUtils.format_bold_string(primary_key)
+                            details.append("\n{parent}: {value}".format(parent=parent, value=primary_key))
 
-                    from test_junkie.metrics import Aggregator
-                    details.append("\t- Tests: {total} of {absolute} total tests ({percentage}%)"
-                                      .format(total=context["total_tests"],
-                                              absolute=self.aggregated_data["absolute_test_count"],
-                                              percentage=Aggregator.percentage(
-                                                  self.aggregated_data["absolute_test_count"], context["total_tests"])))
+                        from test_junkie.metrics import Aggregator
+                        details.append("\t- Tests:\t{total} of {absolute} total tests ({percentage}%)"
+                                       .format(total=context["total_tests"],
+                                               absolute=self.aggregated_data["absolute_test_count"],
+                                               percentage=Aggregator.percentage(
+                                                   self.aggregated_data["absolute_test_count"],
+                                                   context["total_tests"])))
 
-                    for i in CliAggregator.__SECTIONS:
-                        if i in context:
-                            msg = ""
-                            for key, count in context[i].items():
-                                msg += "{}({}) ".format(key, count)
-                            if len(msg) > 0:
-                                details.append("\t- {i}: {msg}".format(i=i.capitalize(), msg=msg))
-                    if len(details) >= 5:
-                        section += details
-                if len(section) > 1:
-                    output.append(section)
+                        for i in CliAudit.__SECTIONS:
+                            if i in context:
+                                msg = "\t"
+                                counter = 0
+                                _sorted_context = sorted(context[i].items(), key=lambda x: x[1])
+                                _sorted_context.reverse()
+                                _sorted_context = collections.OrderedDict(_sorted_context)
+                                for key, count in _sorted_context.items():
+                                    if counter > 0:
+                                        msg += "\n\t\t\t"
+                                    if key is None:
+                                        key = CliUtils.format_color_string(key, "red")
+                                    msg += "{} ({})".format(key, count)
+                                    counter += 1
+                                if len(msg) > 0:
+                                    details.append("\t- {i}: {msg}".format(i=i.capitalize(), msg=msg))
+                        if len(details) >= 5:
+                            section += details
+                    if len(section) > 1:
+                        output.append(section)
+                    break
 
         for section in output:
             if len(section) >= 5:

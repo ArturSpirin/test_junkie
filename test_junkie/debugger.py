@@ -1,5 +1,5 @@
+import io
 import logging
-import os
 import sys
 from contextlib import contextmanager
 
@@ -63,14 +63,19 @@ class LogJunkie:
 
 
 @contextmanager
-def suppress_stdout(suppress=False):
+def suppressed_stdout(suppress=False):
     if suppress:
-        with open(os.devnull, "w") as devnull:
-            old_stdout = sys.stdout
-            sys.stdout = devnull
-            try:
-                yield
-            finally:
-                sys.stdout = old_stdout
+        original_stdout = sys.stdout
+        if sys.version_info[0] < 3:
+            sys.stdout = io.BytesIO()  # works with python 2
+        else:
+            sys.stdout = io.StringIO()  # works with python 3
+        original_level = logging.root.manager.disable
+        logging.disable(logging.ERROR)
+        try:
+            yield
+        finally:
+            sys.stdout = original_stdout
+            logging.disable(original_level)
     else:
         yield

@@ -5,7 +5,7 @@ import time
 import traceback
 import sys
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks
-from test_junkie.debugger import LogJunkie, suppress_stdout
+from test_junkie.debugger import LogJunkie, suppressed_stdout
 from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
 from test_junkie.listener import Listener
@@ -138,7 +138,7 @@ class Runner:
             self.__processor = ParallelProcessor(self.__settings)
 
             parallels = []
-            with suppress_stdout(self.__settings.quiet):
+            with suppressed_stdout(self.__settings.quiet):
                 while self.__suites:
                     for suite in list(self.__suites):
                         suite_object = Builder.get_execution_roster().get(suite, None)

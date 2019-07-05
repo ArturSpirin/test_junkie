@@ -111,8 +111,6 @@ class Color:
 class CliConstants:
 
     TJ_CONFIG_NAME = ".tj.cfg"
-    TJ_COV_CONFIG_NAME = ".tj-cov.cfg"
-    CODE_COV_CONFIG_NAME = ".code-cov.cfg"
 
     DEFAULTS = """
 [runtime]

@@ -1,20 +1,20 @@
-import argparse
 import ast
 import imp
 import inspect
 import os
-import shutil
 import sys
 import time
 import re
+from contextlib import contextmanager
 
 from setuptools.glob import glob
 
 from test_junkie.cli.cli import CliUtils
-from test_junkie.cli.cli_config import Config
 from test_junkie.constants import CliConstants, Undefined
+from test_junkie.debugger import suppressed_stdout
 from test_junkie.errors import BadCliParameters
 from test_junkie.runner import Runner
+from test_junkie.cli.cli_config import Config
 
 
 class CliRunner:
@@ -48,7 +48,12 @@ class CliRunner:
 
             module_name = os.path.splitext(os.path.basename(_file_path))[0]
             try:
-                module = imp.load_source(module_name, _file_path)
+                with suppressed_stdout(suppress=True):
+                    module = imp.load_source(module_name, _file_path)
+            except ModuleNotFoundError:
+                print("[{status}] Make sure you can run files that have issues yourself through CMD before you run "
+                      "it via TJ.".format(status=CliUtils.format_color_string(value="WARNING", color="yellow")))
+                raise
             except ImportError as error:
                 splitter = "{sep}{dir}{sep}".format(
                     sep=os.sep, dir=str(error).replace("No module named ", "").split(".")[0].replace("'", ""))
@@ -67,15 +72,8 @@ class CliRunner:
                     sys.path.insert(0, assumed_root)
                     module = imp.load_source(module_name, _file_path)
                 else:
-                    print("[{status}] You have an Import Error in one of your suites. Try again once its resolved."
-                          .format(status=CliUtils.format_color_string(value="WARNING", color="yellow")))
-                    print("[{status}] If the import error is for a package in your "
-                          "project, make sure that project is included in {pythonpath}."
-                          .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
-                                  pythonpath=CliUtils.format_color_string(value="PYTHONPATH", color="yellow")))
                     raise
             for name, data in inspect.getmembers(module):
-
                 if name in _decorated_classes and inspect.isclass(data):
                     if not self.requested_suites or \
                             (self.requested_suites and name in self.requested_suites):
@@ -105,28 +103,37 @@ class CliRunner:
 
     def scan(self):
 
+        @contextmanager
+        def open_file(_file):
+            if sys.version_info[0] < 3:
+                with open(_file) as _doc:
+                    _source = _doc.read()
+                    yield (_source, _doc)
+            else:
+                with open(_file, encoding="utf-8") as _doc:
+                    _source = _doc.read()
+                    yield (_source, _doc)
+
         def parse_file(_file):
 
-            with open(_file) as doc:
+            with open_file(_file) as __source:
 
-                source = doc.read()
-
-                suite_imported_as_alias = re.findall(CliRunner.__REGEX_ALIAS_IMPORT, source)
+                suite_imported_as_alias = re.findall(CliRunner.__REGEX_ALIAS_IMPORT, __source[0])
                 if suite_imported_as_alias:
                     suite_alias = suite_imported_as_alias[-1].split("Suite")[-1].split("as")[-1].split(",")[0].strip()
-                    self.__find_and_register_suite(suite_alias, source, doc.name)
+                    self.__find_and_register_suite(suite_alias, __source[0], __source[1].name)
                     return True
 
-                suite_imported = re.findall(CliRunner.__REGEX_NO_ALIAS_IMPORT, source)
+                suite_imported = re.findall(CliRunner.__REGEX_NO_ALIAS_IMPORT, __source[0])
                 if suite_imported:
-                    self.__find_and_register_suite("Suite", source, doc.name)
+                    self.__find_and_register_suite("Suite", __source[0], __source[1].name)
                     return True
 
-        print("\n[{status}] Scanning: {location} ..."
-              .format(location=CliUtils.format_color_string(value=",".join(self.sources), color="green"),
-                      status=CliUtils.format_color_string(value="INFO", color="blue")))
-        start = time.time()
         try:
+            print("\n[{status}] Scanning: {location} ..."
+                  .format(location=CliUtils.format_color_string(value=",".join(self.sources), color="green"),
+                          status=CliUtils.format_color_string(value="INFO", color="blue")))
+            start = time.time()
             for source in self.sources:
                 if source.endswith(".py"):
                     parse_file(source)
@@ -139,14 +146,22 @@ class CliRunner:
                         for file_path in glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
                             if parse_file(file_path)is True:
                                 continue
+            print("[{status}] Scan finished in: {time} seconds. Found: {suites} suite(s)."
+                  .format(status=CliUtils.format_color_string(value="INFO", color="blue"),
+                          time="{0:.2f}".format(time.time() - start),
+                          suites=CliUtils.format_bold_string(len(self.suites))))
+        except KeyboardInterrupt:
+            print("(Ctrl+C) Exiting!")
+            exit(12)
+        except BadCliParameters as err:
+            print("[{status}] {error}.".format(status=CliUtils.format_color_string(value="ERROR", color="red"),
+                                               error=err))
+            exit(120)
         except:
             print("[{status}] Unexpected error during scan for test suites.".format(
                 status=CliUtils.format_color_string(value="ERROR", color="red")))
             CliUtils.print_color_traceback()
             exit(120)
-        print("[{status}] Scan finished in: {time} seconds. Found: {suites} suite(s)."
-              .format(status=CliUtils.format_color_string(value="INFO", color="blue"),
-                      time="{0:.2f}".format(time.time() - start), suites=len(self.suites)))
 
     def run_suites(self, args):
 
@@ -160,57 +175,14 @@ class CliRunner:
                     return config
             return None
 
-        def update_code_cov_config():
-
-            tj_config = Config(config_name=CliConstants.TJ_CONFIG_NAME)
-            shutil.copy2(tj_config.path, Config.get_config_path(CliConstants.TJ_COV_CONFIG_NAME))
-            # Initiating tj_cov_config afterwards because otherwise there is a file lock and copy does not work
-            tj_cov_config = Config(config_name=CliConstants.TJ_COV_CONFIG_NAME)
-
-            for option in ["test_multithreading_limit",
-                           "suite_multithreading_limit",
-                           "html_report",
-                           "xml_report",
-                           "monitor_resources",
-                           "tests",
-                           "features",
-                           "components",
-                           "owners",
-                           "run_on_match_all",
-                           "run_on_match_any",
-                           "skip_on_match_all",
-                           "skip_on_match_any",
-                           "sources"]:
-                explicit_value = getattr(args, option)
-                if explicit_value != Undefined:
-                    tj_cov_config.set_value(option, explicit_value)
-
-        if args.code_cov:
-            import subprocess
-            update_code_cov_config()
-
-            run_command = ['coverage', 'run', __file__]
-            if args.cov_rcfile != Undefined:
-                run_command.append("--rcfile")
-                run_command.append(args.cov_rcfile)
-            if args.verbose:
-                run_command.append("-v")
-            if args.quiet:
-                run_command.append("-q")
-
-            for cmd in [run_command]:
-                process = subprocess.Popen(cmd)
-                process.communicate()
-                code = process.wait()
-                if code:
-                    print("[{status}] Exitcode: {code}".format(status=CliUtils.format_color_string("ERROR", "red"),
-                                                               code=CliUtils.format_color_string(code, "red")))
-                    exit(code)
-            return
-
         if self.suites:
             print("[{status}] Running tests ...\n"
                   .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
+            if args.code_cov:
+                import coverage
+                cov = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep),
+                                        config_file=args.cov_rcfile)
+                cov.start()
             try:
                 runner = Runner(suites=self.suites,
                                 html_report=args.html_report,
@@ -224,41 +196,24 @@ class CliRunner:
                            features=args.features,
                            tag_config=tags(),
                            quiet=args.quiet)
+            except KeyboardInterrupt:
+                print("(Ctrl+C) Exiting!")
+                exit(12)
             except:
+                print("[{status}] Unexpected error during test execution.".format(
+                      status=CliUtils.format_color_string(value="ERROR", color="red")))
                 CliUtils.print_color_traceback()
                 exit(120)
-
-    @staticmethod
-    def run_suites_with_code_cov():
-
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-v", "--verbose", action="store_true", default=False,
-                            help="Enable verbose mode for debugging")
-        parser.add_argument("-q", "--quiet", action="store_true", default=False,
-                            help="Suppress all standard output from tests")
-        args = parser.parse_args()
-        if args.verbose:
-            from test_junkie.debugger import LogJunkie
-            LogJunkie.enable_logging(10)
-
-        config = Config(config_name=CliConstants.TJ_COV_CONFIG_NAME)
-        sources = ast.literal_eval(config.get_value("sources"))
-        scanner = CliRunner(sources, [".git"], None)
-        scanner.scan()
-        if scanner.suites:
-            print("[{status}] Running tests ...\n"
-                  .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
-            try:
-                runner = Runner(suites=scanner.suites, config=config.path)
-                runner.run(quiet=args.quiet)
-                print("[{status}] Coverage reports can be accessed via coverage cli. Try \"coverage report -m\". "
-                      "For more see \"coverage -h\"\n"
-                      .format(status=CliUtils.format_color_string(value="TIP", color="blue")))
-            except:
-                CliUtils.print_color_traceback()
-                exit(120)
-
-
-if "__main__" == __name__:
-
-    CliRunner.run_suites_with_code_cov()
+            finally:
+                if args.code_cov:
+                    cov.stop()
+                    cov.save()
+            if args.code_cov:
+                try:
+                    cov.report(show_missing=True, skip_covered=True)
+                    print("[{status}] TJ uses Coverage.py. Control it with --cov-rcfile, "
+                          "see https://coverage.readthedocs.io/en/v4.5.x/config.html"
+                          .format(status=CliUtils.format_color_string(value="TIP", color="blue")))
+                except coverage.misc.CoverageException:
+                    pass
+            return

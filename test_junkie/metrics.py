@@ -1,17 +1,20 @@
 import errno
 import multiprocessing
 import os
+import sys
 import threading
 import time
 import traceback
 from datetime import datetime
+
+import pkg_resources
 
 from test_junkie.cli.cli import CliUtils
 
 from test_junkie.cli.cli_config import Config
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType
-from test_junkie.constants import SuiteCategory, TestCategory
+from test_junkie.constants import SuiteCategory, TestCategory, DocumentationLinks
 
 
 class ClassMetrics(object):
@@ -312,7 +315,11 @@ class Aggregator(object):
                                               exception=CliUtils.format_color_string(parse_exception(trace), "red"),
                                               runtime=param_data["performance"][index],
                                               status=param_data["status"].upper()))
-        print("============================================================\n\n\n")
+        print("\n===========================================================")
+        print(". Test Junkie {} (Python{}) {} .".format(pkg_resources.require("test-junkie")[0].version,
+                                                        sys.version_info[0],
+                                                        DocumentationLinks.DOMAIN))
+        print("===========================================================")
 
     @staticmethod
     def get_template():

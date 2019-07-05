@@ -29,7 +29,11 @@ def test_help():
 
 def test_sub_command_help():
 
-    commands = [['python', EXE, 'audit', 'find', '-h'],
+    commands = [['python', EXE, 'audit', 'features', '-h'],
+                ['python', EXE, 'audit', 'tags', '-h'],
+                ['python', EXE, 'audit', 'components', '-h'],
+                ['python', EXE, 'audit', 'owners', '-h'],
+                ['python', EXE, 'audit', 'suites', '-h'],
                 ['python', EXE, 'config', 'update', '-h'],
                 ['python', EXE, 'config', 'show', '-h'],
                 ['python', EXE, 'config', 'restore', '-h']]
@@ -47,6 +51,7 @@ def test_incomplete_inputs():
                 ['python', EXE, 'config', 'update'],
                 ['python', EXE, 'config', 'restore'],
                 ['python', EXE, 'config', 'show'],
+                ['python', EXE, 'audit'],
                 ['python', EXE, 'version']]
     for cmd in commands:
         output = Cmd.run(cmd)
@@ -77,9 +82,9 @@ def test_config_update():
         value = cmd[5] if len(cmd) == 6 else "True"
         assert "Traceback (most recent call last)" not in output[-2], \
             "Command: {} produced exception. {}".format(cmd, output)
-        assert "OK" in output[-2]
-        assert prop in output[-2], "Command: {} did not update property: {}".format(cmd, prop)
-        assert value in output[-2], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
+        assert "OK" in output[-3]
+        assert prop in output[-3], "Command: {} did not update property: {}".format(cmd, prop)
+        assert value in output[-3], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
 
 
 def test_config_restore():
@@ -99,49 +104,29 @@ def test_config_restore():
                 ]
     for cmd in commands:
         output = Cmd.run(cmd)
-        for line in output:
-            prop = cmd[4].replace("--", "")
-            value = "None"
-            assert "Traceback (most recent call last)" not in line, \
-                "Command: {} produced exception. {}".format(cmd, output)
-            assert "OK" in line
-            assert prop in line, "Command: {} did not update property: {}".format(cmd, prop)
-            assert value in line, "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
-
-
-def test_audit_all():
-
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', '-s', TESTS],
-                ['python', EXE, 'audit', '-s', TESTS, '--by-suites', '--by-tags',
-                 '--by-owners', '--by-features', '--by-components', '--by-suites']]
-    for cmd in commands:
-        output = Cmd.run(cmd)
-        not_validated = ["FEATURES", "OWNERS", "SUITES", "COMPONENTS", "TAGS"]
+        prop = cmd[4].replace("--", "")
+        value = "None"
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-            assert "ERROR" not in line
-            for validate in list(not_validated):
-                if validate in line:
-                    not_validated.remove(validate)
-        assert len(not_validated) == 0
+        assert "OK" in output[0]
+        assert prop in output[0], "Command: {} did not update property: {}".format(cmd, prop)
+        assert value in output[0], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
 
 
 def test_audit_by_owner():
 
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-owners'],
-                ['python', EXE, 'audit', '-s', TESTS, '--by-owners', '-o', 'Mike']]
+    commands = [['python', EXE, 'audit', 'owners', '-s', TESTS],
+                ['python', EXE, 'audit', 'owners', '-s', TESTS, '-o', 'Mike']]
     for cmd in commands:
         output = Cmd.run(cmd)
-        assert_not_in = ["FEATURES", "SUITES", "COMPONENTS", "TAGS"]
+        assert_not_in = ["Tag:", "Component:", "Owners:", "Feature:", "Suite:"]
         if "Mike" in cmd:
-            assert_not_in.append("Victor")
-            assert_not_in.append("George")
+            assert_not_in.append("Owner: George")
+            assert_not_in.append("Owner: Victor")
             assert_not_in.append("None")
-            assert_not_in.append("Owners:")
-        not_validated = ["OWNERS", "Mike", "Suites:", "Features:", "Components:", "Tags:"]
+        not_validated = ["Owner:", "Tests:", "Components:", "Tags:", "Features:", "Suites:"]
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
@@ -157,17 +142,17 @@ def test_audit_by_owner():
 def test_audit_by_suite():
 
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-suites'],
-                ['python', EXE, 'audit', '-s', TESTS, '--by-suites', '-o', 'Mike']]
+    commands = [['python', EXE, 'audit', 'suites', '-s', TESTS],
+                ['python', EXE, 'audit', 'suites', '-s', TESTS, '-o', 'Mike']]
     for cmd in commands:
         output = Cmd.run(cmd)
-        assert_not_in = ["FEATURES", "OWNERS", "COMPONENTS", "TAGS"]
+        assert_not_in = ["Tag:", "Owner:", "Component:", "Suites:"]
         if "Mike" in cmd:
             assert_not_in.append("Victor")
             assert_not_in.append("George")
             assert_not_in.append("None")
             assert_not_in.append("Suites:")
-        not_validated = ["SUITES", "Mike", "Owners:", "Feature:", "Components:", "Tags:"]
+        not_validated = ["Mike", "Owners:", "Feature:", "Components:", "Tags:", "Suite:"]
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
@@ -182,17 +167,12 @@ def test_audit_by_suite():
 
 def test_audit_by_tags():
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-tags'],
-                ['python', EXE, 'audit', '-s', TESTS, '--by-tags', '-l', 'sso']]
+    commands = [['python', EXE, 'audit', 'tags', '-s', TESTS],
+                ['python', EXE, 'audit', 'tags', '-s', TESTS, '-l', 'sso']]
     for cmd in commands:
         output = Cmd.run(cmd)
-        assert_not_in = ["FEATURES", "OWNERS", "COMPONENTS", "SUITES"]
-        if "Mike" in cmd:
-            assert_not_in.append("Victor")
-            assert_not_in.append("George")
-            assert_not_in.append("None")
-            assert_not_in.append("Tags:")
-        not_validated = ["TAGS", "Mike", "Owners:", "Features:", "Suites:", "Components:", "API(2)"]
+        assert_not_in = ["Tags:", "Owner:", "Component:", "Suite:", "Feature:"]
+        not_validated = ["Tag:", "Mike", "Owners:", "Features:", "Suites:", "Components:", "API (2)", "2 of 16"]
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
@@ -207,16 +187,12 @@ def test_audit_by_tags():
 
 def test_audit_by_features():
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-features'],
-                ['python', EXE, 'audit', '-s', TESTS, '--by-features', '-f', 'Store']]
+    commands = [['python', EXE, 'audit', 'features', '-s', TESTS],
+                ['python', EXE, 'audit', 'features', '-s', TESTS, '-f', 'Store']]
     for cmd in commands:
         output = Cmd.run(cmd)
-        assert_not_in = ["SUITES", "OWNERS", "COMPONENTS", "SUITES", "TAGS"]
-        if "Mike" in cmd:
-            assert_not_in.append("Mike")
-            assert_not_in.append("None")
-            assert_not_in.append("Features:")
-        not_validated = ["FEATURES", "Mike(5)", "George(5)", "Owners:", "Tags:", "Suites:", "Components:"]
+        assert_not_in = ["Tag:", "Owner:", "Component:", "Suite:", "Features:"]
+        not_validated = ["Feature:", "Mike (5)", "George (5)", "Owners:", "Tags:", "Suites:", "Components:"]
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
@@ -231,16 +207,12 @@ def test_audit_by_features():
 
 def test_audit_by_components():
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', '-s', TESTS, '--by-components'],
-                ['python', EXE, 'audit', '-s', TESTS, '--by-components', '-c', 'Admin']]
+    commands = [['python', EXE, 'audit', 'components', '-s', TESTS],
+                ['python', EXE, 'audit', 'components', '-s', TESTS, '-c', 'Admin']]
     for cmd in commands:
         output = Cmd.run(cmd)
-        assert_not_in = ["SUITES", "OWNERS", "FEATURES", "SUITES", "TAGS"]
-        if "Mike" in cmd:
-            assert_not_in.append("George")
-            assert_not_in.append("None")
-            assert_not_in.append("Features:")
-        not_validated = ["COMPONENTS", "Mike(5)", "Owners:", "Tags:", "Suites:", "Features:"]
+        assert_not_in = ["Tag:", "Owner:", "Components:", "Suite:", "Feature:"]
+        not_validated = ["Component:", "Mike (5)", "Owners:", "Tags:", "Suites:", "Features:"]
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
@@ -267,7 +239,7 @@ def test_bad_inputs():
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-        validate_output(expected=[["[ERROR]", ""]], output=output)
+        validate_output(expected=[["ERROR", ""]], output=output)
 
 
 def test_config_restore_all():
@@ -278,7 +250,7 @@ def test_config_restore_all():
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-        assert "Config restored to default settings!" in output[-1], "Wrong message: {}".format(output[-1])
+        assert "Config restored to default settings!" in output[-2], "Wrong message: {}".format(output[-2])
 
 
 def test_config_show_all():
@@ -310,15 +282,7 @@ def test_run_with_cmd_args():
                 ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov', '-q']]:
         output = Cmd.run(cmd)
         pprint.pprint(output)
-        validate_output(expected=[["[6/16 37.50%]", "SUCCESS"],
-                                  ["[SUCCESS] [0/5 0%]", "CliTestSuite.ShoppingCartSuite"],
-                                  ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
-                                  ["[SUCCESS] [6/6 100.00%]", "CliTestSuite.AuthApiSuite"]],
-                        output=output)
-        if "--code-cov" in cmd:
-            validate_output(expected=[["Coverage reports can be accessed via coverage cli",
-                                       "Try \"coverage report -m\". For more see \"coverage -h\""]],
-                            output=output)
+        validate_output(expected=[["[6/16 37.50%]", "SUCCESS"]], output=output)
 
 
 def test_run_with_config_and_cmd_args():
@@ -328,11 +292,7 @@ def test_run_with_config_and_cmd_args():
     Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
     output = Cmd.run(['python', EXE, 'run', '-s', TESTS, '-k', 'api'])
     pprint.pprint(output)
-    validate_output(expected=[["[4/16 25.00%]", "SUCCESS"],
-                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.ShoppingCartSuite"],
-                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
-                              ["[SUCCESS] [4/6 66.67%]", "CliTestSuite.AuthApiSuite"]],
-                    output=output)
+    validate_output(expected=[["[4/16 25.00%]", "SUCCESS"]], output=output)
 
 
 def test_run_with_config():
@@ -342,11 +302,7 @@ def test_run_with_config():
     Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
     output = Cmd.run(['python', EXE, 'run', '-s', TESTS])
     pprint.pprint(output)
-    validate_output(expected=[["[9/16 56.25%]", "SUCCESS"],
-                              ["[SUCCESS] [5/5 100.00%]", "CliTestSuite.ShoppingCartSuite"],
-                              ["[SUCCESS] [0/5 0%]", "CliTestSuite.NewProductsSuite"],
-                              ["[SUCCESS] [4/6 66.67%]", "CliTestSuite.AuthApiSuite"]],
-                    output=output)
+    validate_output(expected=[["[9/16 56.25%]", "SUCCESS"]], output=output)
 
 
 def test_runner_with_config():
