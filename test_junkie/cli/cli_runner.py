@@ -50,10 +50,6 @@ class CliRunner:
             try:
                 with suppressed_stdout(suppress=True):
                     module = imp.load_source(module_name, _file_path)
-            except ModuleNotFoundError:
-                print("[{status}] Make sure you can run files that have issues yourself through CMD before you run "
-                      "it via TJ.".format(status=CliUtils.format_color_string(value="WARNING", color="yellow")))
-                raise
             except ImportError as error:
                 splitter = "{sep}{dir}{sep}".format(
                     sep=os.sep, dir=str(error).replace("No module named ", "").split(".")[0].replace("'", ""))
@@ -72,6 +68,8 @@ class CliRunner:
                     sys.path.insert(0, assumed_root)
                     module = imp.load_source(module_name, _file_path)
                 else:
+                    print("[{status}] Make sure you can run files that have issues yourself through CMD before you run "
+                          "it via TJ.".format(status=CliUtils.format_color_string(value="WARNING", color="yellow")))
                     raise
             for name, data in inspect.getmembers(module):
                 if name in _decorated_classes and inspect.isclass(data):
