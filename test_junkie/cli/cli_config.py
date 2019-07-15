@@ -45,14 +45,14 @@ class Config:
         with open(self.path, 'w+') as doc:
             self.config.write(doc)
 
-    def get_value(self, option):
+    def get_value(self, option, default=Undefined):
 
         if sys.version_info[0] < 3:
             # Python 2
-            value = self.config.get("runtime", option, Undefined)
+            value = self.config.get("runtime", option, default)
         else:
             # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
-            value = self.config.get("runtime", option, fallback=Undefined)
+            value = self.config.get("runtime", option, fallback=default)
         return value
 
     def read(self):

@@ -90,6 +90,8 @@ class DocumentationLinks:
     COMPONENTS = "{}/documentation/#components".format(DOMAIN)
     ASSIGNEES = "{}/documentation/#assignees".format(DOMAIN)
 
+    COVERAGE_CONFIG_FILE = "https://coverage.readthedocs.io/en/v4.5.x/config.html"
+
 
 class Color:
 
@@ -129,6 +131,9 @@ skip_on_match_all=None
 skip_on_match_any=None
 sources=None
 quiet=None
+code_cov=None
+cov_rcfile=None
+guess_root=None
 """
 
 

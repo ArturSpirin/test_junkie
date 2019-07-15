@@ -44,15 +44,8 @@ Use: tj COMMAND -h to display COMMAND specific help
                             help="Test Junkie will only run suites provided, "
                                  "given that they are found in the SOURCE")
 
-        parser.add_argument("--code-cov", action="store_true", default=False,
-                            help="Measure code coverage")
-
         parser.add_argument("-v", "--verbose", action="store_true", default=False,
                             help="Enables Test Junkie's logs for debugging purposes")
-
-        parser.add_argument("--cov-rcfile", type=str, default=None,
-                            help="Path to configuration FILE for coverage.py "
-                                 "See https://coverage.readthedocs.io/en/v4.5.x/config.html#syntax")
 
         CliUtils.add_standard_tj_args(parser)
 
@@ -64,7 +57,8 @@ Use: tj COMMAND -h to display COMMAND specific help
 
         from test_junkie.cli.cli_runner import CliRunner
         try:
-            tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites)
+            tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
+                           code_cov=args.code_cov, cov_rcfile=args.cov_rcfile, guess_root=args.guess_root)
             tj.scan()
         except BadCliParameters as error:
             print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
@@ -149,7 +143,8 @@ usage: tj audit [COMMAND] [OPTIONS]
 
                 from test_junkie.cli.cli_runner import CliRunner
                 try:
-                    tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites)
+                    tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
+                                   guess_root=args.guess_root)
                     tj.scan()
                 except BadCliParameters as error:
                     print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
@@ -182,7 +177,7 @@ Use: tj config COMMAND -h to display COMMAND specific help
                 if command in ["show", "update", "restore"]:
                     from test_junkie.cli.cli_config import CliConfig
                     return CliConfig(CliConstants.TJ_CONFIG_NAME, command, sys.argv)
-                else:
+                elif command not in ["-h"]:
                     print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
                           status=CliUtils.format_color_string(value="ERROR", color="red"),
                           command=command))
@@ -275,6 +270,13 @@ class CliUtils:
 
             parser.add_argument("-q", "--quiet", action="store_true", default=Undefined,
                                 help="Suppress all standard output from tests")
+
+            parser.add_argument("--code-cov", action="store_true", default=Undefined,
+                                help="Measure code coverage")
+
+            parser.add_argument("--cov-rcfile", type=str, default=Undefined,
+                                help="Path to configuration FILE for coverage.py "
+                                     "See {link}".format(link=DocumentationLinks.COVERAGE_CONFIG_FILE))
         else:
             parser.add_argument("-l", "--tags", nargs="+", default=Undefined,
                                 help="Test Junkie will audit tests that match those tags.")
@@ -282,6 +284,11 @@ class CliUtils:
         parser.add_argument("-s", "--sources", nargs="+", default=Undefined,
                             help="Paths to DIRECTORY or FILE where you have your tests. "
                                  "Test Junkie will traverse this source(s) looking for test suites")
+
+        parser.add_argument("--guess-root", action="store_true", default=Undefined,
+                            help="If your project is not part of the PYTHONPATH, you will get an error when running "
+                                 "it via command line. If this flag is used, TJ will try to guess the root directory "
+                                 "and temporary add it to the path. Usually not recommended.")
 
     @staticmethod
     def add_standard_boolean_tj_args(parser):
@@ -346,6 +353,15 @@ class CliUtils:
                             .format(link=DocumentationLinks.TAGS))
         parser.add_argument("-q", "--quiet", action="store_true", default=False,
                             help="Suppress all standard output from tests")
+        parser.add_argument("--code-cov", action="store_true", default=False,
+                            help="Measure code coverage")
+        parser.add_argument("--cov-rcfile", action="store_true", default=False,
+                            help="Path to configuration FILE for coverage.py "
+                                 "See {link}".format(link=DocumentationLinks.COVERAGE_CONFIG_FILE))
+        parser.add_argument("--guess-root", action="store_true", default=False,
+                            help="If your project is not part of the PYTHONPATH, you will get an error when running "
+                                 "it via command line. If this flag is used, TJ will try to guess the root directory "
+                                 "and temporary add it to the path. Usually not recommended.")
 
     @staticmethod
     def __initialize():
