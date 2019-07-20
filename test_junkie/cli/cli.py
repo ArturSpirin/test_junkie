@@ -47,6 +47,9 @@ Use: tj COMMAND -h to display COMMAND specific help
         parser.add_argument("-v", "--verbose", action="store_true", default=False,
                             help="Enables Test Junkie's logs for debugging purposes")
 
+        parser.add_argument("--config", type=str, default=Undefined,
+                            help="Provide your own config FILE with settings for test execution.")
+
         CliUtils.add_standard_tj_args(parser)
 
         args = parser.parse_args(sys.argv[2:])
@@ -58,7 +61,8 @@ Use: tj COMMAND -h to display COMMAND specific help
         from test_junkie.cli.cli_runner import CliRunner
         try:
             tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
-                           code_cov=args.code_cov, cov_rcfile=args.cov_rcfile, guess_root=args.guess_root)
+                           code_cov=args.code_cov, cov_rcfile=args.cov_rcfile, guess_root=args.guess_root,
+                           config=args.config)
             tj.scan()
         except BadCliParameters as error:
             print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))

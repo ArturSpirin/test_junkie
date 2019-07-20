@@ -10,11 +10,15 @@ class Config:
 
     def __init__(self, config_name):
 
-        if os.path.isfile(config_name):
+        if config_name not in [CliConstants.TJ_CONFIG_NAME]:
+            if not os.path.exists(config_name):
+                print("[{status}]\tWasn't able to find config @ {path}. Please check that the file exists."
+                      .format(status=CliUtils.format_color_string(value="ERROR", color="red"),
+                              path=CliUtils.format_color_string(value=config_name, color="red")))
+                exit(120)
             self.path = config_name
         else:
             self.path = "{root}{sep}{file}".format(root=Config.get_root_dir(), file=config_name, sep=os.sep)
-
         if not os.path.exists(Config.get_root_dir()):
             os.makedirs(Config.get_root_dir())
         if not os.path.exists(self.path):
@@ -46,14 +50,20 @@ class Config:
             self.config.write(doc)
 
     def get_value(self, option, default=Undefined):
-
-        if sys.version_info[0] < 3:
-            # Python 2
-            value = self.config.get("runtime", option, default)
-        else:
-            # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
-            value = self.config.get("runtime", option, fallback=default)
-        return value
+        section = "runtime"
+        try:
+            if sys.version_info[0] < 3:
+                # Python 2
+                value = self.config.get(section, option, default)
+            else:
+                # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
+                value = self.config.get(section, option, fallback=default)
+            return value
+        except Exception:
+            print("[{status}]\tPlease check config: {path} it appears that its miss-configured."
+                  .format(status=CliUtils.format_color_string(value="ERROR", color="red"),
+                          path=CliUtils.format_color_string(value=self.path, color="red")))
+            raise
 
     def read(self):
 

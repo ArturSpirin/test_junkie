@@ -31,17 +31,19 @@ class CliRunner:
         self.__code_cov = kwargs.get("code_cov", Undefined)
         self.__cov_rcfile = kwargs.get("cov_rcfile", Undefined)
         self.__guess_root = kwargs.get("guess_root", False)
+        self.__execution_config = kwargs.get("config", Undefined)
 
         self.tjignore = ignore
         self.detected_suites = {}
         self.suites = []
         self.requested_suites = suites
-        self.config = Config(config_name=CliConstants.TJ_CONFIG_NAME)
+        self.__config = Config(config_name=CliConstants.TJ_CONFIG_NAME if
+                               self.__execution_config == Undefined else self.__execution_config)
 
     @property
     def sources(self):
         if self.__sources == Undefined:
-            self.__sources = ast.literal_eval(self.config.get_value("sources"))
+            self.__sources = ast.literal_eval(self.__config.get_value("sources"))
         if self.__sources == Undefined or not isinstance(self.__sources, list):
             raise BadCliParameters("Sources is a required parameter. You can set it in the config via tj config "
                                    "update -s / --sources to persist or pass it in directly to the command you "
@@ -51,13 +53,13 @@ class CliRunner:
     @property
     def code_cov(self):
         if self.__code_cov == Undefined:
-            self.__code_cov = ast.literal_eval(self.config.get_value("code_cov", default=False))
+            self.__code_cov = ast.literal_eval(self.__config.get_value("code_cov", default=False))
         return self.__code_cov
 
     @property
     def cov_rcfile(self):
         if self.__cov_rcfile == Undefined:
-            self.__cov_rcfile = self.config.get_value("cov_rcfile", default=None)
+            self.__cov_rcfile = self.__config.get_value("cov_rcfile", default=None)
             if self.__cov_rcfile == "None":
                 self.__cov_rcfile = None
         return self.__cov_rcfile
@@ -65,8 +67,14 @@ class CliRunner:
     @property
     def guess_root(self):
         if self.__guess_root == Undefined:
-            self.__guess_root = self.config.get_value("guess_root", default=False)
+            self.__guess_root = self.__config.get_value("guess_root", default=False)
         return self.__guess_root
+
+    @property
+    def execution_config(self):
+        if self.__execution_config == Undefined:
+            self.__execution_config = Config.get_config_path(CliConstants.TJ_CONFIG_NAME)
+        return self.__execution_config
 
     @staticmethod
     def start_in_a_thread(target, args):
@@ -180,12 +188,10 @@ class CliRunner:
                     suite_alias = suite_imported_as_alias[-1].split("Suite")[-1].split("as")[-1].split(",")[0].strip()
                     CliRunner.start_in_a_thread(target=self.__find_and_register_suite,
                                                 args=(suite_alias, __source[0], __source[1].name))
-                    # self.__find_and_register_suite(suite_alias, __source[0], __source[1].name)
                     return True
 
                 suite_imported = re.findall(CliRunner.__REGEX_NO_ALIAS_IMPORT, __source[0])
                 if suite_imported:
-                    # self.__find_and_register_suite("Suite", __source[0], __source[1].name)
                     CliRunner.start_in_a_thread(target=self.__find_and_register_suite,
                                                 args=("Suite", __source[0], __source[1].name))
                     return True
@@ -245,18 +251,16 @@ class CliRunner:
                 import coverage
 
                 if self.cov_rcfile is not None:
-                    print(">>>>", 1)
                     cov = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep),
                                             config_file=self.cov_rcfile)
                 else:
-                    print(">>>>", 2)
                     cov = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep))
                 cov.start()
             try:
                 runner = Runner(suites=self.suites,
                                 html_report=args.html_report,
                                 xml_report=args.xml_report,
-                                config=Config.get_config_path(CliConstants.TJ_CONFIG_NAME))
+                                config=self.execution_config)
                 runner.run(test_multithreading_limit=args.test_multithreading_limit,
                            suite_multithreading_limit=args.suite_multithreading_limit,
                            tests=args.tests,
