@@ -50,11 +50,6 @@ class Runner:
 
         self.__before_group_failure_records = {}
 
-    def __create_html_report(self, reporter):
-
-        if self.__kwargs.get("html_report", None) is not None:
-            reporter.generate_html_report(self.__kwargs.get("html_report"))
-
     @staticmethod
     def __process_owners(suite_object):
 
@@ -190,7 +185,7 @@ class Runner:
                                 aggregator=aggregator,
                                 multi_threading_enabled=self.__processor.test_multithreading()
                                 or self.__processor.suite_multithreading())
-            self.__create_html_report(reporter)
+            reporter.generate_html_report(self.__settings.html_report)
         XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
         if self.__settings.monitor_resources:
             resource_monitor.cleanup()

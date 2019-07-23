@@ -103,7 +103,6 @@ class Reporter:
             suites_data=self.__get_suites_data(),
             tags_data=self.__get_tags_data())
 
-        # table_data = self.__get_table_data()
         row_two_html += ReportTemplate.get_table(table_data["table_data"])
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())

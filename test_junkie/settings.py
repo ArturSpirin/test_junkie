@@ -89,7 +89,10 @@ class Settings:
             if key in self.config.config.options("runtime"):
                 value = self.config.get_value(key)
                 if value is not Undefined:
-                    value = ast.literal_eval(value)
+                    try:
+                        value = ast.literal_eval(value)
+                    except SyntaxError:
+                        pass
                     source = "CONFIG @ {}".format(self.config.path)
 
         LogJunkie.debug("Setting: {setting} Source: {source}".format(setting=key, source=source))
@@ -116,27 +119,31 @@ class Settings:
     def features(self):
 
         if self.__features is Undefined:
-            self.__features = self.__get_value(key="features", default=Settings.__DEFAULT_FEATURES)
+            self.__features = self.__get_value(key="features",
+                                               default=Settings.__DEFAULT_FEATURES)
         return self.__features
 
     @property
     def components(self):
 
         if self.__components is Undefined:
-            self.__components = self.__get_value(key="components", default=Settings.__DEFAULT_COMPONENTS)
+            self.__components = self.__get_value(key="components",
+                                                 default=Settings.__DEFAULT_COMPONENTS)
         return self.__components
 
     @property
     def owners(self):
 
         if self.__owners is Undefined:
-            self.__owners = self.__get_value(key="owners", default=Settings.__DEFAULT_OWNERS)
+            self.__owners = self.__get_value(key="owners",
+                                             default=Settings.__DEFAULT_OWNERS)
         return self.__owners
 
     @property
     def tests(self):
         if self.__tests is Undefined:
-            self.__tests = self.__get_value(key="tests", default=Settings.__DEFAULT_TESTS)
+            self.__tests = self.__get_value(key="tests",
+                                            default=Settings.__DEFAULT_TESTS)
         return self.__tests
 
     @property
@@ -147,31 +154,36 @@ class Settings:
                 config = {}
                 properties = ["run_on_match_all", "run_on_match_any", "skip_on_match_all", "skip_on_match_any"]
                 for prop in properties:
-                    config.update({prop: self.__get_value(key=prop, default=Settings.__DEFAULT_TAGS)})
+                    config.update({prop: self.__get_value(key=prop,
+                                                          default=Settings.__DEFAULT_TAGS)})
                 self.__tag_config = config
             else:
                 for prop, value in config.items():
                     if value is Undefined:
-                        config.update({prop: self.__get_value(key=prop, default=Settings.__DEFAULT_TAGS)})
+                        config.update({prop: self.__get_value(key=prop,
+                                                              default=Settings.__DEFAULT_TAGS)})
                 self.__tag_config = config
         return self.__tag_config
 
     @property
     def monitor_resources(self):
         if self.__resources_mon is Undefined:
-            self.__resources_mon = self.__get_value(key="monitor_resources", default=Settings.__DEFAULT_RESOURCE_MON)
+            self.__resources_mon = self.__get_value(key="monitor_resources",
+                                                    default=Settings.__DEFAULT_RESOURCE_MON)
         return self.__resources_mon
 
     @property
     def quiet(self):
         if self.__quiet is Undefined:
-            self.__quiet = self.__get_value(key="quiet", default=Settings.__DEFAULT_QUIET)
+            self.__quiet = self.__get_value(key="quiet",
+                                            default=Settings.__DEFAULT_QUIET)
         return self.__quiet
 
     @property
     def html_report(self):
         if self.__html_report is Undefined:
-            self.__html_report = self.__get_value(key="html_report", default=Settings.__DEFAULT_HTML)
+            self.__html_report = self.__get_value(key="html_report",
+                                                  default=Settings.__DEFAULT_HTML)
         if self.__html_report and not self.__html_report.endswith(".html"):
             raise BadParameters("\"html_report\" parameter requires full path with a file name and .html extension "
                                 "for example: /var/www/html/my_report.html. For more info, see documentation: {link}"
@@ -181,7 +193,8 @@ class Settings:
     @property
     def xml_report(self):
         if self.__xml_report is Undefined:
-            self.__xml_report = self.__get_value(key="xml_report", default=Settings.__DEFAULT_XML)
+            self.__xml_report = self.__get_value(key="xml_report",
+                                                 default=Settings.__DEFAULT_XML)
         if self.__xml_report and not self.__xml_report.endswith(".xml"):
             raise BadParameters("\"xml_report\" parameter requires full path with a file name and .html extension "
                                 "for example: /var/www/html/my_report.xml. For more info, see documentation: {link}"
