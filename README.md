@@ -25,24 +25,31 @@ from test_junkie.decorators import Suite, beforeTest, afterTest, test, beforeCla
 
 @Suite()
 class ExampleTestSuite:
+
     @beforeClass()
     def before_class(self):
         print("Hi, I'm before class")
+        
     @beforeTest()
     def before_test(self):
         print("Hi, I'm before test")
+        
     @afterTest()
     def after_test(self):
         print("Hi, I'm after test")
+        
     @afterClass()
     def after_class(self):
         print("Hi, I'm after class")
+        
     @test()
     def something_to_test1(self):
         print("Hi, I'm test #1")
+        
     @test()
     def something_to_test2(self):
         print("Hi, I'm test #2")
+        
     @test()
     def something_to_test3(self):
         print("Hi, I'm test #3")
