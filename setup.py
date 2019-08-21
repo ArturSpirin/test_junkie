@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.7a4",
+    version="0.7a5",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Modern Testing Framework",
@@ -33,6 +33,8 @@ setuptools.setup(
     ],
     install_requires=["statistics", "psutil", "appdirs", "configparser",
                       "colorama", "coverage"],
+    extras_require={
+        'service':  ["flask", "flask-wtf", "flask-socketio", "deepdiff"]},
     keywords=["automation", "testing", "tests", "test-runner"],
     entry_points={
           'console_scripts': [

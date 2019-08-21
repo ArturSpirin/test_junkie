@@ -49,6 +49,11 @@ class Runner:
         self.__group_rules = Builder.build_group_definitions(self.__suites)
 
         self.__before_group_failure_records = {}
+        self.__test_cycle_failed = False
+
+    @property
+    def test_cycle_failed(self):
+        return self.__test_cycle_failed
 
     @staticmethod
     def __process_owners(suite_object):
@@ -308,18 +313,18 @@ class Runner:
                                                     time.sleep(1)
                                                 time.sleep(Limiter.get_test_throttling())
                                                 parallels.append(
-                                                    self.__processor.run_test_in_a_thread(Runner.__run_test,
+                                                    self.__processor.run_test_in_a_thread(self.__run_test,
                                                                                           suite, test, param,
                                                                                           class_param,
                                                                                           before_class_error,
                                                                                           self.__cancel))
 
                                         else:
-                                            Runner.__run_test(suite=suite, test=test,
-                                                              parameter=param,
-                                                              class_parameter=class_param,
-                                                              before_class_error=before_class_error,
-                                                              cancel=self.__cancel)
+                                            self.__run_test(suite=suite, test=test,
+                                                            parameter=param,
+                                                            class_parameter=class_param,
+                                                            before_class_error=before_class_error,
+                                                            cancel=self.__cancel)
                                     tests.remove(test)
 
                                 else:
@@ -351,8 +356,7 @@ class Runner:
             suite.metrics.update_suite_metrics(status=SuiteCategory.SKIP, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_SKIP, suite=suite)
 
-    @staticmethod
-    def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
+    def __run_test(self, suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
 
         def run_before_test():
             try:
@@ -372,6 +376,7 @@ class Runner:
                 return False
 
         def process_failure(error, pre_processed=False, decorator=None):
+            self.__test_cycle_failed = True
             _runtime = time.time() - start_time  # start time defined in the outside scope before each decorated func
             if not isinstance(error, TestJunkieExecutionError):
                 if pre_processed:
@@ -381,6 +386,7 @@ class Runner:
                 __category, __event = TestCategory.ERROR, Event.ON_ERROR
                 if isinstance(error, AssertionError):
                     __category, __event = TestCategory.FAIL, Event.ON_FAILURE
+
                 test.metrics.update_metrics(status=__category,
                                             start_time=test_start_time,
                                             param=parameter,

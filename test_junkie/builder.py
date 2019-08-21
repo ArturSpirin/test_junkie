@@ -29,22 +29,52 @@ class Builder(object):
 
     @staticmethod
     def get_execution_roster():
+        if Builder.__CURRENT_SUITE_OBJECT != Builder.__get_suite_object_defaults():
+            undefined_test_objects = {}
+            from test_junkie.objects import SuiteObject
+            from test_junkie.decorators import DecoratorType
+            if Builder.__CURRENT_SUITE_OBJECT:
+                for decorator, data in Builder.__CURRENT_SUITE_OBJECT["suite_definition"].items():
+                    for item in data:
+                        module = item["decorated_function"].__module__
+                        if module not in undefined_test_objects:
+                            undefined_test_objects.update({module: Builder.__get_suite_object_defaults()})
+                        undefined_test_objects[module]["suite_definition"][decorator].append(data)
+                for module, suite_object in undefined_test_objects.items():
+                    decorator_kwargs = {}
+                    suite_object["class_object"] = module
+                    suite_object["class_retry"] = decorator_kwargs.get("retry", 1)
+                    suite_object["class_skip"] = decorator_kwargs.get("skip", False)
+                    suite_object["class_meta"] = decorator_kwargs.get("meta", {})
+                    suite_object["test_listener"] = decorator_kwargs.get("listener", Listener)
+                    suite_object["test_rules"] = decorator_kwargs.get("rules", Rules)
+                    suite_object["class_parameters"] = decorator_kwargs.get("parameters", [None])
+                    suite_object["parallelized"] = decorator_kwargs.get("parallelized", True)
+                    decorator_kwargs.update({"testjunkie_suite_id": Builder.__SUITE_ID})
+                    suite_object["decorator_kwargs"] = decorator_kwargs
+
+                    Builder.__EXECUTION_ROSTER.update({module: SuiteObject(suite_object)})
+
+                Builder.__set_current_suite_object_defaults()
         return Builder.__EXECUTION_ROSTER
 
     @staticmethod
-    def __set_current_suite_object_defaults():
+    def __get_suite_object_defaults():
         from test_junkie.decorators import DecoratorType
-        Builder.__CURRENT_SUITE_OBJECT = {"test_listener": None,
-                                          "test_rules": None,
-                                          "class_name": None,
-                                          "class_retry": None,
-                                          "class_skip": False,
-                                          "class_object": None,
-                                          "suite_definition": {DecoratorType.BEFORE_CLASS: [],
-                                                               DecoratorType.BEFORE_TEST: [],
-                                                               DecoratorType.TEST_CASE: [],
-                                                               DecoratorType.AFTER_TEST: [],
-                                                               DecoratorType.AFTER_CLASS: []}}
+        return {"test_listener": None,
+                "test_rules": None,
+                "class_name": None,
+                "class_retry": None,
+                "class_skip": False,
+                "class_object": None,
+                "suite_definition": {DecoratorType.BEFORE_CLASS: [],
+                                     DecoratorType.BEFORE_TEST: [],
+                                     DecoratorType.TEST_CASE: [],
+                                     DecoratorType.AFTER_TEST: [],
+                                     DecoratorType.AFTER_CLASS: []}}
+    @staticmethod
+    def __set_current_suite_object_defaults():
+        Builder.__CURRENT_SUITE_OBJECT = Builder.__get_suite_object_defaults()
 
     @staticmethod
     def build_group_definitions(suites):

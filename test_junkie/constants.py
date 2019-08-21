@@ -140,3 +140,8 @@ guess_root=None
 class Undefined(object):
     def __init__(self):
         pass
+
+
+class UndefinedSuiteObject(object):
+    def __init__(self):
+        pass

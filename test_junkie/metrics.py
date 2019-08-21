@@ -9,7 +9,7 @@ from datetime import datetime
 
 import pkg_resources
 
-from test_junkie.cli.cli import CliUtils
+from test_junkie.cli.cli_utils import CliUtils
 
 from test_junkie.cli.cli_config import Config
 from test_junkie.debugger import LogJunkie

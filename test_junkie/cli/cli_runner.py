@@ -6,11 +6,12 @@ import sys
 import threading
 import time
 import re
+import traceback
 from contextlib import contextmanager
 
 from setuptools.glob import glob
 
-from test_junkie.cli.cli import CliUtils
+from test_junkie.cli.cli_utils import CliUtils
 from test_junkie.constants import CliConstants, Undefined, DocumentationLinks
 from test_junkie.debugger import suppressed_stdout
 from test_junkie.decorators import synchronized
@@ -158,6 +159,9 @@ class CliRunner:
 
     def __skip(self, source, directory):
 
+        if directory.startswith("."):
+            return True
+
         if source not in directory:
             return True
 
@@ -269,14 +273,22 @@ class CliRunner:
                            features=args.features,
                            tag_config=tags(),
                            quiet=args.quiet)
+                if runner.test_cycle_failed:
+                    print("[{status}] Some of the tests failed!".format(
+                        status=CliUtils.format_color_string(value="WARNING", color="yellow")))
+                    exit(400)
+                else:
+                    print("[{status}] All tests passed!".format(
+                        status=CliUtils.format_color_string(value="INFO", color="blue")))
             except KeyboardInterrupt:
                 print("(Ctrl+C) Exiting!")
                 exit(12)
-            except:
-                print("[{status}] Unexpected error during test execution.".format(
-                      status=CliUtils.format_color_string(value="ERROR", color="red")))
-                CliUtils.print_color_traceback()
-                exit(120)
+            except Exception:
+                if "SystemExit: 400" not in traceback.format_exc():
+                    print("[{status}] Unexpected error during test execution.".format(
+                          status=CliUtils.format_color_string(value="ERROR", color="red")))
+                    CliUtils.print_color_traceback()
+                    exit(120)
             finally:
                 if self.code_cov:
                     cov.stop()

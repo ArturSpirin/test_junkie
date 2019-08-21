@@ -3,7 +3,7 @@ import ast
 from appdirs import *
 
 from test_junkie.constants import CliConstants, Undefined
-from test_junkie.cli.cli import CliUtils
+from test_junkie.cli.cli_utils import CliUtils
 
 
 class Config:
@@ -76,6 +76,13 @@ class Config:
         :return: STRING, root directory for TJ to store its configs and other assets
         """
         return user_data_dir("Test-Junkie")
+
+    @staticmethod
+    def get_agents_root_dir():
+        """
+        :return: STRING, root directory for TJ Agents to store its configs and other assets
+        """
+        return "{}/agents".format(Config.get_root_dir())
 
     @staticmethod
     def get_config_path(config_name):
