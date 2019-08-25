@@ -90,7 +90,8 @@ class QualityManager:
 
         assert metrics["status"] == expected_status, \
             "Expected status: {} Actual Status: {}".format(expected_status, metrics["status"])
-        assert metrics["retry"] == expected_retry_count
+        assert metrics["retry"] == expected_retry_count, \
+            "Expected retry: {} Actual: {}".format(expected_retry_count, metrics["retry"])
         assert str(metrics["param"]) == str(expected_param)
         assert str(metrics["class_param"]) == str(expected_class_param)
 

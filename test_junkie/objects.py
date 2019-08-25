@@ -445,8 +445,8 @@ class Limiter:
     TRACEBACK_LIMIT = __DEFAULT_LIMIT
 
     # throttling limits
-    SUITE_THROTTLING = 0
-    TEST_THROTTLING = 0
+    SUITE_THROTTLING = 0  # only applies to parallels
+    TEST_THROTTLING = 0  # only applies to parallels
 
     @staticmethod
     def parse_exception_object(value):
