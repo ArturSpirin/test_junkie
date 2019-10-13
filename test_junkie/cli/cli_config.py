@@ -82,7 +82,7 @@ class Config:
         """
         :return: STRING, root directory for TJ Agents to store its configs and other assets
         """
-        return "{}/agents".format(Config.get_root_dir())
+        return "{}{}agents".format(Config.get_root_dir(), os.sep)
 
     @staticmethod
     def get_config_path(config_name):

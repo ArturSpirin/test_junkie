@@ -1,13 +1,16 @@
 import argparse
+import json
 import os
-import pickle
+import platform
 import socket
+import sys
 import time
 from base64 import b64encode
 from datetime import datetime
 from glob import glob
 from json import dumps, loads
 
+import pkg_resources
 import requests
 
 from test_junkie.cli.cli_config import Config
@@ -90,7 +93,8 @@ Use: tj hq agent COMMAND -h to display COMMAND specific help
         parser = argparse.ArgumentParser(description="",
                                          usage="""tj hq agent add PROJECT
 
-Add a new Test Junkie Agent to a repository or overwrite existing one.
+Add a new Test Junkie Agent to a repository or overwrite existing one. 
+Adding an agent to a repository will enable you to view data for the tests in that repository in real time in Test Junkie HQ.
 
 Use: tj hq agent add PROJECT
 """)
@@ -99,7 +103,7 @@ Use: tj hq agent add PROJECT
         parser.add_argument('--port', type=int, help='Porn on which Test Junkie HQ is running', required=True)
         # parser.add_argument('tj-config', help='Agent will process data according to the config settings')
         args = parser.parse_args(self.args)
-        file_path = "{}/{}.json".format(Config.get_agents_root_dir(), b64encode(args.project))
+        file_path = "{}{}{}.json".format(Config.get_agents_root_dir(), os.sep, b64encode(args.project))
         if not os.path.exists(Config.get_agents_root_dir()):
             os.makedirs(Config.get_agents_root_dir())
         with open(file_path, "w+") as doc:
@@ -109,10 +113,33 @@ Use: tj hq agent add PROJECT
         print("Test Junkie Agent added to: {}!".format(args.project))
 
     def remove(self):
-        print("Test Junkie Agent removed from: !")
+        parser = argparse.ArgumentParser(description="",
+                                         usage="""tj hq agent remove PROJECT
+
+Remove a Test Junkie Agent from a repository.
+
+Use: tj hq agent remove PROJECT
+        """)
+        parser.add_argument('project', help='Full path to the root directory of your project/repository')
+        args = parser.parse_args(self.args)
+        project = "{}.json".format(b64encode(args.project))
+        if project in os.listdir(Config.get_agents_root_dir()):
+            file_path = "{}{}{}".format(Config.get_agents_root_dir(), os.sep, project)
+            os.remove(file_path)
+            print("Agent extracted from: {}".format(args.project))
+        else:
+            print("There are no agents to extract from: {}".format(args.project))
 
     def show(self):
-        print("Test Junkie HQ is awesome!")
+        docs = os.listdir(Config.get_agents_root_dir())
+        template = "{project_root:50}{host:50}{port:10}"  # same, but named
+        if docs:
+            print(template.format(project_root="PROJECT", host="HQ HOST", port="PORT"))
+            for doc in docs:
+                with open(Config.get_agents_root_dir() + os.sep + doc, "r+") as details:
+                    print(template.format(**json.loads(details.read())))
+        else:
+            print("No agents deployed.")
 
     def start(self):
 
@@ -132,17 +159,27 @@ Use: tj hq agent add PROJECT
                             aggregator = CliAudit(suites=tj.suites, args=None)
                             aggregator.aggregate()
                             tests = aggregator.aggregated_data["test_roster"]
+                            tjv = pkg_resources.require("test-junkie")[0].version
+                            pyv = sys.version_info[0]
                             payload = {"host": socket.gethostname(),
                                        "tests": tests,
                                        "project": source[0].split(os.sep)[-1],
+                                       "project_location": source[0],
+                                       "tech": {"name": "Test Junkie {} (Python{})".format(tjv, pyv),
+                                                "tjv": tjv,
+                                                "pyv": pyv,
+                                                "platform": {"os": platform.system(), "release": platform.release()}},
                                        "sent_at": str(datetime.now())}
                             if tests:  # TODO add auth
                                 endpoint = "{host}:{port}/handler".format(host=host, port=port)
-                                response = requests.post(endpoint, json=payload)
-                                print(response)
+                                try:
+                                    response = requests.post(endpoint, json=payload)
+                                    print(">>>>>", response.status_code)
+                                except Exception as error:
+                                    print(error)
                             else:
                                 print("No data to send: ", tests)
 
-                time.sleep(500)
+                time.sleep(20)
         except KeyboardInterrupt:
             print("Ctrl + C. Exiting!")
