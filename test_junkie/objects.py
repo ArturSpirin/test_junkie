@@ -56,8 +56,13 @@ class SuiteObject(object):
         self.__suite_definition = suite_definition
         self.__listener = suite_definition["test_listener"](class_meta=suite_definition["class_meta"])
         self.__tests = []
+        self.__test_function_names = []
+        self.__test_function_objects = []
         for test in suite_definition["suite_definition"].get(DecoratorType.TEST_CASE):
-            self.__tests.append(TestObject(test))
+            test_obj = TestObject(test)
+            self.__tests.append(test_obj)
+            self.__test_function_names.append(test_obj.get_function_name())
+            self.__test_function_objects.append(test_obj.get_function_object())
         self.metrics = ClassMetrics()
         self.__rules = suite_definition["test_rules"](suite=copy.deepcopy(self))
         self.__instance = None
@@ -129,17 +134,43 @@ class SuiteObject(object):
         self.__tests = tests
 
     def get_test_objects(self):
-
+        """
+        Use to get all TJ TestObjects
+        :return: LIST of TestObjects
+        """
         return self.__tests
+
+    def get_test_function_names(self):
+        """
+        Use to get actual names of the test functions
+        :return: LIST of STRINGS
+        """
+        return self.__test_function_names
+
+    def get_test_function_objects(self):
+        """
+        Use to get actual function objects
+        :return: LIST of STRINGS
+        """
+        return self.__test_function_objects
 
     def get_skip(self):
         return self.__suite_definition.get("class_skip", False)
 
-    def can_skip(self, features=None):
+    def can_skip(self, settings):
 
         can_skip = _FuncEval.eval_skip(self)
-        if features is not None and can_skip is False:
-            return not self.get_feature() in features
+
+        if settings.features is not None and can_skip is False:
+            can_skip = not self.get_feature() in settings.features
+
+        if settings.tests is not None and can_skip is False:
+            for test in settings.tests:
+                if inspect.ismethod(test) or inspect.isfunction(test):
+                    test = test.__name__
+                if test in self.get_test_function_names():
+                    return False
+            return True
         return can_skip
 
     def get_retry_limit(self):

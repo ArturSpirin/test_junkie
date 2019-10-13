@@ -243,7 +243,7 @@ class Runner:
                     self.__before_group_failure_records.update(result)
                     exception = result[list(result.keys())[0]]["trace"]
 
-        if not suite.can_skip(self.__settings.features) and not self.__cancel and not exception:
+        if not suite.can_skip(self.__settings) and not self.__cancel and not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
