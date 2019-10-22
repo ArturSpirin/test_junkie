@@ -82,9 +82,9 @@ def test_config_update():
         value = cmd[5] if len(cmd) == 6 else "True"
         assert "Traceback (most recent call last)" not in output[-2], \
             "Command: {} produced exception. {}".format(cmd, output)
-        assert "OK" in output[-3]
-        assert prop in output[-3], "Command: {} did not update property: {}".format(cmd, prop)
-        assert value in output[-3], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
+        assert "OK" in output[-2]
+        assert prop in output[-2], "Command: {} did not update property: {}".format(cmd, prop)
+        assert value in output[-2], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
 
 
 def test_config_restore():
@@ -250,7 +250,7 @@ def test_config_restore_all():
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-        assert "Config restored to default settings!" in output[-2], "Wrong message: {}".format(output[-1])
+        assert "Config restored to default settings!" in output[-1], "Wrong message: {}".format(output[-1])
 
 
 def test_config_show_all():
