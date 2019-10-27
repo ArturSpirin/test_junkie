@@ -39,6 +39,15 @@ class CliRunner:
         self.requested_suites = suites
         self.__config = Config(config_name=CliConstants.TJ_CONFIG_NAME if
                                self.__execution_config == Undefined else self.__execution_config)
+        self.coverage = None
+        if self.code_cov:
+            import coverage
+            if self.cov_rcfile is not None:
+                self.coverage = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep),
+                                                  config_file=self.cov_rcfile)
+            else:
+                self.coverage = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep))
+            self.coverage.start()
 
     @property
     def sources(self):
@@ -247,15 +256,6 @@ class CliRunner:
         if self.suites:
             print("[{status}] Running tests ...\n"
                   .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
-            if self.code_cov:
-                import coverage
-
-                if self.cov_rcfile is not None:
-                    cov = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep),
-                                            config_file=self.cov_rcfile)
-                else:
-                    cov = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep))
-                cov.start()
             try:
                 runner = Runner(suites=self.suites,
                                 html_report=args.html_report,
@@ -278,15 +278,18 @@ class CliRunner:
                 CliUtils.print_color_traceback()
                 exit(120)
             finally:
-                if self.code_cov:
-                    cov.stop()
-                    cov.save()
-            if self.code_cov:
-                try:
-                    cov.report(show_missing=True, skip_covered=True)
-                    print("[{status}] TJ uses Coverage.py. Control it with --cov-rcfile, "
-                          "see {link}".format(status=CliUtils.format_color_string(value="TIP", color="blue"),
-                                              link=DocumentationLinks.COVERAGE_CONFIG_FILE))
-                except coverage.misc.CoverageException:
-                    pass
+                if self.coverage is not None:
+                    self.coverage.stop()
+                    self.coverage.save()
+                    import coverage
+                    try:
+                        print("[{status}] Code coverage report:".format(
+                            status=CliUtils.format_color_string(value="INFO", color="blue")))
+                        self.coverage.report(show_missing=True, skip_covered=True)
+                        print("[{status}] TJ uses Coverage.py. Control it with --cov-rcfile, "
+                              "see {link}".format(status=CliUtils.format_color_string(value="TIP", color="blue"),
+                                                  link=DocumentationLinks.COVERAGE_CONFIG_FILE))
+                    except coverage.misc.CoverageException:
+                        CliUtils.print_color_traceback()
+                        exit(120)
             return
