@@ -56,8 +56,18 @@ class SuiteObject(object):
         self.__suite_definition = suite_definition
         self.__listener = suite_definition["test_listener"](class_meta=suite_definition["class_meta"])
         self.__tests = []
+        self.__test_function_names = []  # this suite has tests with those function names
+        self.__test_components = []  # this suite has tests that address those components
+        self.__test_tags = []  # this suite has tests that are tagged with those tags
+        self.__test_function_objects = []
         for test in suite_definition["suite_definition"].get(DecoratorType.TEST_CASE):
-            self.__tests.append(TestObject(test))
+            test_obj = TestObject(test)
+            self.__tests.append(test_obj)
+            self.__test_function_names.append(test_obj.get_function_name())
+            self.__test_function_objects.append(test_obj.get_function_object())
+            self.__test_components.append(test_obj.get_component())
+            self.__test_tags += test_obj.get_tags()
+        self.__test_tags, self.__test_function_objects = set(self.__test_tags), set(self.__test_function_objects)
         self.metrics = ClassMetrics()
         self.__rules = suite_definition["test_rules"](suite=copy.deepcopy(self))
         self.__instance = None
@@ -129,17 +139,92 @@ class SuiteObject(object):
         self.__tests = tests
 
     def get_test_objects(self):
-
+        """
+        Use to get all TJ TestObjects
+        :return: LIST of TestObjects
+        """
         return self.__tests
+
+    def get_test_function_names(self):
+        """
+        Use to get actual names of the test functions
+        :return: LIST of STRINGS
+        """
+        return self.__test_function_names
+
+    def get_test_components(self):
+        """
+        Use to get all the components that are covered by tests in this suite
+        :return: LIST of STRINGS
+        """
+        return self.__test_components
+
+    def get_test_tags(self):
+        """
+        Use to get all the tags that are covered by tests in this suite
+        :return: LIST of STRINGS
+        """
+        return self.__test_tags
+
+    def get_test_function_objects(self):
+        """
+        Use to get actual function objects
+        :return: LIST of STRINGS
+        """
+        return self.__test_function_objects
 
     def get_skip(self):
         return self.__suite_definition.get("class_skip", False)
 
-    def can_skip(self, features=None):
+    def can_skip(self, settings):
+        """
+        This function determines if the whole suite needs to be skipped.
+        - if user asked to run tests for specific feature, it will check to make sure this suite matches that feature
+        - if user asked to run tests for specific container, it will check to make sure suite has related tests
+        - if user asked to run specific tags, it will verify that suite has tests with those tags
+        - If user asked to run specific tests, it will check to make sure suite has that test
+        :param settings: Settings object
+        :return: If suite qualifies, it will return False, other wise it will return True.
+        """
+        def __all_tags_match(expected, actual):
+
+            for _tag in expected:
+                if _tag not in actual:
+                    return False
+            return True
 
         can_skip = _FuncEval.eval_skip(self)
-        if features is not None and can_skip is False:
-            return not self.get_feature() in features
+
+        if settings.features is not None and can_skip is False:
+            can_skip = not self.get_feature() in settings.features
+
+        if settings.components is not None and can_skip is False:
+            for component in settings.components:
+                if component not in self.get_test_components():
+                    return True
+
+        if settings.tags is not None and can_skip is False:
+
+            if settings.tags.get("run_on_match_any", None) is not None:
+                for tag in settings.tags["run_on_match_any"]:
+                    if tag in self.get_test_tags():
+                        return False
+                return True
+
+            if settings.tags.get("run_on_match_all", None) is not None:
+                for test_obj in self.get_test_objects():
+                    if __all_tags_match(expected=settings.tags["run_on_match_all"], actual=test_obj.get_tags()):
+                        return False
+                return True
+
+        if settings.tests is not None and can_skip is False:
+            for test in settings.tests:
+                if inspect.ismethod(test) or inspect.isfunction(test):
+                    test = test.__name__
+                if test in self.get_test_function_names():
+                    return False
+            return True
+
         return can_skip
 
     def get_retry_limit(self):
@@ -445,8 +530,8 @@ class Limiter:
     TRACEBACK_LIMIT = __DEFAULT_LIMIT
 
     # throttling limits
-    SUITE_THROTTLING = 0
-    TEST_THROTTLING = 0
+    SUITE_THROTTLING = 0  # only applies to parallels
+    TEST_THROTTLING = 0  # only applies to parallels
 
     @staticmethod
     def parse_exception_object(value):

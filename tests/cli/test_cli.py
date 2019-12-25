@@ -239,7 +239,7 @@ def test_bad_inputs():
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-        validate_output(expected=[["ERROR", ""]], output=output)
+        validate_output(expected=[["ERROR", ""]], output=output, cmd=cmd)
 
 
 def test_config_restore_all():
@@ -263,14 +263,15 @@ def test_config_show_all():
                 "Command: {} produced exception. {}".format(cmd, output)
 
 
-def validate_output(expected, output):
+def validate_output(expected, output, cmd):
 
     for item in list(expected):
         for line in output:
             if item[0] in line and item[1] in line:
-                expected.remove(item)
+                if item in expected:
+                    expected.remove(item)
     if expected:
-        raise AssertionError("Not verified: {}".format(expected))
+        raise AssertionError("Not verified: {} for command: {}".format(expected, " ".join(cmd)))
 
 
 def test_run_with_cmd_args():
@@ -282,7 +283,7 @@ def test_run_with_cmd_args():
                 ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov', '-q']]:
         output = Cmd.run(cmd)
         pprint.pprint(output)
-        validate_output(expected=[["[6/16 37.50%]", "SUCCESS"]], output=output)
+        validate_output(expected=[["6/6 100.00", "SUCCESS"]], output=output, cmd=cmd)
 
 
 def test_run_with_config_and_cmd_args():
@@ -290,9 +291,10 @@ def test_run_with_config_and_cmd_args():
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
     Cmd.run(['python', EXE, 'config', 'update', '-k', 'api ui'])
     Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
-    output = Cmd.run(['python', EXE, 'run', '-s', TESTS, '-k', 'api'])
+    cmd = ['python', EXE, 'run', '-s', TESTS, '-k', 'api']
+    output = Cmd.run(cmd)
     pprint.pprint(output)
-    validate_output(expected=[["[4/16 25.00%]", "SUCCESS"]], output=output)
+    validate_output(expected=[["[4/6 66.67%]", "SUCCESS"]], output=output, cmd=cmd)
 
 
 def test_run_with_config():
@@ -300,9 +302,10 @@ def test_run_with_config():
     Cmd.run(['python', EXE, 'config', 'restore', '--all'])
     Cmd.run(['python', EXE, 'config', 'update', '-k', 'api', 'ui'])
     Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
-    output = Cmd.run(['python', EXE, 'run', '-s', TESTS])
+    cmd = ['python', EXE, 'run', '-s', TESTS]
+    output = Cmd.run(cmd)
     pprint.pprint(output)
-    validate_output(expected=[["[9/16 56.25%]", "SUCCESS"]], output=output)
+    validate_output(expected=[["[9/11 81.82%]", "SUCCESS"]], output=output, cmd=cmd)
 
 
 def test_runner_with_config():

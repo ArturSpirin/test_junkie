@@ -128,9 +128,9 @@ def test_retry2():
                 for param, metrics in class_data.items():
                     QualityManager.check_test_metrics(metrics,
                                                       expected_status="skip",
-                                                      expected_retry_count=4,
-                                                      expected_exception_count=4,
-                                                      expected_performance_count=4)
+                                                      expected_retry_count=2,
+                                                      expected_exception_count=2,
+                                                      expected_performance_count=2)
                     tested = True
     if not tested:
         raise Exception("Test did not run")
@@ -231,9 +231,9 @@ def test_skip():
                 for param, metrics in class_data.items():
                     QualityManager.check_test_metrics(metrics,
                                                       expected_status="skip",
-                                                      expected_retry_count=4,
-                                                      expected_exception_count=4,
-                                                      expected_performance_count=4)
+                                                      expected_retry_count=2,
+                                                      expected_exception_count=2,
+                                                      expected_performance_count=2)
                     tested = True
     if not tested:
         raise Exception("Test did not run")

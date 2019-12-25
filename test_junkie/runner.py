@@ -248,7 +248,7 @@ class Runner:
                     self.__before_group_failure_records.update(result)
                     exception = result[list(result.keys())[0]]["trace"]
 
-        if not suite.can_skip(self.__settings.features) and not self.__cancel and not exception:
+        if not suite.can_skip(self.__settings) and not self.__cancel and not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
@@ -267,8 +267,10 @@ class Runner:
                                             .format(len(unsuccessful_tests)))
                             if not unsuccessful_tests:
                                 break
+                            tests = unsuccessful_tests
+                        else:
+                            tests = list(suite.get_test_objects())
                         parallels = []
-                        tests = list(suite.get_test_objects())
                         while tests:
                             for test in list(tests):
 
@@ -422,8 +424,14 @@ class Runner:
                     process_failure(after_test_error)  # updating **test** metrics (no decorator passed in)
                 return False
 
+        if not test.accepts_suite_parameters():
+            # for reporting purposes, so reports are properly nested
+            class_parameter = None
+
         test_start_time = time.time()
         if before_class_error is not None or cancel:
+            if class_parameter is None and test.get_number_of_actual_retries(parameter, class_parameter) == 1:
+                return  # ticket: #19 tests with no class parameters should not be processed multiple times on error
             _status = TestCategory.IGNORE if not cancel else TestCategory.CANCEL
             _event = Event.ON_IGNORE if not cancel else Event.ON_CANCEL
             test.metrics.update_metrics(status=_status,
@@ -436,10 +444,6 @@ class Runner:
                                    class_param=class_parameter, param=parameter,
                                    formatted_traceback=before_class_error["traceback"])
             return
-
-        if not test.accepts_suite_parameters():
-            # for reporting purposes, so reports are properly nested
-            class_parameter = None
 
         status = test.get_status(parameter, class_parameter)
         if not test.accepts_suite_parameters() and status is not None:
