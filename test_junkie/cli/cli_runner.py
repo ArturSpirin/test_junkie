@@ -106,6 +106,16 @@ class CliRunner:
 
     def __find_and_register_suite(self, _suite_alias, _source, _file_path):
 
+        def raise_import_error(error):
+
+            print("[{status}] There is an import error: {error}"
+                  .format(status=CliUtils.format_color_string(value="ERROR", color="red"), error=error))
+            print("[{status}] 1. Make sure you have installed all of the packages required for your project "
+                  "to work".format(status=CliUtils.format_color_string(value="ERROR", color="red")))
+            print("[{status}] 2. Make sure the root of your project is in the PYTHONPATH"
+                  .format(status=CliUtils.format_color_string(value="ERROR", color="red")))
+            raise
+
         def guess_project_root(path, _module_name, error):
 
             print("[{status}] Import error: {error}"
@@ -124,7 +134,7 @@ class CliRunner:
             except ImportError as error:
                 if len(possibility.split(os.sep)) > 2:
                     return guess_project_root(possibility, _module_name, error)
-                raise
+                raise_import_error(error)
 
         @synchronized()
         def load_module(_decorated_classes):
@@ -137,16 +147,7 @@ class CliRunner:
                 if self.guess_root:
                     module = guess_project_root(_file_path, module_name, error)
                 else:
-                    print("[{status}] There is an import error: {error}"
-                          .format(status=CliUtils.format_color_string(value="ERROR", color="red"), error=error))
-                    print("[{status}] 1. Make sure you have installed all of the packages required for your project "
-                          "to work".format(status=CliUtils.format_color_string(value="ERROR", color="red")))
-                    print("[{status}] 2. Make sure the root of your project is in the PYTHONPATH"
-                          .format(status=CliUtils.format_color_string(value="ERROR", color="red")))
-                    print("[{status}] 3. TJ can try to guess your root directory if you run with --guess-root "
-                          "(Usually not recommended)".format(status=CliUtils.format_color_string(value="ERROR",
-                                                                                                 color="red")))
-                    raise
+                    raise_import_error(error)
             for name, data in inspect.getmembers(module):
                 if name in _decorated_classes and inspect.isclass(data):
                     if not self.requested_suites or \

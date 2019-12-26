@@ -1,8 +1,9 @@
-from test_junkie.decorators import Suite, test
+from test_junkie.decorators import test
+from test_junkie.decorators import Suite as suite
 from tests.junkie_suites.TestListener import TestListener
 
 
-@Suite(retry=2,
+@suite(retry=2,
        listener=TestListener,
        parameters=[1, 2],
        parallelized=False,
@@ -34,7 +35,7 @@ class AuthApiSuite:
         pass
 
 
-@Suite(retry=2,
+@suite(retry=2,
        listener=TestListener,
        meta={"name": "Suite B", "known_bugs": []},
        parameters=[1, 2], priority=1, feature="Store",
@@ -72,7 +73,7 @@ class ShoppingCartSuite:
         pass
 
 
-@Suite(retry=2,
+@suite(retry=2,
        listener=TestListener,
        priority=2, feature="Store", owner="Mike")
 class NewProductsSuite:

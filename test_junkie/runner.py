@@ -80,6 +80,9 @@ class Runner:
 
             if suites is not None:
                 suite_object = Builder.get_execution_roster().get(item, None)
+                if suite_object is None:
+                    raise BadParameters("Check Runner instance, you initialized it with incorrect test suite object: "
+                                        "{}.".format(item))
                 priority = suite_object.get_priority()
                 is_parallelized = suite_object.is_parallelized()
             else:
