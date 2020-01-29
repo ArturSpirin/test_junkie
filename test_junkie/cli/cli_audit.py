@@ -1,6 +1,8 @@
 import collections
 import pprint
 
+from markdown2 import Markdown
+
 from test_junkie.builder import Builder
 from test_junkie.constants import Undefined
 
@@ -140,6 +142,13 @@ class CliAudit:
                 module = "{}::{}".format(suite_object.get_class_module(), suite_object.get_class_name())
                 if module not in self.aggregated_data["test_roster"]:
                     self.aggregated_data["test_roster"].update({module: {}})
+
+                doc_html = None
+                if test.get_function_object().__doc__:
+                    markdowner = Markdown(extras=["tables"])  # TODO allow extras to be configured via config
+                    doc = test.get_function_object().__doc__.replace("\n        ", "\n")
+                    doc_html = markdowner.convert(doc)
+
                 self.aggregated_data["test_roster"][module].update(
                     {test.get_function_name(): {"suite_name": suite_object.get_class_name(),
                                                 "suite_module": suite_object.get_class_module(),
@@ -147,7 +156,9 @@ class CliAudit:
                                                 "feature": suite_object.get_feature(),
                                                 "component": test.get_component(),
                                                 "tags": test.get_tags(),
-                                                "doc": test.get_function_object().__doc__}})
+                                                "doc": test.get_function_object().__doc__,
+                                                "doc_html": doc_html,
+                                                }})
 
             self.aggregated_data["context_by_suites"].update({suite_object.get_class_name(): suite_context})
 
@@ -271,4 +282,4 @@ class CliAudit:
             print("[{status}] Nothing matches your search criteria!"
                   .format(status=CliUtils.format_color_string("INFO", "blue")))
 
-        pprint.pprint(self.aggregated_data["test_roster"])
+        # pprint.pprint(self.aggregated_data["test_roster"])

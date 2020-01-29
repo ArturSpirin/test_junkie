@@ -7,7 +7,7 @@
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/test_junkie.svg)](https://pypi.python.org/pypi/test_junkie/)
 [![Downloads](https://pepy.tech/badge/test-junkie)](https://pepy.tech/project/test-junkie)
 
-# Test Junkie [![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Checkout+this+new+awesome+test+runner+for+Python!&url=https%3A%2F%2Fgithub.com%2FArturSpirin%2Ftest_junkie&hashtags=github,python,programming,pythonprogramming&original_referer=http%3A%2F%2Fgithub.com%2F&tw_p=tweetbutton)
+# Test Junkie [![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Test+Junkie+is+one+of+the+most+powerful+test+runners+on+Python+that+you+have+not+hear+of+and+you+are+missing+out!&url=https%3A%2F%2Ftest-junkie.com&hashtags=automation,testing,python&original_referer=https%3A%2F%2Fgithub.com%2F&tw_p=tweetbutton)
 [![Test Junkie Logo](https://www.test-junkie.com/static/media/logo.png)](https://www.test-junkie.com/)
 
 ## Installation
@@ -82,3 +82,4 @@ Please [report](https://github.com/ArturSpirin/test_junkie/issues/new?template=b
 [<img width="270" src="https://www.actocorp.com/wp-content/uploads/2019/02/ActoLogo-red.png">](https://www.actocorp.com)
 
 become our [sponsor](https://www.patreon.com/join/arturspirin?)
+
