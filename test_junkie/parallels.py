@@ -50,11 +50,6 @@ class ParallelProcessor:
         return thread
 
     @staticmethod
-    def wait_for_parallels_to_finish(parallels):
-        for parallel in parallels:
-            parallel.join()
-
-    @staticmethod
     def wait_currently_active_suites_to_finish():
         for suite, info in list(ParallelProcessor.__PARALLELS.items()):
             info["thread"].join()
@@ -98,10 +93,6 @@ class ParallelProcessor:
             LogJunkie.debug("Test limit: {}/{}".format(active, self.__test_limit))
             return True
         return False
-
-    @staticmethod
-    def get_active_parallels():
-        return ParallelProcessor.__PARALLELS
 
     def suite_qualifies(self, suite):
 
