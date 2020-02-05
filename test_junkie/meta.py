@@ -38,7 +38,7 @@ class Meta:
         :param suite: Object, class object that the test is part of. Typically will be "self".
         :param parameter: User defined parameter for the test.
         :param suite_parameter: User defined suite parameter for the test.
-        :return: Dictionary or None, depending if the meta data is defined
+        :return: Dictionary
         """
         def __get_test_metadata(class_object):
             for frame in inspect.stack():

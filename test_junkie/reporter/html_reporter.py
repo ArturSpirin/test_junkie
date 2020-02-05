@@ -15,17 +15,11 @@ class Reporter:
     @staticmethod
     def round(value):
         from statistics import mean
-        if value:
-            return str(float("{0:.2f}".format(float(mean(value)))))
-        else:
-            return "0"
+        return str(float("{0:.2f}".format(float(mean(value))))) if value else "0"
 
     @staticmethod
     def total_up(value):
-        if value:
-            return str(float("{0:.2f}".format(float(sum(value)))))
-        else:
-            return "0"
+        return str(float("{0:.2f}".format(float(sum(value))))) if value else "0"
 
     @staticmethod
     def escape(s, quote=True):
@@ -283,55 +277,54 @@ class Reporter:
         for suite in executed_suites:
             suite_id += 1
             suite_metrics = get_copy(suite.metrics.get_metrics())
-            if suite_metrics is None:
-                continue
-            database_lol["suites"].update({suite_id: {"name": suite.get_class_name(),
-                                                      "module": suite.get_class_module(),
-                                                      "metrics": convert_suite_metrics(suite_metrics)}})
-            for test in suite.get_test_objects():
+            if suite_metrics:
+                database_lol["suites"].update({suite_id: {"name": suite.get_class_name(),
+                                                          "module": suite.get_class_module(),
+                                                          "metrics": convert_suite_metrics(suite_metrics)}})
+                for test in suite.get_test_objects():
 
-                test_id = test.get_test_id()
-                test_metrics = get_copy(test.metrics.get_metrics())
-                if test_metrics is None:
-                    continue
-                duration, statuses = [], []
+                    test_id = test.get_test_id()
+                    test_metrics = get_copy(test.metrics.get_metrics())
+                    if test_metrics:
 
-                component = test.get_component()
-                component = "Not Defined" if component is None else component
-                feature = suite.get_feature()
-                feature = "Not Defined" if feature is None else feature
-                assignee = test.get_owner()
-                assignee = "Not Defined" if assignee is None else assignee
+                        duration, statuses = [], []
 
-                test_name = test.get_function_name()
-                suite_name = suite.get_class_name()
+                        component = test.get_component()
+                        component = "Not Defined" if component is None else component
+                        feature = suite.get_feature()
+                        feature = "Not Defined" if feature is None else feature
+                        assignee = test.get_owner()
+                        assignee = "Not Defined" if assignee is None else assignee
 
-                for class_param, class_param_data in test_metrics.items():
-                    for param, param_data in class_param_data.items():
+                        test_name = test.get_function_name()
+                        suite_name = suite.get_class_name()
 
-                        self.analyzer.analyze(test_id=test_id,
-                                              tracebacks=list(param_data["tracebacks"]),
-                                              performance=list(param_data["performance"]))
+                        for class_param, class_param_data in test_metrics.items():
+                            for param, param_data in class_param_data.items():
 
-                        duration += param_data["performance"]
-                        statuses.append(param_data["status"])
-                        # no value for exception objects in the HTML report, only will consume memory
-                        for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
-                            param_data[decorator].pop("exceptions")
-                            convert_performance(param_data[decorator]["performance"])
-                            convert_tracebacks(param_data[decorator]["tracebacks"])
-                        param_data.pop("exceptions")
-                        param_data.update({"params_total": Reporter.total_up(param_data["performance"])})
-                        convert_performance(param_data["performance"])
-                        convert_tracebacks(param_data["tracebacks"])
+                                self.analyzer.analyze(test_id=test_id,
+                                                      tracebacks=list(param_data["tracebacks"]),
+                                                      performance=list(param_data["performance"]))
 
-                duration = Reporter.total_up(duration)
-                status = str(prioritize_status(statuses))
+                                duration += param_data["performance"]
+                                statuses.append(param_data["status"])
+                                # no value for exception objects in the HTML report, only will consume memory
+                                for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
+                                    param_data[decorator].pop("exceptions")
+                                    convert_performance(param_data[decorator]["performance"])
+                                    convert_tracebacks(param_data[decorator]["tracebacks"])
+                                param_data.pop("exceptions")
+                                param_data.update({"params_total": Reporter.total_up(param_data["performance"])})
+                                convert_performance(param_data["performance"])
+                                convert_tracebacks(param_data["tracebacks"])
 
-                table_data.append({"suite": suite_name, "test": test_name, "feature": feature, "component": component,
-                                   "duration": duration, "status": status, "test_id": test_id, "suite_id": suite_id,
-                                   "assignee": assignee})
-                database_lol["tests"].update({test_id: {"name": test.get_function_name(),
-                                                        "metrics": test_metrics,
-                                                        "status": status}})
+                        duration = Reporter.total_up(duration)
+                        status = str(prioritize_status(statuses))
+
+                        table_data.append({"suite": suite_name, "test": test_name, "feature": feature,
+                                           "component": component, "duration": duration, "status": status,
+                                           "test_id": test_id, "suite_id": suite_id, "assignee": assignee})
+                        database_lol["tests"].update({test_id: {"name": test.get_function_name(),
+                                                                "metrics": test_metrics,
+                                                                "status": status}})
         return {"table_data": table_data, "database_lol": database_lol, "opportunities": self.analyzer.analysis}
