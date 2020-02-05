@@ -107,33 +107,6 @@ class SuiteObject(object):
 
         return self.get_class_object().__module__
 
-    def _update_test_meta(self, parameter=None, suite_parameter=None, **kwargs):
-
-        for frame in inspect.stack():
-            try:
-                getattr(self.get_class_object(), str(inspect.getframeinfo(frame[0]).function))
-                test_function_name = str(inspect.getframeinfo(frame[0]).function)
-                for test_object in self.get_test_objects():
-                    if test_object.get_function_name() == test_function_name:
-                        test_object.get_meta(parameter, suite_parameter).update(kwargs)
-                        return True
-                return False
-            except:
-                pass
-        return False
-
-    def _get_test_meta(self, parameter=None, suite_parameter=None):
-
-        for frame in inspect.stack():
-            try:
-                getattr(self.get_class_object(), str(inspect.getframeinfo(frame[0]).function))
-                test_function_name = str(inspect.getframeinfo(frame[0]).function)
-                for test_object in self.get_test_objects():
-                    if test_object.get_function_name() == test_function_name:
-                        return test_object.get_meta(parameter, suite_parameter)
-            except:
-                pass
-
     def update_test_objects(self, tests):
 
         self.__tests = tests
