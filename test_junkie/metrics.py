@@ -54,6 +54,24 @@ class ClassMetrics(object):
 
         return self.__stats
 
+    def __get_average_metric(self, decorator, metric):
+
+        from statistics import mean
+        performance = self.get_metrics().get(decorator, {}).get(metric, None)
+        return mean(performance) if performance else None
+
+    def get_average_performance_of_after_class(self):
+        return self.__get_average_metric(DecoratorType.AFTER_CLASS, "performance")
+
+    def get_average_performance_of_before_class(self):
+        return self.__get_average_metric(DecoratorType.BEFORE_CLASS, "performance")
+
+    def get_average_performance_of_after_test(self):
+        return self.__get_average_metric(DecoratorType.AFTER_TEST, "performance")
+
+    def get_average_performance_of_before_test(self):
+        return self.__get_average_metric(DecoratorType.BEFORE_TEST, "performance")
+
 
 class TestMetrics(object):
 

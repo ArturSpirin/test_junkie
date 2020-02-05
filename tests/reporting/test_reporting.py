@@ -17,7 +17,7 @@ def test_reporting():
 
     suites = runner.get_executed_suites()
     for suite in suites:
-        suite.get_average_performance_of_after_class()
-        suite.get_average_performance_of_before_class()
-        suite.get_average_performance_of_after_test()
-        suite.get_average_performance_of_before_test()
+        suite.metrics.get_average_performance_of_after_class()
+        suite.metrics.get_average_performance_of_before_class()
+        suite.metrics.get_average_performance_of_after_test()
+        suite.metrics.get_average_performance_of_before_test()
