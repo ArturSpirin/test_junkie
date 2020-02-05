@@ -77,6 +77,7 @@ class TestMetrics(object):
                     "performance": [],
                     "exceptions": [],
                     "tracebacks": [],
+                    "statuses": [],
                     DecoratorType.BEFORE_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
                     DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []}}
 
@@ -110,6 +111,7 @@ class TestMetrics(object):
             self.__stats[string_class_param][string_param]["status"] = status
             self.__stats[string_class_param][string_param]["param"] = param
             self.__stats[string_class_param][string_param]["class_param"] = class_param
+            self.__stats[string_class_param][string_param]["statuses"].append(status)
 
     def get_metrics(self):
 
@@ -319,7 +321,7 @@ class Aggregator(object):
                                       .format(num=index + 1,
                                               trace=trace,
                                               runtime=param_data["performance"][index],
-                                              status=param_data["status"].upper()))
+                                              status=param_data["statuses"][index].upper()))
         print("\n===========================================================")
         print(". Test Junkie {} (Python{}) {} .".format(pkg_resources.require("test-junkie")[0].version,
                                                         sys.version_info[0],

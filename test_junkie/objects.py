@@ -61,7 +61,7 @@ class SuiteObject(object):
         self.__test_tags = []  # this suite has tests that are tagged with those tags
         self.__test_function_objects = []
         for test in suite_definition["suite_definition"].get(DecoratorType.TEST_CASE):
-            test_obj = TestObject(test)
+            test_obj = TestObject(test, self)
             self.__tests.append(test_obj)
             self.__test_function_names.append(test_obj.get_function_name())
             self.__test_function_objects.append(test_obj.get_function_object())
@@ -349,10 +349,10 @@ class SuiteObject(object):
 
 class TestObject(object):
 
-    def __init__(self, test_definition):
+    def __init__(self, test_definition, suite):
 
         self.__test_definition = test_definition
-
+        self.suite = suite
         self.metrics = TestMetrics()
 
     def __copy__(self):
@@ -360,6 +360,9 @@ class TestObject(object):
 
     def __deepcopy__(self, memo):
         return self
+
+    def __repr__(self):
+        return "<{}.{}>".format(self.suite.get_class_name(), self.get_function_name())
 
     def get_test_id(self):
         return self.get_kwargs().get("testjunkie_test_id", 0)

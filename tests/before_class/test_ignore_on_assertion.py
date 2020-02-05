@@ -26,7 +26,7 @@ def test_test_metrics():
         metrics = test.metrics.get_metrics()["None"]["None"]
         QualityManager.check_test_metrics(metrics,
                                           expected_status="ignore",
-                                          expected_exception_count=1,
-                                          expected_performance_count=1,
-                                          expected_retry_count=1,
+                                          expected_exception_count=2,
+                                          expected_performance_count=2,
+                                          expected_retry_count=2,
                                           expected_exception=AssertionError)
