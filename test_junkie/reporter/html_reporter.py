@@ -103,6 +103,7 @@ class Reporter:
         html = html.format(body=body, database_lol=json.dumps(table_data["database_lol"]))
         with open(write_file, "w+") as output:
             output.write(html)
+            output.close()
 
     def __get_resources_data(self):
 
