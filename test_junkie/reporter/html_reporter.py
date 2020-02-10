@@ -100,7 +100,7 @@ class Reporter:
         row_two_html += ReportTemplate.get_table(table_data["table_data"])
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
-        html = html.format(body=body, database_lol=json.dumps(table_data["database_lol"]))
+        html = html.format(body=body, database_lol=(table_data["database_lol"]))
         with open(write_file, "w+") as output:
             output.write(html)
 
