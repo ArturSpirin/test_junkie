@@ -257,6 +257,35 @@ class Reporter:
                                                        "minimum": minimum, "maximum": maximum}})
             return new_suite_metrics
 
+        def convert_test_metrics(_data):
+            """
+            Sanitizes the data for json.dumps(database_lol)
+            See issue: https://github.com/ArturSpirin/test_junkie/issues/30
+            """
+            new_test_metrics = {}
+            for cp, cp_data in _data.items():
+
+                # converting all class params to str as this data is only used for display
+                cp = str(cp)
+                if cp.startswith("<") and cp.endswith(">"):  # have to strip the html tags or wont show up
+                    cp = "&lt;{}&gt;".format(cp[1:-1])
+
+                new_test_metrics.update({cp: {}})
+                for tp, tp_data in cp_data.items():
+
+                    # converting all test params to str as this data is only used for display
+                    tp = str(tp)
+                    if tp.startswith("<") and tp.endswith(">"):  # have to strip the html tags or wont show up
+                        tp = "&lt;{}&gt;".format(tp[1:-1])
+
+                    for param_type in ["param", "class_param"]:  # doing the same thing to the test's data dict
+                        tp_data[param_type] = str(tp_data[param_type])
+                        if tp_data[param_type].startswith("<") and tp_data[param_type].endswith(">"):
+                            tp_data[param_type] = "&lt;{}&gt;".format(tp_data[param_type][1:-1])
+
+                    new_test_metrics[str(cp)].update({tp: tp_data})
+            return new_test_metrics
+
         def get_copy(value):
 
             try:
@@ -325,6 +354,6 @@ class Reporter:
                                            "component": component, "duration": duration, "status": status,
                                            "test_id": test_id, "suite_id": suite_id, "assignee": assignee})
                         database_lol["tests"].update({test_id: {"name": test.get_function_name(),
-                                                                "metrics": test_metrics,
+                                                                "metrics": convert_test_metrics(test_metrics),
                                                                 "status": status}})
         return {"table_data": table_data, "database_lol": database_lol, "opportunities": self.analyzer.analysis}
