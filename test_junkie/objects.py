@@ -57,7 +57,7 @@ class SuiteObject(object):
         self.__listener = suite_definition["test_listener"](class_meta=suite_definition["class_meta"])
         self.__tests = []
         self.__test_function_names = []  # this suite has tests with those function names
-        self.__test_components = []  # this suite has tests that address those components
+        self.__test_components = set()  # this suite has tests that address those components
         self.__test_tags = []  # this suite has tests that are tagged with those tags
         self.__test_function_objects = []
         for test in suite_definition["suite_definition"].get(DecoratorType.TEST_CASE):
@@ -65,7 +65,7 @@ class SuiteObject(object):
             self.__tests.append(test_obj)
             self.__test_function_names.append(test_obj.get_function_name())
             self.__test_function_objects.append(test_obj.get_function_object())
-            self.__test_components.append(test_obj.get_component())
+            self.__test_components.add(test_obj.get_component())
             self.__test_tags += test_obj.get_tags()
         self.__test_tags, self.__test_function_objects = set(self.__test_tags), set(self.__test_function_objects)
         self.metrics = ClassMetrics()
@@ -173,8 +173,9 @@ class SuiteObject(object):
 
         if settings.components is not None and can_skip is False:
             for component in settings.components:
-                if component not in self.get_test_components():
-                    return True
+                if component in self.get_test_components():
+                    return False
+            return True
 
         if settings.tags is not None and can_skip is False:
 
