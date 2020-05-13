@@ -4,6 +4,9 @@ import threading
 import time
 import traceback
 import sys
+
+from rich.progress import Progress
+
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks
 from test_junkie.debugger import LogJunkie, suppressed_stdout
 from test_junkie.decorators import DecoratorType, synchronized
@@ -49,11 +52,7 @@ class Runner:
         self.__group_rules = Builder.build_group_definitions(self.__suites)
 
         self.__before_group_failure_records = {}
-        self.__test_cycle_failed = False
-
-    @property
-    def test_cycle_failed(self):
-        return self.__test_cycle_failed
+        self.__show_progress = kwargs.get("show_progress", False)
 
     @staticmethod
     def __process_owners(suite_object):
@@ -85,6 +84,9 @@ class Runner:
 
             if suites is not None:
                 suite_object = Builder.get_execution_roster().get(item, None)
+                if suite_object is None:
+                    raise BadParameters("Check Runner instance, you initialized it with incorrect test suite object: "
+                                        "{}.".format(item))
                 priority = suite_object.get_priority()
                 is_parallelized = suite_object.is_parallelized()
             else:
@@ -137,10 +139,16 @@ class Runner:
                 resource_monitor.start()
             self.__processor = ParallelProcessor(self.__settings)
 
-            parallels = []
             with suppressed_stdout(self.__settings.quiet):
+                if self.__show_progress:
+                    test_progress = Progress(auto_refresh=True)
+                    total_suites = len(self.__suites)
+                    task_id = test_progress.add_task("Progress", total=total_suites)
                 while self.__suites:
                     for suite in list(self.__suites):
+                        if self.__show_progress:
+                            test_progress.update(task_id, completed=total_suites - len(self.__suites))
+                            test_progress.refresh()
                         suite_object = Builder.get_execution_roster().get(suite, None)
                         if suite_object is not None:
                             if self.__processor.suite_multithreading() and suite_object.is_parallelized():
@@ -148,8 +156,7 @@ class Runner:
                                     if self.__processor.suite_qualifies(suite_object):
                                         time.sleep(Limiter.get_suite_throttling())
                                         self.__executed_suites.append(suite_object)
-                                        parallels.append(ParallelProcessor.run_suite_in_a_thread(
-                                            self.__run_suite, suite_object))
+                                        ParallelProcessor.run_suite_in_a_thread(self.__run_suite, suite_object)
                                         self.__suites.remove(suite)
                                         break
                                     elif suite_object.get_priority() is None:
@@ -161,7 +168,7 @@ class Runner:
                                     LogJunkie.debug("Cant run suite: {} in parallel with any other suites. Waiting for "
                                                     "parallel suites to finish so I can run it by itself."
                                                     .format(suite_object.get_class_object()))
-                                    ParallelProcessor.wait_for_parallels_to_finish(parallels)
+                                    ParallelProcessor.wait_currently_active_suites_to_finish()
                                 self.__executed_suites.append(suite_object)
                                 self.__run_suite(suite_object)
                                 self.__suites.remove(suite)
@@ -171,16 +178,17 @@ class Runner:
                                            "is correct.".format(suite))
                             self.__suites.remove(suite)
                     LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
-                    time.sleep(1)
-
-                for parallel in parallels:
-                    parallel.join()
+                    time.sleep(0.2)
+                ParallelProcessor.wait_currently_active_suites_to_finish()
+                if self.__show_progress:
+                    test_progress.update(task_id, completed=total_suites)
+                    test_progress.refresh()
         finally:
             if self.__settings.monitor_resources:
                 resource_monitor.shutdown()
 
         runtime = time.time() - initial_start_time
-        print("========== Test Junkie finished in {:0.2f} seconds ==========".format(runtime))
+        print("\n========== Test Junkie finished in {:0.2f} seconds ==========".format(runtime))
         aggregator = Aggregator(self.get_executed_suites())
         Aggregator.present_console_output(aggregator)
         if self.__settings.html_report:
@@ -254,7 +262,6 @@ class Runner:
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
 
                     for class_param in suite.get_parameters(process_functions=True):
-
                         LogJunkie.debug("Running suite: {}".format(suite.get_class_object()))
                         LogJunkie.debug("Suite Retry {}/{} with Param: {}"
                                         .format(suite_retry_attempt, suite.get_retry_limit(), class_param))
@@ -270,7 +277,7 @@ class Runner:
                             tests = unsuccessful_tests
                         else:
                             tests = list(suite.get_test_objects())
-                        parallels = []
+
                         while tests:
                             for test in list(tests):
 
@@ -282,9 +289,8 @@ class Runner:
                                     if not test.is_parallelized():
                                         LogJunkie.debug("Cant run test: {} in parallel with any other tests"
                                                         .format(test.get_function_object()))
-                                        ParallelProcessor.wait_for_parallels_to_finish(parallels)
-                                    while self.__processor.test_limit_reached(parallels):
-                                        time.sleep(1)
+                                        ParallelProcessor.wait_currently_active_tests_to_finish()
+
                                     bad_params = Runner.__validate_test_parameters(test)
                                     if bad_params is not None:
                                         tests.remove(test)
@@ -295,9 +301,8 @@ class Runner:
                                         Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test,
                                                                class_param=class_param, error=bad_params)
                                         continue
-
-                                    while not self.__processor.test_qualifies(suite, test):
-                                        time.sleep(1)
+                                    while not self.__processor.test_qualifies(test):
+                                        time.sleep(0.2)
                                         if test.get_priority() is None:
                                             continue
 
@@ -311,22 +316,20 @@ class Runner:
                                                                     and test.parallelized_parameters()
                                                                     and param is not None)):
 
-                                                while self.__processor.test_limit_reached(parallels):
-                                                    time.sleep(1)
-                                                time.sleep(Limiter.get_test_throttling())
-                                                parallels.append(
-                                                    self.__processor.run_test_in_a_thread(self.__run_test,
-                                                                                          suite, test, param,
-                                                                                          class_param,
-                                                                                          before_class_error,
-                                                                                          self.__cancel))
-
+                                            while self.__processor.test_limit_reached():
+                                                time.sleep(0.2)
+                                            time.sleep(Limiter.get_test_throttling())
+                                            self.__processor.run_test_in_a_thread(Runner.__run_test,
+                                                                                  suite, test, param,
+                                                                                  class_param,
+                                                                                  before_class_error,
+                                                                                  self.__cancel)
                                         else:
-                                            self.__run_test(suite=suite, test=test,
-                                                            parameter=param,
-                                                            class_parameter=class_param,
-                                                            before_class_error=before_class_error,
-                                                            cancel=self.__cancel)
+                                            Runner.__run_test(suite=suite, test=test,
+                                                              parameter=param,
+                                                              class_parameter=class_param,
+                                                              before_class_error=before_class_error,
+                                                              cancel=self.__cancel)
                                     tests.remove(test)
 
                                 else:
@@ -334,8 +337,7 @@ class Runner:
                                     test.metrics.update_metrics(status=TestCategory.SKIP, start_time=test_start_time)
                                     Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
                                                            class_param=class_param)
-
-                        ParallelProcessor.wait_for_parallels_to_finish(parallels)
+                        ParallelProcessor.wait_currently_active_tests_to_finish()
                         Runner.__run_after_class(suite, class_param)
                     suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
@@ -358,7 +360,8 @@ class Runner:
             suite.metrics.update_suite_metrics(status=SuiteCategory.SKIP, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_SKIP, suite=suite)
 
-    def __run_test(self, suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
+    @staticmethod
+    def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
 
         def run_before_test():
             try:
@@ -378,7 +381,6 @@ class Runner:
                 return False
 
         def process_failure(error, pre_processed=False, decorator=None):
-            self.__test_cycle_failed = True
             _runtime = time.time() - start_time  # start time defined in the outside scope before each decorated func
             if not isinstance(error, TestJunkieExecutionError):
                 if pre_processed:
@@ -388,7 +390,6 @@ class Runner:
                 __category, __event = TestCategory.ERROR, Event.ON_ERROR
                 if isinstance(error, AssertionError):
                     __category, __event = TestCategory.FAIL, Event.ON_FAILURE
-
                 test.metrics.update_metrics(status=__category,
                                             start_time=test_start_time,
                                             param=parameter,
@@ -430,8 +431,12 @@ class Runner:
 
         test_start_time = time.time()
         if before_class_error is not None or cancel:
-            if class_parameter is None and test.get_number_of_actual_retries(parameter, class_parameter) == 1:
-                return  # ticket: #19 tests with no class parameters should not be processed multiple times on error
+            if not test.accepts_suite_parameters():
+                if None in test.suite.metrics.get_metrics()[DecoratorType.BEFORE_CLASS]["exceptions"] \
+                        and test.get_status(parameter, class_parameter) is not None:
+                    return  # fixes ticket: #19
+                elif test.get_number_of_actual_retries(parameter, class_parameter) >= test.suite.get_retry_limit():
+                    return  # fixes ticket: #27
             _status = TestCategory.IGNORE if not cancel else TestCategory.CANCEL
             _event = Event.ON_IGNORE if not cancel else Event.ON_CANCEL
             test.metrics.update_metrics(status=_status,

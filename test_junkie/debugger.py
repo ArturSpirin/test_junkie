@@ -3,8 +3,6 @@ import logging
 import sys
 from contextlib import contextmanager
 
-from test_junkie.decorators import synchronized
-
 
 class LogJunkie:
 
@@ -26,7 +24,6 @@ class LogJunkie:
         LogJunkie.__ENABLED = False
 
     @staticmethod
-    @synchronized()
     def __get_logger():
 
         if LogJunkie.__LOGGER is None:
@@ -66,10 +63,7 @@ class LogJunkie:
 def suppressed_stdout(suppress=False):
     if suppress:
         original_stdout = sys.stdout
-        if sys.version_info[0] < 3:
-            sys.stdout = io.BytesIO()  # works with python 2
-        else:
-            sys.stdout = io.StringIO()  # works with python 3
+        sys.stdout = io.StringIO()  # works with python 3
         original_level = logging.root.manager.disable
         logging.disable(logging.ERROR)
         try:

@@ -42,61 +42,57 @@ class ParallelProcessor:
 
         return self.__test_limit > 1
 
-    def test_limit_reached(self, parallels):
-
-        active = 0
-        for parallel in parallels:
-            if parallel.isAlive():
-                active += 1
-        if active >= self.__test_limit:
-            LogJunkie.debug("Test limit: {}/{}".format(active, self.__test_limit))
-            return True
-        return False
-
     @staticmethod
     def run_suite_in_a_thread(func, suite):
         thread = threading.Thread(target=func, args=(suite,))
-        if suite not in ParallelProcessor.__PARALLELS:
-            ParallelProcessor.__PARALLELS.update({suite.get_class_object(): {"thread": thread, "tests": []}})
+        ParallelProcessor.__PARALLELS.update({suite.get_class_object(): {"thread": thread, "tests": []}})
         thread.start()
         return thread
 
     @staticmethod
-    def wait_for_parallels_to_finish(parallels):
-        for parallel in parallels:
-            parallel.join()
+    def wait_currently_active_suites_to_finish():
+        for suite, info in list(ParallelProcessor.__PARALLELS.items()):
+            info["thread"].join()
+
+    @staticmethod
+    def wait_currently_active_tests_to_finish():
+        for suite, info in list(ParallelProcessor.__PARALLELS.items()):
+            for test in info["tests"]:
+                test["thread"].join()
 
     @staticmethod
     def run_test_in_a_thread(func, suite, test, parameter, class_parameter, before_class_error, cancel):
         thread = threading.Thread(target=func, args=(suite, test, parameter, class_parameter,
                                                      before_class_error, cancel))
-        if suite not in ParallelProcessor.__PARALLELS:
+        if suite.get_class_object() not in ParallelProcessor.__PARALLELS.keys():
             ParallelProcessor.__PARALLELS.update({suite.get_class_object(): {"thread": thread, "tests": []}})
         ParallelProcessor.__PARALLELS[suite.get_class_object()]["tests"].append({"test": test, "thread": thread})
         thread.start()
         return thread
 
-    @staticmethod
-    def get_active_parallels_count():
-        active_parallels = 0
+    def suite_limit_reached(self):
+        active = 0
         for suite, data in ParallelProcessor.__PARALLELS.items():
             if data["thread"].isAlive():
-                active_parallels += 1
-        return active_parallels
+                active += 1
+        if active >= self.__suite_limit:
+            LogJunkie.debug("Suite limit: {}/{}".format(active, self.__suite_limit))
+            return True
+        return False
 
-    @staticmethod
-    def get_active_test_parallels_count(suite_object):
-        active_parallels = 0
-        data = ParallelProcessor.__PARALLELS.get(suite_object.get_class_object(), None)
-        if data is not None:
-            for test in data["tests"]:
+    def test_limit_reached(self):
+        active = 0
+        for suite, info in list(ParallelProcessor.__PARALLELS.items()):
+            for test in info["tests"]:
                 if test["thread"].isAlive():
-                    active_parallels += 1
-        return active_parallels
-
-    @staticmethod
-    def get_active_parallels():
-        return ParallelProcessor.__PARALLELS
+                    active += 1
+                else:
+                    # so we don't accumulate large number of stale data we don't need
+                    ParallelProcessor.__PARALLELS[suite]["tests"].remove(test)
+        if active >= self.__test_limit:
+            LogJunkie.debug("Test limit: {}/{}".format(active, self.__test_limit))
+            return True
+        return False
 
     def suite_qualifies(self, suite):
 
@@ -155,15 +151,12 @@ class ParallelProcessor:
         if not _passes_reverse_restriction():
             return False
 
-        if self.__suite_limit is not None:
-            while ParallelProcessor.get_active_parallels_count() >= self.__suite_limit:
-                LogJunkie.debug("Suite level Thread limit reached! Active suites: {}/{}"
-                                .format(ParallelProcessor.get_active_parallels_count(), self.__suite_limit))
-                time.sleep(5)
+        while self.suite_limit_reached():
+            time.sleep(0.2)
         return True
 
     @synchronized(threading.Lock())
-    def test_qualifies(self, suite, test):
+    def test_qualifies(self, test):
 
         def _build_reverse_restriction():
             """
@@ -218,10 +211,4 @@ class ParallelProcessor:
                     return False
         if not _passes_reverse_restriction():
             return False
-
-        if self.__test_limit is not None:
-            while ParallelProcessor.get_active_test_parallels_count(suite) >= self.__test_limit:
-                LogJunkie.debug("Test level Thread limit reached! Active tests: {}/{}"
-                                .format(ParallelProcessor.get_active_test_parallels_count(suite), self.__test_limit))
-                time.sleep(5)
         return True

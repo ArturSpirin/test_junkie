@@ -1,8 +1,9 @@
 import ast
+
+from test_junkie.cli.config.Config import Config
 from test_junkie.constants import DocumentationLinks, Undefined
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
-from test_junkie.cli.cli_config import Config
 
 
 class Settings:
@@ -84,7 +85,7 @@ class Settings:
             source = "KWARGS"
 
         # if value is still __undefined__ and config provided, will check the config for a value to use
-        if value is Undefined and self.config is not None:
+        if Settings.is_undefined(value) and self.config is not None:
             source = "DEFAULTS"
             if key in self.config.config.options("runtime"):
                 value = self.config.get_value(key)
@@ -102,23 +103,23 @@ class Settings:
     @property
     def test_thread_limit(self):
 
-        if self.__test_thread_limit is Undefined:
+        if Settings.is_undefined(self.__test_thread_limit):
             self.__test_thread_limit = self.__get_value(key="test_multithreading_limit",
                                                         default=Settings.__DEFAULT_TEST_THREAD_LIMIT)
-        return self.__test_thread_limit
+        return int(self.__test_thread_limit) if self.__test_thread_limit is not None else None
 
     @property
     def suite_thread_limit(self):
 
-        if self.__suite_thread_limit is Undefined:
+        if Settings.is_undefined(self.__suite_thread_limit):
             self.__suite_thread_limit = self.__get_value(key="suite_multithreading_limit",
                                                          default=Settings.__DEFAULT_SUITE_THREAD_LIMIT)
-        return self.__suite_thread_limit
+        return int(self.__suite_thread_limit) if self.__suite_thread_limit is not None else None
 
     @property
     def features(self):
 
-        if self.__features is Undefined:
+        if Settings.is_undefined(self.__features):
             self.__features = self.__get_value(key="features",
                                                default=Settings.__DEFAULT_FEATURES)
         return self.__features
@@ -126,7 +127,7 @@ class Settings:
     @property
     def components(self):
 
-        if self.__components is Undefined:
+        if Settings.is_undefined(self.__components):
             self.__components = self.__get_value(key="components",
                                                  default=Settings.__DEFAULT_COMPONENTS)
         return self.__components
@@ -134,23 +135,23 @@ class Settings:
     @property
     def owners(self):
 
-        if self.__owners is Undefined:
+        if Settings.is_undefined(self.__owners):
             self.__owners = self.__get_value(key="owners",
                                              default=Settings.__DEFAULT_OWNERS)
         return self.__owners
 
     @property
     def tests(self):
-        if self.__tests is Undefined:
+        if Settings.is_undefined(self.__tests):
             self.__tests = self.__get_value(key="tests",
                                             default=Settings.__DEFAULT_TESTS)
         return self.__tests
 
     @property
     def tags(self):
-        if self.__tag_config == Undefined:
+        if Settings.is_undefined(self.__tag_config):
             config = self.kwargs.get("tag_config", Undefined)
-            if config is Undefined:
+            if Settings.is_undefined(config):
                 config = {}
                 properties = ["run_on_match_all", "run_on_match_any", "skip_on_match_all", "skip_on_match_any"]
                 for prop in properties:
@@ -159,7 +160,7 @@ class Settings:
                 self.__tag_config = config
             else:
                 for prop, value in config.items():
-                    if value is Undefined:
+                    if Settings.is_undefined(value):
                         config.update({prop: self.__get_value(key=prop,
                                                               default=Settings.__DEFAULT_TAGS)})
                 self.__tag_config = config
@@ -167,21 +168,21 @@ class Settings:
 
     @property
     def monitor_resources(self):
-        if self.__resources_mon is Undefined:
+        if Settings.is_undefined(self.__resources_mon):
             self.__resources_mon = self.__get_value(key="monitor_resources",
                                                     default=Settings.__DEFAULT_RESOURCE_MON)
         return self.__resources_mon
 
     @property
     def quiet(self):
-        if self.__quiet is Undefined:
+        if Settings.is_undefined(self.__quiet):
             self.__quiet = self.__get_value(key="quiet",
                                             default=Settings.__DEFAULT_QUIET)
         return self.__quiet
 
     @property
     def html_report(self):
-        if self.__html_report is Undefined:
+        if Settings.is_undefined(self.__html_report):
             self.__html_report = self.__get_value(key="html_report",
                                                   default=Settings.__DEFAULT_HTML)
         if self.__html_report and not self.__html_report.endswith(".html"):
@@ -192,7 +193,7 @@ class Settings:
 
     @property
     def xml_report(self):
-        if self.__xml_report is Undefined:
+        if Settings.is_undefined(self.__xml_report):
             self.__xml_report = self.__get_value(key="xml_report",
                                                  default=Settings.__DEFAULT_XML)
         if self.__xml_report and not self.__xml_report.endswith(".xml"):
@@ -200,3 +201,7 @@ class Settings:
                                 "for example: /var/www/html/my_report.xml. For more info, see documentation: {link}"
                                 .format(link=DocumentationLinks.XML_REPORT))
         return self.__xml_report
+
+    @staticmethod
+    def is_undefined(value):
+        return value is Undefined or isinstance(value, Undefined)

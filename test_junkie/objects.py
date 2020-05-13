@@ -57,15 +57,15 @@ class SuiteObject(object):
         self.__listener = suite_definition["test_listener"](class_meta=suite_definition["class_meta"])
         self.__tests = []
         self.__test_function_names = []  # this suite has tests with those function names
-        self.__test_components = []  # this suite has tests that address those components
+        self.__test_components = set()  # this suite has tests that address those components
         self.__test_tags = []  # this suite has tests that are tagged with those tags
         self.__test_function_objects = []
         for test in suite_definition["suite_definition"].get(DecoratorType.TEST_CASE):
-            test_obj = TestObject(test)
+            test_obj = TestObject(test, self)
             self.__tests.append(test_obj)
             self.__test_function_names.append(test_obj.get_function_name())
             self.__test_function_objects.append(test_obj.get_function_object())
-            self.__test_components.append(test_obj.get_component())
+            self.__test_components.add(test_obj.get_component())
             self.__test_tags += test_obj.get_tags()
         self.__test_tags, self.__test_function_objects = set(self.__test_tags), set(self.__test_function_objects)
         self.metrics = ClassMetrics()
@@ -106,33 +106,6 @@ class SuiteObject(object):
     def get_class_module(self):
 
         return self.get_class_object().__module__
-
-    def _update_test_meta(self, parameter=None, suite_parameter=None, **kwargs):
-
-        for frame in inspect.stack():
-            try:
-                getattr(self.get_class_object(), str(inspect.getframeinfo(frame[0]).function))
-                test_function_name = str(inspect.getframeinfo(frame[0]).function)
-                for test_object in self.get_test_objects():
-                    if test_object.get_function_name() == test_function_name:
-                        test_object.get_meta(parameter, suite_parameter).update(kwargs)
-                        return True
-                return False
-            except:
-                pass
-        return False
-
-    def _get_test_meta(self, parameter=None, suite_parameter=None):
-
-        for frame in inspect.stack():
-            try:
-                getattr(self.get_class_object(), str(inspect.getframeinfo(frame[0]).function))
-                test_function_name = str(inspect.getframeinfo(frame[0]).function)
-                for test_object in self.get_test_objects():
-                    if test_object.get_function_name() == test_function_name:
-                        return test_object.get_meta(parameter, suite_parameter)
-            except:
-                pass
 
     def update_test_objects(self, tests):
 
@@ -200,8 +173,9 @@ class SuiteObject(object):
 
         if settings.components is not None and can_skip is False:
             for component in settings.components:
-                if component not in self.get_test_components():
-                    return True
+                if component in self.get_test_components():
+                    return False
+            return True
 
         if settings.tags is not None and can_skip is False:
 
@@ -304,24 +278,6 @@ class SuiteObject(object):
 
         return self.get_kwargs().get("priority", None)
 
-    def __get_average_metric(self, decorator, metric):
-
-        from statistics import mean
-        performance = self.metrics.get_metrics().get(decorator, {}).get(metric, None)
-        return mean(performance) if performance else None
-
-    def get_average_performance_of_after_class(self):
-        return self.__get_average_metric(DecoratorType.AFTER_CLASS, "performance")
-
-    def get_average_performance_of_before_class(self):
-        return self.__get_average_metric(DecoratorType.BEFORE_CLASS, "performance")
-
-    def get_average_performance_of_after_test(self):
-        return self.__get_average_metric(DecoratorType.AFTER_TEST, "performance")
-
-    def get_average_performance_of_before_test(self):
-        return self.__get_average_metric(DecoratorType.BEFORE_TEST, "performance")
-
     def get_runtime(self):
 
         return self.metrics.get_metrics().get("runtime", None)
@@ -349,10 +305,10 @@ class SuiteObject(object):
 
 class TestObject(object):
 
-    def __init__(self, test_definition):
+    def __init__(self, test_definition, suite):
 
         self.__test_definition = test_definition
-
+        self.suite = suite
         self.metrics = TestMetrics()
 
     def __copy__(self):
@@ -360,6 +316,9 @@ class TestObject(object):
 
     def __deepcopy__(self, memo):
         return self
+
+    def __repr__(self):
+        return "<{}.{}>".format(self.suite.get_class_name(), self.get_function_name())
 
     def get_test_id(self):
         return self.get_kwargs().get("testjunkie_test_id", 0)

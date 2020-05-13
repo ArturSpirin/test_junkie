@@ -1,4 +1,5 @@
 import copy
+import io
 import json
 import time
 import traceback
@@ -107,8 +108,8 @@ class Reporter:
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
         html = html.format(body=body, database_lol=json.dumps(table_data["database_lol"]))
-        with open(write_file, "w+") as output:
-            output.write(html)
+        with io.open(write_file, "w+", encoding="utf-8") as f:
+            f.write(html)
 
     def __get_resources_data(self):
 

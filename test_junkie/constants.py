@@ -114,30 +114,30 @@ class CliConstants:
 
     TJ_CONFIG_NAME = ".tj.cfg"
 
-    DEFAULTS = """
-[runtime]
-test_multithreading_limit=None
-suite_multithreading_limit=None
-html_report=None
-xml_report=None
-monitor_resources=None
-tests=None
-features=None
-components=None
-owners=None
-run_on_match_all=None
-run_on_match_any=None
-skip_on_match_all=None
-skip_on_match_any=None
-sources=None
-quiet=None
-code_cov=None
-cov_rcfile=None
-guess_root=None
+    DEFAULTS = """[runtime]
+test_multithreading_limit = None
+suite_multithreading_limit = None
+html_report = None
+xml_report = None
+monitor_resources = None
+tests = None
+features = None
+components = None
+owners = None
+run_on_match_all = None
+run_on_match_any = None
+skip_on_match_all = None
+skip_on_match_any = None
+sources = None
+quiet = None
+code_cov = None
+cov_rcfile = None
+guess_root = None
 """
 
 
 class Undefined(object):
+
     def __init__(self):
         pass
 

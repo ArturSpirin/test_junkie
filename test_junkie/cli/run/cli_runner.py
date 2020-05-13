@@ -6,18 +6,21 @@ import sys
 import threading
 import time
 import re
-import traceback
 from contextlib import contextmanager
+from pathlib import Path
 
+from rich.console import Console
+from rich.progress import track
 from setuptools.glob import glob
 
-from test_junkie.cli.cli_utils import CliUtils
+from test_junkie.cli.config.Config import Config
+from test_junkie.cli.utils import Color
 from test_junkie.constants import CliConstants, Undefined, DocumentationLinks
 from test_junkie.debugger import suppressed_stdout
 from test_junkie.decorators import synchronized
 from test_junkie.errors import BadCliParameters
 from test_junkie.runner import Runner
-from test_junkie.cli.cli_config import Config
+
 
 
 class CliRunner:
@@ -29,17 +32,19 @@ class CliRunner:
     def __init__(self, sources, ignore, suites, **kwargs):
 
         self.__sources = sources
-        self.__code_cov = kwargs.get("code_cov", Undefined)
-        self.__cov_rcfile = kwargs.get("cov_rcfile", Undefined)
-        self.__guess_root = kwargs.get("guess_root", False)
+        self.__code_cov = kwargs.get("code_cov", None)
+        self.__cov_rcfile = kwargs.get("cov_rcfile", None)
+        self.__guess_root = not kwargs.get("no_guess_root", False)
         self.__execution_config = kwargs.get("config", Undefined)
 
         self.tjignore = ignore
         self.detected_suites = {}
+        self.detected_issues_during_scan = []
         self.suites = []
         self.requested_suites = suites
         self.__config = Config(config_name=CliConstants.TJ_CONFIG_NAME if
-                               self.__execution_config == Undefined else self.__execution_config)
+                               isinstance(self.__execution_config, Undefined) or self.__execution_config == Undefined
+                               else self.__execution_config)
         self.coverage = None
         if self.code_cov:
             import coverage
@@ -50,11 +55,13 @@ class CliRunner:
                 self.coverage = coverage.Coverage(omit="*{sep}test_junkie{sep}*".format(sep=os.sep))
             self.coverage.start()
 
+        self.console = Console()
+
     @property
     def sources(self):
-        if self.__sources == Undefined:
+        if isinstance(self.__sources, Undefined):
             self.__sources = ast.literal_eval(self.__config.get_value("sources"))
-        if self.__sources == Undefined or not isinstance(self.__sources, list):
+        if isinstance(self.__sources, Undefined) or not isinstance(self.__sources, list):
             raise BadCliParameters("Sources is a required parameter. You can set it in the config via tj config "
                                    "update -s / --sources to persist or pass it in directly to the command you "
                                    "are running via -s / --sources")
@@ -62,13 +69,13 @@ class CliRunner:
 
     @property
     def code_cov(self):
-        if self.__code_cov == Undefined:
+        if isinstance(self.__code_cov, Undefined):
             self.__code_cov = ast.literal_eval(self.__config.get_value("code_cov", default=False))
         return self.__code_cov
 
     @property
     def cov_rcfile(self):
-        if self.__cov_rcfile == Undefined:
+        if isinstance(self.__cov_rcfile, Undefined):
             self.__cov_rcfile = self.__config.get_value("cov_rcfile", default=None)
             if self.__cov_rcfile == "None":
                 self.__cov_rcfile = None
@@ -76,13 +83,13 @@ class CliRunner:
 
     @property
     def guess_root(self):
-        if self.__guess_root == Undefined:
+        if isinstance(self.__guess_root, Undefined):
             self.__guess_root = self.__config.get_value("guess_root", default=False)
         return self.__guess_root
 
     @property
     def execution_config(self):
-        if self.__execution_config == Undefined:
+        if isinstance(self.__execution_config, Undefined):
             self.__execution_config = Config.get_config_path(CliConstants.TJ_CONFIG_NAME)
         return self.__execution_config
 
@@ -107,15 +114,9 @@ class CliRunner:
 
     def __find_and_register_suite(self, _suite_alias, _source, _file_path):
 
-        def guess_project_root(path, _module_name, error):
+        def guess_project_root(path, _module_name):
 
-            print("[{status}] Import error: {error}"
-                  .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
-                          error=error))
-            possibility = "{}".format(os.sep).join(path.split(os.sep)[:-1])
-            print("[{status}] Trying again with assumption that this is your project root: {assumed_root}"
-                  .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
-                          assumed_root=CliUtils.format_color_string(value=possibility, color="yellow")))
+            possibility = "{}".format(Path(path).parent)
             try:
                 sys.path.insert(0, possibility)
                 return imp.load_source(_module_name, _file_path)
@@ -124,35 +125,30 @@ class CliRunner:
                 exit(12)
             except ImportError as error:
                 if len(possibility.split(os.sep)) > 2:
-                    return guess_project_root(possibility, _module_name, error)
+                    return guess_project_root(possibility, _module_name)
                 raise
 
         @synchronized()
         def load_module(_decorated_classes):
-
             module_name = os.path.splitext(os.path.basename(_file_path))[0]
             try:
-                with suppressed_stdout(suppress=True):
-                    module = imp.load_source(module_name, _file_path)
-            except ImportError as error:
-                if self.guess_root:
-                    module = guess_project_root(_file_path, module_name, error)
-                else:
-                    print("[{status}] There is an import error: {error}"
-                          .format(status=CliUtils.format_color_string(value="ERROR", color="red"), error=error))
-                    print("[{status}] 1. Make sure you have installed all of the packages required for your project "
-                          "to work".format(status=CliUtils.format_color_string(value="ERROR", color="red")))
-                    print("[{status}] 2. Make sure the root of your project is in the PYTHONPATH"
-                          .format(status=CliUtils.format_color_string(value="ERROR", color="red")))
-                    print("[{status}] 3. TJ can try to guess your root directory if you run with --guess-root "
-                          "(Usually not recommended)".format(status=CliUtils.format_color_string(value="ERROR",
-                                                                                                 color="red")))
-                    raise
-            for name, data in inspect.getmembers(module):
-                if name in _decorated_classes and inspect.isclass(data):
-                    if not self.requested_suites or \
-                            (self.requested_suites and name in self.requested_suites):
-                        self.suites.append(data)
+                try:
+                    with suppressed_stdout(suppress=True):
+                        module = imp.load_source(module_name, _file_path)
+                except ImportError as error:
+                    if self.guess_root:
+                        module = guess_project_root(_file_path, module_name)
+                    else:
+                        raise
+                for name, data in inspect.getmembers(module):
+                    if name in _decorated_classes and inspect.isclass(data):
+                        if not self.requested_suites or \
+                                (self.requested_suites and name in self.requested_suites):
+                            self.suites.append(data)
+            except Exception as exception:
+                self.detected_issues_during_scan.append({"exception": exception,
+                                                         "module": module_name,
+                                                         "file": _file_path})
 
         matches = re.findall("@{alias}((.|\n)*?):\n".format(alias=_suite_alias), _source)
         decorated_classes = []
@@ -181,6 +177,12 @@ class CliRunner:
 
     def scan(self):
 
+        def eval_errors():
+            if self.detected_issues_during_scan:
+                self.console.print("[[[red]ATTENTION[/red]]] Detected {} issue(s)"
+                                   .format(len(self.detected_issues_during_scan)))
+                for issue in self.detected_issues_during_scan:
+                    self.console.print(f"Module: '{issue['file']}'\n\t|__ [red]{issue['exception']}[/red]\n")
         @contextmanager
         def open_file(_file):
             if sys.version_info[0] < 3:
@@ -210,85 +212,80 @@ class CliRunner:
                     return True
 
         try:
-            print("\n[{status}] Scanning: {location} ..."
-                  .format(location=CliUtils.format_color_string(value=",".join(self.sources), color="green"),
-                          status=CliUtils.format_color_string(value="INFO", color="blue")))
+            self.console.print("\n[[[bold blue]INFO[/bold blue]]] Scanning for tests...")
+            self.detected_issues_during_scan = []
             start = time.time()
             for source in self.sources:
                 if source.endswith(".py"):
                     parse_file(source)
                 else:
-                    for dirName, subdirList, fileList in os.walk(source, topdown=True):
+                    for dirName, subdirList, fileList in track(list(os.walk(source, topdown=True)),
+                                                               description=f"Scanning: [blue]{source}[/blue]"):
 
                         if self.__skip(source, dirName):
                             continue
 
                         for file_path in glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
-                            if parse_file(file_path)is True:
+                            if parse_file(file_path) is True:
                                 continue
+
             for thread in CliRunner.__SCANNER_THREADS:
                 thread.join()
             print("[{status}] Scan finished in: {time} seconds. Found: {suites} suite(s)."
-                  .format(status=CliUtils.format_color_string(value="INFO", color="blue"),
+                  .format(status=Color.format_string(value="INFO", color="blue"),
                           time="{0:.2f}".format(time.time() - start),
-                          suites=CliUtils.format_bold_string(len(self.suites))))
+                          suites=Color.format_bold_string(len(self.suites))))
+            eval_errors()
         except KeyboardInterrupt:
             print("(Ctrl+C) Exiting!")
             exit(12)
         except BadCliParameters as err:
-            print("[{status}] {error}.".format(status=CliUtils.format_color_string(value="ERROR", color="red"),
+            print("[{status}] {error}.".format(status=Color.format_string(value="ERROR", color="red"),
                                                error=err))
             exit(120)
         except:
             print("[{status}] Unexpected error during scan for test suites.".format(
-                status=CliUtils.format_color_string(value="ERROR", color="red")))
-            CliUtils.print_color_traceback()
+                status=Color.format_string(value="ERROR", color="red")))
+            Color.print_traceback()
             exit(120)
 
-    def run_suites(self, args):
+    def run_suites(self, **args):
 
         def tags():
-            config = {"run_on_match_all": args.run_on_match_all,
-                      "run_on_match_any": args.run_on_match_any,
-                      "skip_on_match_all": args.skip_on_match_all,
-                      "skip_on_match_any": args.skip_on_match_any}
+            config = {"run_on_match_all": args["run_on_match_all"],
+                      "run_on_match_any": args["run_on_match_any"],
+                      "skip_on_match_all": args["skip_on_match_all"],
+                      "skip_on_match_any": args["skip_on_match_any"]}
             for prop, value in config.items():
                 if value is not None:
                     return config
             return None
 
         if self.suites:
-            print("[{status}] Running tests ...\n"
-                  .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
+            print("[{status}] Running tests ..."
+                  .format(status=Color.format_string(value="INFO", color="blue")))
             try:
                 runner = Runner(suites=self.suites,
-                                html_report=args.html_report,
-                                xml_report=args.xml_report,
-                                config=self.execution_config)
-                runner.run(test_multithreading_limit=args.test_multithreading_limit,
-                           suite_multithreading_limit=args.suite_multithreading_limit,
-                           tests=args.tests,
-                           owners=args.owners,
-                           components=args.components,
-                           features=args.features,
+                                html_report=args["html_report"],
+                                xml_report=args["xml_report"],
+                                config=self.execution_config,
+                                show_progress=True)
+                runner.run(test_multithreading_limit=args["test_multithreading_limit"],
+                           suite_multithreading_limit=args["suite_multithreading_limit"],
+                           tests=args["tests"],
+                           owners=args["owners"],
+                           components=args["components"],
+                           features=args["features"],
                            tag_config=tags(),
-                           quiet=args.quiet)
-                if runner.test_cycle_failed:
-                    print("[{status}] Some of the tests failed!".format(
-                        status=CliUtils.format_color_string(value="WARNING", color="yellow")))
-                    exit(400)
-                else:
-                    print("[{status}] All tests passed!".format(
-                        status=CliUtils.format_color_string(value="INFO", color="blue")))
+                           quiet=not args["no_quiet"])
             except KeyboardInterrupt:
                 print("(Ctrl+C) Exiting!")
                 exit(12)
-            except Exception:
-                if "SystemExit: 400" not in traceback.format_exc():
-                    print("[{status}] Unexpected error during test execution.".format(
-                          status=CliUtils.format_color_string(value="ERROR", color="red")))
-                    CliUtils.print_color_traceback()
-                    exit(120)
+            except:
+                print("[{status}] Unexpected error during test execution.".format(
+                      status=Color.format_string(value="ERROR", color="red")))
+                Color.print_traceback()
+                exit(120)
             finally:
                 if self.coverage is not None:
                     self.coverage.stop()
@@ -296,12 +293,12 @@ class CliRunner:
                     import coverage
                     try:
                         print("[{status}] Code coverage report:".format(
-                            status=CliUtils.format_color_string(value="INFO", color="blue")))
+                            status=Color.format_string(value="INFO", color="blue")))
                         self.coverage.report(show_missing=True, skip_covered=True)
                         print("[{status}] TJ uses Coverage.py. Control it with --cov-rcfile, "
-                              "see {link}".format(status=CliUtils.format_color_string(value="TIP", color="blue"),
+                              "see {link}".format(status=Color.format_string(value="TIP", color="blue"),
                                                   link=DocumentationLinks.COVERAGE_CONFIG_FILE))
                     except coverage.misc.CoverageException:
-                        CliUtils.print_color_traceback()
+                        Color.print_traceback()
                         exit(120)
             return

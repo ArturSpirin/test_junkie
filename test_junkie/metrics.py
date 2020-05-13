@@ -9,9 +9,9 @@ from datetime import datetime
 
 import pkg_resources
 
-from test_junkie.cli.cli_utils import CliUtils
+from test_junkie.cli.utils import Color
 
-from test_junkie.cli.cli_config import Config
+from test_junkie.cli.config import Config
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import SuiteCategory, TestCategory, DocumentationLinks
@@ -280,7 +280,7 @@ class Aggregator(object):
                                                                   percent=Aggregator.percentage(test_report["total"],
                                                                                                 test_report[status]))
             if test_report[status]:
-                value = CliUtils.format_bold_string(value)
+                value = Color.format_bold_string(value)
             print(value)
         print("")
         for suite, stats in suite_report.items():
@@ -288,9 +288,9 @@ class Aggregator(object):
             if status is None:  # this means that something went wrong with custom event processing
                 status = "*"+SuiteCategory.ERROR
             print(">> [{status}] [{passed}/{total} {rate}%] [{runtime:0.2f}s] {module}.{name}"
-                  .format(module=CliUtils.format_bold_string(suite.get_class_module()),
-                          name=CliUtils.format_bold_string(suite.get_class_name()),
-                          status=CliUtils.format_bold_string(status.upper()),
+                  .format(module=Color.format_bold_string(suite.get_class_module()),
+                          name=Color.format_bold_string(suite.get_class_name()),
+                          status=Color.format_bold_string(status.upper()),
                           runtime=suite.get_runtime(),
                           rate=Aggregator.percentage(stats["total"], stats[TestCategory.SUCCESS]),
                           passed=stats[TestCategory.SUCCESS],
@@ -301,7 +301,7 @@ class Aggregator(object):
                 tests = suite.get_unsuccessful_tests()
                 for test in tests:
                     test_metrics = test.metrics.get_metrics()
-                    print("\t|__ test: {name}()".format(name=CliUtils.format_bold_string(test.get_function_name())))
+                    print("\t|__ test: {name}()".format(name=Color.format_bold_string(test.get_function_name())))
                     for class_param, class_param_data in test_metrics.items():
                         if class_param != "None":
                             print("\t  |__ class parameter: {class_parameter}".format(class_parameter=class_param))
@@ -311,7 +311,7 @@ class Aggregator(object):
                             for index in range(param_data["retry"]):
                                 trace = param_data["tracebacks"][index]
                                 if trace is not None:
-                                    trace = ":: Traceback: {}".format(CliUtils.format_color_string(
+                                    trace = ":: Traceback: {}".format(Color.format_string(
                                         parse_exception(trace), "red"))
                                 else:
                                     trace = ""
