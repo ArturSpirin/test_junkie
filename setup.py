@@ -1,5 +1,3 @@
-import sys
-
 import setuptools
 
 with open("README.md", "r") as fh:
@@ -37,8 +35,6 @@ setuptools.setup(
     keywords=["automation", "testing", "tests", "test-runner"],
     entry_points={
           'console_scripts': [
-              'tj2 = test_junkie.__main__:main'
-              if sys.version_info[0] < 3 else 'tj3 = test_junkie.__main__:main',
               'tj = test_junkie.__main__:main'
           ]
     },

@@ -122,10 +122,4 @@ class Analyzer:
 
     @staticmethod
     def is_similar(string_a, string_b):
-        if SequenceMatcher(None, string_a, string_b).ratio() >= 0.70:
-            return True
-        return False
-
-    def is_missing_definitions(self, data):
-
-        pass
+        return SequenceMatcher(None, string_a, string_b).ratio() >= 0.70

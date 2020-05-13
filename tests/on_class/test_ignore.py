@@ -7,6 +7,7 @@ from tests.junkie_suites.IgnoreSuite import IgnoreSuiteBoundMethod, IgnoreSuiteF
     IgnoreSuiteClassic2, IgnoreSuiteClassic3
 from tests.junkie_suites.error_handling.ErrorSuite4 import ErrorSuite4
 from tests.junkie_suites.error_handling.ErrorSuite5 import ErrorSuite5
+from tests.junkie_suites.error_handling.ErrorSuite6 import ErrorSuite6
 
 runner1 = Runner([IgnoreSuiteBoundMethod])
 runner1.run()
@@ -234,3 +235,13 @@ def test_after_test_error4():
             QualityManager.check_test_metrics(metrics,
                                               expected_status="error",
                                               expected_exception=Exception)
+
+
+def test_bad_suite_inputs():
+
+    try:
+        runner7 = Runner([ErrorSuite6])
+        runner7.run()
+        raise Exception("Expected BadParameters error to be thrown")
+    except BadParameters:
+        pass  # expected

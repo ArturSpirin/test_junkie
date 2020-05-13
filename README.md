@@ -82,4 +82,3 @@ Please [report](https://github.com/ArturSpirin/test_junkie/issues/new?template=b
 [<img width="270" src="https://www.actocorp.com/wp-content/uploads/2019/02/ActoLogo-red.png">](https://www.actocorp.com)
 
 become our [sponsor](https://www.patreon.com/join/arturspirin?)
-
