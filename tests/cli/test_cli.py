@@ -1,9 +1,9 @@
 import os
 import pprint
 
+from test_junkie.cli.config.Config import Config
 from test_junkie.constants import CliConstants
 from test_junkie.runner import Runner
-from test_junkie.cli.cli_config import Config
 from tests.QualityManager import QualityManager
 from tests.cli.CliTestSuite import AuthApiSuite, ShoppingCartSuite, NewProductsSuite
 from tests.cli.Cmd import Cmd

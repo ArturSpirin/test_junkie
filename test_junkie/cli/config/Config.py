@@ -9,12 +9,12 @@ class Config:
 
         if config_name not in [CliConstants.TJ_CONFIG_NAME]:
             if not os.path.exists(config_name):
-                print("[[bold red]ERROR[/bold red]]\tWasn't able to find config @ [bold red]{path}[/bold red]. "
-                      "Please check that the file exists.".format(path=config_name))
+                print(f"[[[bold red]ERROR[/bold red]]]\tNot able to find config @ "
+                      "[bold red]{config_name}[/bold red]. Please check that the file exists.")
                 exit(120)
             self.path = config_name
         else:
-            self.path = "{root}{sep}{file}".format(root=Config.get_root_dir(), file=config_name, sep=os.sep)
+            self.path = f"{Config.get_root_dir()}{os.sep}{config_name}"
         if not os.path.exists(Config.get_root_dir()):
             os.makedirs(Config.get_root_dir())
         if not os.path.exists(self.path):
@@ -51,8 +51,8 @@ class Config:
             value = self.config.get(section, option, fallback=default)
             return value
         except Exception:
-            print("[[bold red]ERROR[/bold red]]\tPlease check config: [bold red]{path}[/bold red] "
-                  "it appears that its miss-configured.".format(path=self.path))
+            print(f"[[[bold red]ERROR[bold red]]]\tPlease check config: [bold red]{self.path}[/bold red] "
+                  "it appears that its miss-configured.")
             raise
 
     def read(self):
@@ -66,6 +66,20 @@ class Config:
         :return: STRING, root directory for TJ to store its configs and other assets
         """
         return user_data_dir("Test-Junkie")
+
+    @staticmethod
+    def get_agents_root_dir():
+        """
+        :return: STRING, root directory for TJ HQ Agents
+        """
+        return f"{Config.get_root_dir()}{os.sep}agents"
+
+    @staticmethod
+    def get_hq_root_dir():
+        """
+        :return: STRING, root directory for HQ Servers
+        """
+        return f"{Config.get_root_dir()}{os.sep}hq"
 
     @staticmethod
     def get_config_path(config_name):

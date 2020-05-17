@@ -29,7 +29,7 @@ setuptools.setup(
         "Topic :: Utilities"
     ],
     install_requires=["statistics", "psutil", "appdirs", "configparser",
-                      "colorama", "coverage", "click", "rich"],
+                      "colorama", "coverage", "click", "rich", "requests"],
     extras_require={
         'service':  ["flask", "flask-wtf", "flask-socketio", "deepdiff"]},
     keywords=["automation", "testing", "tests", "test-runner"],

@@ -5,3 +5,6 @@ pytest-cov==2.6.0
 codecov
 psutil
 appdirs
+requests
+rich
+click

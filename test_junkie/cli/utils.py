@@ -6,6 +6,13 @@ from colorama import Fore, Style
 from test_junkie.constants import Undefined
 
 
+def md5(value):
+    import hashlib
+    m = hashlib.md5()
+    m.update(value.encode("utf8"))
+    return m.hexdigest()
+
+
 class PythonLiteralOption(click.Option):
 
     def type_cast_value(self, ctx, value):

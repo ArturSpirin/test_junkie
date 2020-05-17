@@ -10,7 +10,7 @@ from json import dumps, loads
 import pkg_resources
 import requests
 from rich.console import Console
-from test_junkie.cli.config import Config
+from test_junkie.cli.config.Config import Config
 
 console = Console()
 
@@ -108,10 +108,10 @@ class Agent:
 
             table = Table(title="")
 
-            table.add_column("id", justify="left", style="blue")
-            table.add_column("name")
-            table.add_column("project", justify="left", no_wrap=True)
-            table.add_column("status", justify="left")
+            table.add_column("ID", justify="left", style="blue")
+            table.add_column("Name")
+            table.add_column("Project", justify="left", no_wrap=True)
+            table.add_column("Status", justify="left")
             if hq is not None:
                 agents = Agent.agents_by_hq(hq)
                 if agents:
