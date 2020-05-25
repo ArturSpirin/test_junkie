@@ -1,14 +1,20 @@
 import os
+import pickle
+import sys
+import platform
 from subprocess import check_output
 from json import dumps, loads
 from rich.console import Console
 from test_junkie.cli.config.Config import Config
 from test_junkie.cli.utils import md5
+from test_junkie.constants import Undefined
 
 console = Console()
 
 
 class HQ:
+
+    __LOCK_FILE = f"{Config.get_agents_root_dir()}{os.sep}enable_agents.lock"
 
     def __init__(self):
 
@@ -109,7 +115,7 @@ class HQ:
             console.print("Resource not found.")
 
     @staticmethod
-    def ls():
+    def ls(display_tokens=False):
 
         if not os.path.exists(Config.get_hq_root_dir()):
             console.print("Resource not found.")
@@ -123,13 +129,107 @@ class HQ:
             table.add_column("ID", justify="left", style="blue")
             table.add_column("Host")
             table.add_column("Name")
-            table.add_column("Token", justify="left", no_wrap=True)
+            if display_tokens:
+                table.add_column("Token", justify="left", no_wrap=True)
             table.add_column("Status", justify="left")
 
             for doc in docs:
                 with open(Config.get_hq_root_dir() + os.sep + doc, "r+") as details:
                     server = loads(details.read())
-                    table.add_row(f"{server['id']}", f"{server['host']}", f"{server['name']}", f"{server['token']}")
+                    if display_tokens:
+                        table.add_row(f"{server['id']}", f"{server['host']}", f"{server['name']}", f"{server['token']}")
+                    else:
+                        table.add_row(f"{server['id']}", f"{server['host']}", f"{server['name']}")
             console.print(table)
         else:
             console.print("Resource not found.")
+
+    @staticmethod
+    def __is_enabled():
+        return os.path.exists(HQ.__LOCK_FILE)
+
+    @staticmethod
+    def __add_lock():
+        if not HQ.__is_enabled():
+            with open(HQ.__LOCK_FILE, "w+") as file:
+                file.write("")
+
+    @staticmethod
+    def __remove_lock():
+        if os.path.exists(HQ.__LOCK_FILE):
+            return os.remove(HQ.__LOCK_FILE)
+
+    @staticmethod
+    def status():
+
+        if HQ.__is_enabled():
+            console.print("[[[bold green]ENABLED[/bold green]]] Agents on this machine are enabled and sending data "
+                          "to their respective Test Junkie HQ instances.")
+            return True
+        else:
+            console.print("[[[bold red]DISABLED[/bold red]]] Agents on this machine are disabled and will NOT send data"
+                          " to their respective Test Junkie HQ instances.")
+            return False
+
+    @staticmethod
+    def start():
+
+        from test_junkie.cli.run.cli_runner import CliRunner
+        from test_junkie.cli.audit.cli_audit import CliAudit
+        import pkg_resources
+        import socket
+        from datetime import datetime
+        import requests
+        import time
+        if not HQ.__is_enabled():
+            HQ.__add_lock()
+            try:
+                while HQ.__is_enabled():
+                    for dirName, subdirList, fileList in os.walk(Config.get_agents_root_dir(), topdown=True):
+                        from glob import glob
+                        for file_path in glob(os.path.join(os.path.dirname(dirName + "\\"), "*.pickle")):
+                            with open(file_path, "rb") as doc:
+                                agent = pickle.load(doc)
+                                host, token, source = agent["hq"]["host"], agent["hq"]["token"], [agent["project"]]
+
+                                tj = CliRunner(sources=source, ignore=[".git"], suites=None)
+                                tj.scan()
+
+                                aggregator = CliAudit(suites=tj.suites, args=Undefined)
+                                aggregator.aggregate()
+                                tests = aggregator.aggregated_data["test_roster"]
+                                test_junkie_version = pkg_resources.require("test-junkie")[0].version
+                                python_version = sys.version_info[0]
+                                payload = {"host": socket.gethostname(),
+                                           "tests": tests,
+                                           "project": source[0].split(os.sep)[-1],
+                                           "project_location": source[0],
+                                           "tech": {"name": f"Test Junkie {test_junkie_version} "
+                                                            f"(Python{python_version})",
+                                                    "tjv": test_junkie_version,
+                                                    "pyv": python_version,
+                                                    "platform": {"os": platform.system(),
+                                                                 "release": platform.release()}},
+                                           "sent_at": str(datetime.now())}
+                                if tests:  # TODO add auth
+                                    endpoint = f"{host}/handler?token={token}"
+                                    try:
+                                        response = requests.post(endpoint, json=payload)
+                                        print(">>>>>", response.status_code)
+                                    except Exception as error:
+                                        print(error)
+                                else:
+                                    print("No data to send: ", tests)
+                    time.sleep(20)
+            except KeyboardInterrupt:
+                HQ.__remove_lock()
+                print("Ctrl + C. Exiting!")
+
+    @staticmethod
+    def stop():
+        HQ.__remove_lock()
+
+
+if "__main__" == __name__:
+
+    HQ.start()

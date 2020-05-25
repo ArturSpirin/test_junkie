@@ -70,8 +70,8 @@ def owners(sources, suites, features, components, owners, tags, no_guess_root, v
     try:
         tj = CliRunner(sources=sources, ignore=[".git"], suites=suites, no_guess_root=no_guess_root)
         tj.scan()
-        aggregator = CliAudit(suites=tj.suites, args=locals(), command="owners")
+        aggregator = CliAudit(suites=tj.suites, args=locals())
         aggregator.aggregate()
-        aggregator.print_results()
+        aggregator.print_results(command="owners")
     except BadCliParameters as error:
         print("[[[bold red]ERROR[/bold red]]] [bold red]{error}[/bold red]".format(error=error))

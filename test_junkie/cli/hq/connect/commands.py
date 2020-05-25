@@ -18,10 +18,11 @@ def add(host, name):
 
 
 @click.command()
+@click.option('-t', "--display_tokens",  is_flag=True, help="Will also display which token is being for communicating.")
 @click.help_option('-h', '--help')
-def list():
+def list(display_tokens):
     """List all connected servers."""
-    _hq.ls()
+    _hq.ls(display_tokens)
 
 
 @click.command()
@@ -36,4 +37,29 @@ def remove(hq):
 @click.help_option('-h', '--help')
 def status():
     """Current status regarding HQ & Agents."""
-    print("Status!")
+    if _hq.status():
+        from test_junkie.cli.hq.agent.agent import Agent
+        Agent().ls(None)
+
+
+@click.command()
+@click.option('-d', "--detached", is_flag=True,  help="Activates process in the background.")
+@click.help_option('-h', '--help')
+def start(detached):
+    """Activates all the agents on this machine."""
+    import os
+    import sys
+    executable = f"{__file__.split('cli')[0]}cli{os.sep}hq{os.sep}hq.py"
+    if detached:
+        from subprocess import DEVNULL
+        import subprocess
+        subprocess.Popen([sys.executable, executable], stdout=DEVNULL, stderr=DEVNULL)
+    else:
+        _hq.start()
+
+
+@click.command()
+@click.help_option('-h', '--help')
+def stop():
+    """Deactivates all agents on this machine."""
+    _hq.stop()

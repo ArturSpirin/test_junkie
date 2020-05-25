@@ -1,13 +1,14 @@
 import collections
 
 from test_junkie.builder import Builder
+from test_junkie.constants import Undefined
 
 
 class CliAudit:
 
     __SECTIONS = ["owners", "features", "suites", "components", "tags"]
 
-    def __init__(self, suites, args, command):
+    def __init__(self, suites, args):
 
         self.aggregated_data = {
                 "absolute_test_count": 0,  # parameterized tests will be treated as 1 test
@@ -18,81 +19,87 @@ class CliAudit:
                 "context_by_suites": {},
                 "context_by_tags": {},
                 "context_by_components": {},
+                "test_roster": {},
 
                 "parameterized_test_count": 0,
                 "parameterized_suite_count": 0,
                 }
         self.suites = suites
         self.exe_roster = Builder.get_execution_roster()
-        self.args = args
-        self.command = command
+        self.args = args if args is not None else Undefined
 
     def aggregate(self):
+
         from test_junkie.settings import Settings
+
         def is_relevant(_suite=None, _test=None):
+
             if not _suite and not _test:
                 raise Exception("Must pass in either a SuiteObject or a TestObject!")
+
             elif _suite and not _test:
                 from test_junkie.rules import Rules
-                if self.args["no_rules"] and _suite.get_rules().__class__ != Rules:
+                if self.args.get("no_rules", Undefined) and _suite.get_rules().__class__ != Rules:
                     return False
 
                 from test_junkie.listener import Listener
-                if self.args["no_listeners"] and _suite.get_listener().__class__ != Listener:
+                if self.args.get("no_listeners", Undefined) and _suite.get_listener().__class__ != Listener:
                     return False
 
-                if self.args["no_suite_retries"] and _suite.get_retry_limit() > 1:
+                if self.args.get("no_suite_retries", Undefined) and _suite.get_retry_limit() > 1:
                     return False
 
-                if self.args["no_suite_meta"] and _suite.get_meta():
+                if self.args.get("no_suite_meta", Undefined) and _suite.get_meta():
                     return False
 
-                if self.args["no_owners"] and _suite.get_owner():
+                if self.args.get("no_owners", Undefined) and _suite.get_owner():
                     return False
 
-                if self.args["no_features"] and _suite.get_feature():
+                if self.args.get("no_features", Undefined) and _suite.get_feature():
                     return False
 
-                if not Settings.is_undefined(self.args["features"]):
-                    if _suite.get_feature() in self.args["features"]:
+                if not Settings.is_undefined(self.args.get("features", Undefined)):
+                    if _suite.get_feature() in self.args.get("features", Undefined):
                         return True
                     return False
+
             else:
-                if self.args["no_test_retries"] and _test.get_retry_limit() > 1:
+                if self.args.get("no_test_retries", Undefined) and _test.get_retry_limit() > 1:
                     return False
 
-                if self.args["no_test_meta"] and _suite.get_meta():
+                if self.args.get("no_test_meta", Undefined) and _suite.get_meta():
                     return False
 
-                if self.args["no_owners"] and _test.get_owner():
+                if self.args.get("no_owners", Undefined) and _test.get_owner():
                     return False
 
-                if self.args["no_components"] and _test.get_component():
+                if self.args.get("no_components", Undefined) and _test.get_component():
                     return False
 
-                if self.args["no_tags"] and _test.get_tags():
+                if self.args.get("no_tags", Undefined) and _test.get_tags():
                     return False
 
-                if not Settings.is_undefined(self.args["owners"]):
-                    if _test.get_owner() in self.args["owners"]:
+                if not Settings.is_undefined(self.args.get("owners", Undefined)):
+                    if _test.get_owner() in self.args.get("owners", Undefined):
                         return True
                     return False
 
-                if not Settings.is_undefined(self.args["components"]):
-                    if _test.get_component() in self.args["components"]:
+                if not Settings.is_undefined(self.args.get("components", Undefined)):
+                    if _test.get_component() in self.args.get("components", Undefined):
                         return True
                     return False
 
-                if not Settings.is_undefined(self.args["tags"]):
-                    for tag in self.args["tags"]:
+                if not Settings.is_undefined(self.args.get("tags", Undefined)):
+                    for tag in self.args.get("tags", Undefined):
                         if tag in _test.get_tags():
                             return True
                     return False
             return True
 
         for suite, suite_object in self.exe_roster.items():
-            if not is_relevant(_suite=suite_object):
-                continue
+            if not Settings.is_undefined(self.args):
+                if not is_relevant(_suite=suite_object):
+                    continue
 
             tests = suite_object.get_test_objects()
             self.aggregated_data["absolute_suite_count"] += 1
@@ -120,9 +127,10 @@ class CliAudit:
                 if test.get_owner() is None:
                     test.get_kwargs().update({"owner": suite_object.get_owner()})
 
-                if not is_relevant(_suite=suite, _test=test):
-                    continue
-                # self.aggregated_data["absolute_test_count"] += 1
+                if not Settings.is_undefined(self.args):
+                    if not is_relevant(_suite=suite, _test=test):
+                        continue
+
                 if test.accepts_suite_parameters() or test.accepts_test_parameters():
                     self.aggregated_data["parameterized_test_count"] += 1
 
@@ -132,6 +140,28 @@ class CliAudit:
                     CliAudit.process_property(context, "owners", test.get_owner())
 
                 self.update_context(suite, test, feature)
+
+                module = "{}::{}".format(suite_object.get_class_module(), suite_object.get_class_name())
+                if module not in self.aggregated_data["test_roster"]:
+                    self.aggregated_data["test_roster"].update({module: {}})
+
+                doc_html = None
+                if test.get_function_object().__doc__:
+                    from markdown2 import Markdown
+                    markdowner = Markdown(extras=["tables"])  # TODO allow extras to be configured via config
+                    doc = test.get_function_object().__doc__.replace("\n        ", "\n")
+                    doc_html = markdowner.convert(doc)
+
+                self.aggregated_data["test_roster"][module].update(
+                    {test.get_function_name(): {"suite_name": suite_object.get_class_name(),
+                                                "suite_module": suite_object.get_class_module(),
+                                                "owner": test.get_owner(),
+                                                "feature": suite_object.get_feature(),
+                                                "component": test.get_component(),
+                                                "tags": test.get_tags(),
+                                                "doc": test.get_function_object().__doc__,
+                                                "doc_html": doc_html,
+                                                }})
             self.aggregated_data["context_by_suites"].update({suite_object.get_class_name(): suite_context})
 
     @staticmethod
@@ -187,13 +217,13 @@ class CliAudit:
                 value = test.get_component() if context == "components" else test.get_owner()
                 update_context_template(value, context)
 
-    def print_results(self):
+    def print_results(self, command):
 
         from test_junkie.cli.utils import Color
         match_found = False
         output = []
         for data_context in CliAudit.__SECTIONS:
-            if data_context == self.command:
+            if data_context == command:
                 data = self.aggregated_data["context_by_{context}".format(context=data_context)]
                 if data:
                     section = []
