@@ -332,7 +332,7 @@ class Aggregator(object):
                                 trace = param_data["tracebacks"][index]
                                 if trace is not None:
                                     trace = ":: Traceback: {}".format(CliUtils.format_color_string(
-                                        parse_exception(trace), "red"))
+                                        parse_exception(trace.encode('utf8', errors="replace").decode("utf8")), "red"))
                                 else:
                                     trace = ""
                                 print("\t      |__ run #{num} [{status}] [{runtime:0.2f}s] {trace}"

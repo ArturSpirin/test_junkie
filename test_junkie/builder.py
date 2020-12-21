@@ -26,6 +26,7 @@ class Builder(object):
     __GROUP_RULES = []
     __GROUP_RULE_DEFINITIONS = {}
     __REQUESTED_SUITES = None
+    __FILE_CONTROL = None  # this controls the cross file test injections
 
     @staticmethod
     def get_execution_roster():
@@ -100,6 +101,10 @@ class Builder(object):
                                      "testjunkie_suite_id": Builder.__SUITE_ID})
             Builder.__validate_test_kwargs(decorator_kwargs, decorated_function)
             _function_name = decorated_function.__name__
+            if Builder.__FILE_CONTROL is not None \
+                    and Builder.__FILE_CONTROL != inspect.getsourcefile(decorated_function):
+                Builder.__set_current_suite_object_defaults()
+            Builder.__FILE_CONTROL = inspect.getsourcefile(decorated_function)
         else:
             if decorated_function is not None:
                 Builder.__validate_suite_kwargs(decorator_kwargs)
