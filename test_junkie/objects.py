@@ -6,6 +6,7 @@ from test_junkie.decorators import DecoratorType
 from test_junkie.constants import TestCategory
 from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
+from test_junkie.compatability_utils import CompatibilityUtils as CU
 
 
 class _FuncEval:
@@ -17,10 +18,10 @@ class _FuncEval:
         try:
             if not isinstance(val, bool):
                 if inspect.isfunction(val):
-                    val = val(meta=obj.get_meta()) if "meta" in inspect.getfullargspec(val).args else val()
+                    val = val(meta=obj.get_meta()) if "meta" in CU.getargspec(val).args else val()
                 elif inspect.ismethod(val):
                     val = getattr(val.__self__, val.__name__)(meta=obj.get_meta()) \
-                        if "meta" in inspect.getfullargspec(val).args \
+                        if "meta" in CU.getargspec(val).args \
                         else getattr(val.__self__, val.__name__)()
                 else:
                     raise BadParameters("Unsupported data type used to pass parameters to the skip property in test: "
@@ -432,16 +433,16 @@ class TestObject(object):
 
     def accepts_test_and_suite_parameters(self):
 
-        return "parameter" in inspect.getfullargspec(self.get_function_object()).args and \
-               "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "parameter" in CU.getargspec(self.get_function_object()).args and \
+               "suite_parameter" in CU.getargspec(self.get_function_object()).args
 
     def accepts_test_parameters(self):
 
-        return "parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "parameter" in CU.getargspec(self.get_function_object()).args
 
     def accepts_suite_parameters(self):
 
-        return "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "suite_parameter" in CU.getargspec(self.get_function_object()).args
 
     def __not_ran(self, param, class_param):
         """
