@@ -541,7 +541,7 @@ class Runner:
             for func in functions_list:
                 try:
                     # deprecated but supports Python 2
-                    if "suite_parameter" in inspect.getargspec(func["decorated_function"]).args:
+                    if "suite_parameter" in inspect.getfullargspec(func["decorated_function"]).args:
                         func["decorated_function"](suite.get_class_instance(), suite_parameter=class_parameter)
                     else:
                         func["decorated_function"](suite.get_class_instance())

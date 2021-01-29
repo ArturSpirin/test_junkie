@@ -187,7 +187,7 @@ class Builder(object):
                                 "For more info, see @test() decorator documentation: {}"
                                 .format(data["arg"], data["expected"], data["actual"],
                                         DocumentationLinks.TEST_DECORATOR))
-        if "parameter" not in inspect.getargspec(decorated_function).args and kwargs.get("parameters") is not None:
+        if "parameter" not in inspect.getfullargspec(decorated_function).args and kwargs.get("parameters") is not None:
             raise BadSignature("When using \"parameters\" argument for @test() decorator, "
                                "you must accept \"parameter\" in the function's signature. "
                                "For more info, see documentation: {}"
