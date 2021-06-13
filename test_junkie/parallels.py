@@ -73,7 +73,7 @@ class ParallelProcessor:
     def suite_limit_reached(self):
         active = 0
         for suite, data in ParallelProcessor.__PARALLELS.items():
-            if data["thread"].isAlive():
+            if data["thread"]:
                 active += 1
         if active >= self.__suite_limit:
             LogJunkie.debug("Suite limit: {}/{}".format(active, self.__suite_limit))
@@ -84,7 +84,7 @@ class ParallelProcessor:
         active = 0
         for suite, info in list(ParallelProcessor.__PARALLELS.items()):
             for test in info["tests"]:
-                if test["thread"].isAlive():
+                if test["thread"]:
                     active += 1
                 else:
                     # so we don't accumulate large number of stale data we don't need
