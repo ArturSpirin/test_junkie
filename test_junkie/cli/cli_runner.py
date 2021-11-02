@@ -91,7 +91,7 @@ class CliRunner:
         def get_active_count():
             active = 0
             for thread in CliRunner.__SCANNER_THREADS:
-                if thread.isAlive():
+                if thread.is_alive():
                     active += 1
                 else:
                     CliRunner.__SCANNER_THREADS.remove(thread)

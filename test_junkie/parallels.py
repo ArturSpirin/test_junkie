@@ -73,7 +73,7 @@ class ParallelProcessor:
     def suite_limit_reached(self):
         active = 0
         for suite, data in ParallelProcessor.__PARALLELS.items():
-            if data["thread"].isAlive():
+            if data["thread"].is_alive():
                 active += 1
         if active >= self.__suite_limit:
             LogJunkie.debug("Suite limit: {}/{}".format(active, self.__suite_limit))
@@ -84,7 +84,7 @@ class ParallelProcessor:
         active = 0
         for suite, info in list(ParallelProcessor.__PARALLELS.items()):
             for test in info["tests"]:
-                if test["thread"].isAlive():
+                if test["thread"].is_alive():
                     active += 1
                 else:
                     # so we don't accumulate large number of stale data we don't need
@@ -118,7 +118,7 @@ class ParallelProcessor:
             :return: BOOLEAN
             """
             if ParallelProcessor.__PARALLELS.get(restriction, None) is not None:
-                if ParallelProcessor.__PARALLELS[restriction]["thread"].isAlive():
+                if ParallelProcessor.__PARALLELS[restriction]["thread"].is_alive():
                     LogJunkie.debug("Suite: {} can't run while: {} is running."
                                     .format(suite.get_class_object(), restriction))
                     return False
@@ -133,7 +133,7 @@ class ParallelProcessor:
                 reverse_suites = ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[suite.get_class_object()]
                 for reverse_suite in reverse_suites:
                     if ParallelProcessor.__PARALLELS.get(reverse_suite, None) is not None:
-                        if ParallelProcessor.__PARALLELS[reverse_suite]["thread"].isAlive():
+                        if ParallelProcessor.__PARALLELS[reverse_suite]["thread"].is_alive():
                             LogJunkie.debug("Suite: {} can't run while: {} is running due to reverse restriction."
                                             .format(suite.get_class_object(), reverse_suite))
                             return False
@@ -182,7 +182,7 @@ class ParallelProcessor:
             for class_object, suite_mapping in list(ParallelProcessor.__PARALLELS.items()):
                 for test_mapping in suite_mapping["tests"]:
                     if test_mapping["test"].get_function_object() in test.get_parallel_restrictions():
-                        if test_mapping["thread"].isAlive():
+                        if test_mapping["thread"].is_alive():
                             return False
             return True
 
@@ -196,7 +196,7 @@ class ParallelProcessor:
                 for class_object, suite_mapping in list(ParallelProcessor.__PARALLELS.items()):
                     for test_mapping in suite_mapping["tests"]:
                         if test_mapping["test"].get_function_object() in reverse_tests:
-                            if test_mapping["thread"].isAlive():
+                            if test_mapping["thread"].is_alive():
                                 return False
             return True
 
