@@ -3,6 +3,8 @@ import json
 import time
 import traceback
 
+from test_junkie.compatability_utils import CompatibilityUtils
+
 from test_junkie.constants import TestCategory, DecoratorType, Color
 from test_junkie.debugger import LogJunkie
 from test_junkie.metrics import Aggregator
@@ -101,8 +103,12 @@ class Reporter:
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
         html = html.format(body=body, database_lol=json.dumps(table_data["database_lol"]))
-        with open(write_file, "w+") as output:
-            output.write(html)
+        if CompatibilityUtils.in_python2():
+            with open(write_file, "w+") as output:
+                output.write(html)
+        else:
+            with open(write_file, "w+", encoding="utf8") as output:
+                output.write(html)
 
     def __get_resources_data(self):
 
