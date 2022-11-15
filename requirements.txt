@@ -5,3 +5,4 @@ pytest-cov==2.6.0
 codecov
 psutil
 appdirs
+setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
