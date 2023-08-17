@@ -331,8 +331,13 @@ class Aggregator(object):
                             for index in range(param_data["retry"]):
                                 trace = param_data["tracebacks"][index]
                                 if trace is not None:
-                                    trace = ":: Traceback: {}".format(CliUtils.format_color_string(
-                                        parse_exception(trace.encode('utf8', errors="replace").decode("utf8")), "red"))
+                                    trace = ":: Traceback: {}".format(
+                                        CliUtils.format_color_string(
+                                            parse_exception(
+                                                trace.encode('utf8', errors="replace").decode("unicode-escape")
+                                            ), "red"
+                                        )
+                                    )
                                 else:
                                     trace = ""
                                 print("\t      |__ run #{num} [{status}] [{runtime:0.2f}s] {trace}"
