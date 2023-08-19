@@ -73,12 +73,6 @@ For more examples, see [CLI documentation](https://www.test-junkie.com/documenta
 ## Output Example
 [![Test Junkie Console Output](https://www.test-junkie.com/static/media/console_out.jpg)](https://www.test-junkie.com/static/media/console_out.jpg)
 
-Full documentation is available on **[test-junkie.com](https://www.test-junkie.com/)**  
+### Full documentation is available on **[test-junkie.com](https://www.test-junkie.com/)**  
 
-Please [report](https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md) any bugs you find.
-
-**Our Sponsors**
-
-[<img width="270" src="https://www.actocorp.com/wp-content/uploads/2019/02/ActoLogo-red.png">](https://www.actocorp.com)
-
-become our [sponsor](https://www.patreon.com/join/arturspirin?)
+#### Please [report](https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md) any bugs you find.
