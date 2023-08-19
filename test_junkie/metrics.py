@@ -331,13 +331,22 @@ class Aggregator(object):
                             for index in range(param_data["retry"]):
                                 trace = param_data["tracebacks"][index]
                                 if trace is not None:
-                                    trace = ":: Traceback: {}".format(
-                                        CliUtils.format_color_string(
-                                            parse_exception(
-                                                trace.encode('utf8', errors="replace").decode("unicode-escape")
-                                            ), "red"
+                                    try:
+                                        trace = ":: Traceback: {}".format(
+                                            CliUtils.format_color_string(
+                                                parse_exception(
+                                                    trace.encode('utf8', errors="replace")
+                                                ), "red"
+                                            )
                                         )
-                                    )
+                                    except:
+                                        trace = ":: Traceback: {}".format(
+                                            CliUtils.format_color_string(
+                                                parse_exception(
+                                                    trace.encode("unicode_escape").decode("utf8")
+                                                ), "red"
+                                            )
+                                        )
                                 else:
                                     trace = ""
                                 print("\t      |__ run #{num} [{status}] [{runtime:0.2f}s] {trace}"
@@ -346,9 +355,9 @@ class Aggregator(object):
                                               runtime=param_data["performance"][index],
                                               status=param_data["statuses"][index].upper()))
         print("\n===========================================================")
-        print(". Test Junkie {} (Python{}) {} .".format(pkg_resources.require("test-junkie")[0].version,
-                                                        sys.version_info[0],
-                                                        DocumentationLinks.DOMAIN))
+        print(". Test Junkie {} (Python{}) {} .".format(
+            pkg_resources.require("test-junkie")[0].version, sys.version_info[0], DocumentationLinks.DOMAIN)
+        )
         print("===========================================================")
 
     @staticmethod
