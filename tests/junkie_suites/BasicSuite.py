@@ -6,7 +6,7 @@ def skip_function(meta):
     return True
 
 
-@Suite()
+@Suite(feature="AdvancedSuite")
 class BasicSuite:
 
     @beforeClass()
@@ -25,11 +25,11 @@ class BasicSuite:
     def after_class(self):
         pass
 
-    @test()
+    @test(tags=["critical2", "v1"])
     def failure(self):
         assert True is False
 
-    @test()
+    @test(tags=["critical2", "v1"])
     def error(self):
         raise Exception("Exception")
 
@@ -42,7 +42,7 @@ class BasicSuite:
     def skip_function(self):
         pass
 
-    @test(parameters=[1, 2, 3, 4])
+    @test(parameters=[1, 2, 3, 4], tags=["critical2", "v1"])
     def parameters(self, parameter):
         pass
 

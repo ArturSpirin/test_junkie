@@ -7,6 +7,7 @@ from tests.junkie_suites.TestRules import TestRules
 @Suite(retry=2,
        listener=TestListener,
        rules=TestRules,
+       feature="AdvancedSuite",
        meta=meta(name="Advanced Use Cases",
                  known_bugs=[]),
        parameters=[1, 2])

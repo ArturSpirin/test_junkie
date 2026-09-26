@@ -33,6 +33,10 @@ class ClassMetrics(object):
     def __deepcopy__(self, memo):
         return self
 
+    def reset(self):
+        # so a new Runner run doesn't inherit stale results from a previous one (fixes ticket: #43)
+        self.__init__()
+
     def update_decorator_metrics(self, decorator, start_time, exception=None, trace=None):
         from test_junkie.objects import Limiter
         self.__stats[decorator]["performance"].append(time.time() - start_time)
@@ -84,6 +88,10 @@ class TestMetrics(object):
 
     def __deepcopy__(self, memo):
         return self
+
+    def reset(self):
+        # so a new Runner run doesn't inherit stale results from a previous one (fixes ticket: #43)
+        self.__init__()
 
     def update_metrics(self, status, start_time, param=None, class_param=None, exception=None,
                        formatted_traceback=None, runtime=None, decorator=None):
@@ -157,28 +165,42 @@ class Aggregator(object):
 
         def get_template():
 
-            return {"total": 0,
-                    TestCategory.SUCCESS: 0,
-                    TestCategory.FAIL: 0,
-                    TestCategory.ERROR: 0,
-                    TestCategory.IGNORE: 0,
-                    TestCategory.SKIP: 0,
-                    TestCategory.CANCEL: 0}
+            return {
+                "total": 0,
+                TestCategory.SUCCESS: 0,
+                TestCategory.FAIL: 0,
+                TestCategory.ERROR: 0,
+                TestCategory.IGNORE: 0,
+                TestCategory.SKIP: 0,
+                TestCategory.CANCEL: 0
+            }
 
-        report = {"tests": get_template(),
-                  "suites": {}}
+        report = {
+            "tests": dict(get_template()),
+            "suites": {}
+        }
 
         for suite in self.__executed_suites:
+
             if suite not in report["suites"]:
-                report["suites"].update({suite: get_template()})
+                report["suites"].update({suite: dict(get_template())})
+
             for test in suite.get_test_objects():
+
                 test_metrics = test.metrics.get_metrics()
+
                 for class_param, class_param_data in test_metrics.items():
+
                     for param, param_data in class_param_data.items():
+
+                        if param_data["status"] is None:
+                            continue  # never got a final status, nothing to count yet
+
                         report["tests"]["total"] += 1
                         report["tests"][param_data["status"]] += 1
                         report["suites"][suite]["total"] += 1
                         report["suites"][suite][param_data["status"]] += 1
+
         return report
 
     def get_report_by_features(self):
@@ -248,6 +270,8 @@ class Aggregator(object):
 
         for class_param, class_param_data in metrics.items():
             for param, data in class_param_data.items():
+                if data["status"] is None:
+                    continue
                 for entry in data["performance"]:
                     if subcategory == 0:
                         report[category]["performance"].append(entry)
@@ -430,5 +454,8 @@ class ResourceMonitor(threading.Thread):
     def cleanup(self):
         try:
             os.remove(self.file_path)
-        except:
-            LogJunkie.error(traceback.format_exc())
+        except Exception:
+            trace = traceback.format_exc()
+            print("[WARNING] Failed to remove resource monitoring temp file: {}\n{}"
+                  .format(self.file_path, trace), file=sys.stderr)
+            LogJunkie.error(trace)

@@ -1,12 +1,10 @@
 import copy
 import inspect
 import traceback
-import sys
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import TestCategory
 from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
-from test_junkie.compatability_utils import CompatibilityUtils as CU
 
 
 class _FuncEval:
@@ -18,10 +16,10 @@ class _FuncEval:
         try:
             if not isinstance(val, bool):
                 if inspect.isfunction(val):
-                    val = val(meta=obj.get_meta()) if "meta" in CU.getargspec(val).args else val()
+                    val = val(meta=obj.get_meta()) if "meta" in inspect.getfullargspec(val).args else val()
                 elif inspect.ismethod(val):
                     val = getattr(val.__self__, val.__name__)(meta=obj.get_meta()) \
-                        if "meta" in CU.getargspec(val).args \
+                        if "meta" in inspect.getfullargspec(val).args \
                         else getattr(val.__self__, val.__name__)()
                 else:
                     raise BadParameters("Unsupported data type used to pass parameters to the skip property in test: "
@@ -72,12 +70,6 @@ class SuiteObject(object):
         self.metrics = ClassMetrics()
         self.__rules = suite_definition["test_rules"](suite=copy.deepcopy(self))
         self.__instance = None
-
-    def __copy__(self):
-        return self
-
-    def __deepcopy__(self, memo):
-        return self
 
     def get_suite_id(self):
         return self.get_kwargs().get("testjunkie_suite_id", 0)
@@ -285,7 +277,7 @@ class SuiteObject(object):
 
     def get_number_of_actual_retries(self):
 
-        return self.metrics.get_metrics().get("retries", None)
+        return self.metrics.get_metrics().get("retry", 0)
 
     def get_data_by_tags(self):
 
@@ -311,12 +303,6 @@ class TestObject(object):
         self.__test_definition = test_definition
         self.suite = suite
         self.metrics = TestMetrics()
-
-    def __copy__(self):
-        return self
-
-    def __deepcopy__(self, memo):
-        return self
 
     def __repr__(self):
         return "<{}.{}>".format(self.suite.get_class_name(), self.get_function_name())
@@ -433,16 +419,16 @@ class TestObject(object):
 
     def accepts_test_and_suite_parameters(self):
 
-        return "parameter" in CU.getargspec(self.get_function_object()).args and \
-               "suite_parameter" in CU.getargspec(self.get_function_object()).args
+        return "parameter" in inspect.getfullargspec(self.get_function_object()).args and \
+               "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
 
     def accepts_test_parameters(self):
 
-        return "parameter" in CU.getargspec(self.get_function_object()).args
+        return "parameter" in inspect.getfullargspec(self.get_function_object()).args
 
     def accepts_suite_parameters(self):
 
-        return "suite_parameter" in CU.getargspec(self.get_function_object()).args
+        return "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
 
     def __not_ran(self, param, class_param):
         """
@@ -497,7 +483,7 @@ class Limiter:
     def parse_exception_object(value):
 
         if Limiter.ACTIVE and value is not None:
-            msg = value.message if sys.version_info[0] < 3 else str(value)
+            msg = str(value)
             if isinstance(msg, str) and len(msg) > Limiter.EXCEPTION_MESSAGE_LIMIT:
                 value.message = "{} [. . .]".format(msg[:Limiter.EXCEPTION_MESSAGE_LIMIT])
         return value

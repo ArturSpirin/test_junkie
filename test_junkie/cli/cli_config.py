@@ -1,6 +1,7 @@
 import argparse
 import ast
-from appdirs import *
+import os
+from appdirs import user_data_dir
 
 from test_junkie.constants import CliConstants, Undefined
 from test_junkie.cli.cli import CliUtils
@@ -52,13 +53,7 @@ class Config:
     def get_value(self, option, default=Undefined):
         section = "runtime"
         try:
-            if sys.version_info[0] < 3:
-                # Python 2
-                value = self.config.get(section, option, default)
-            else:
-                # Python 3, module is not backwards compatible and fallback has to be explicitly assigned
-                value = self.config.get(section, option, fallback=default)
-            return value
+            return self.config.get(section, option, fallback=default)
         except Exception:
             print("[{status}]\tPlease check config: {path} it appears that its miss-configured."
                   .format(status=CliUtils.format_color_string(value="ERROR", color="red"),
@@ -90,12 +85,7 @@ class Config:
         :param path: STRING, path to the config file
         :return: ConfigParser object
         """
-        if sys.version_info[0] < 3:
-            # Python 2
-            import ConfigParser as configparser
-        else:
-            # Python 3, module was renamed to configparser
-            import configparser
+        import configparser
         config = configparser.ConfigParser()
         config.read(self.path)
         return config

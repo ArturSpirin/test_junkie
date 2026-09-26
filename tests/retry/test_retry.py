@@ -85,3 +85,8 @@ def test_no_retry_on_assertion():
             tested = True
     if not tested:
         raise Exception("Test did not run")
+
+
+def test_suite_get_number_of_actual_retries():
+    # get_number_of_actual_retries() was looking up "retries" instead of "retry", always got None
+    assert results[0].get_number_of_actual_retries() == 3

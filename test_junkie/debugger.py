@@ -66,10 +66,7 @@ class LogJunkie:
 def suppressed_stdout(suppress=False):
     if suppress:
         original_stdout = sys.stdout
-        if sys.version_info[0] < 3:
-            sys.stdout = io.BytesIO()  # works with python 2
-        else:
-            sys.stdout = io.StringIO()  # works with python 3
+        sys.stdout = io.StringIO()
         original_level = logging.root.manager.disable
         logging.disable(logging.ERROR)
         try:

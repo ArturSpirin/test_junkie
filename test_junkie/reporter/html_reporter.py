@@ -1,9 +1,8 @@
 import copy
+import html
 import json
 import time
 import traceback
-
-from test_junkie.compatability_utils import CompatibilityUtils
 
 from test_junkie.constants import TestCategory, DecoratorType, Color
 from test_junkie.debugger import LogJunkie
@@ -25,16 +24,7 @@ class Reporter:
 
     @staticmethod
     def escape(s, quote=True):
-        """
-        Copy of the HTML escape function to avoid python2 dependency
-        """
-        s = s.replace("&", "&amp;")  # Must be done first!
-        s = s.replace("<", "&lt;")
-        s = s.replace(">", "&gt;")
-        if quote:
-            s = s.replace('"', "&quot;")
-            s = s.replace('\'', "&#x27;")
-        return s
+        return html.escape(s, quote=quote)
 
     def __init__(self, monitoring_file, aggregator, runtime, multi_threading_enabled):
 
@@ -103,12 +93,8 @@ class Reporter:
 
         body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
         html = html.format(body=body, database_lol=json.dumps(table_data["database_lol"]))
-        if CompatibilityUtils.in_python2():
-            with open(write_file, "w+") as output:
-                output.write(html)
-        else:
-            with open(write_file, "w+", encoding="utf8") as output:
-                output.write(html)
+        with open(write_file, "w+", encoding="utf8") as output:
+            output.write(html)
 
     def __get_resources_data(self):
 

@@ -1,8 +1,10 @@
 colorama
 coverage
-pytest==3.9.3
-pytest-cov==2.6.0
-codecov
+pytest>=8.0
+pytest-cov>=5.0
 psutil
 appdirs
-setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
+setuptools>=70.0.0 # not directly required, pinned by Snyk to avoid a vulnerability
+urllib3>=2.5.0 # not directly required, pinned by Snyk to avoid a vulnerability
+requests>=2.32.4 # not directly required, pinned by Snyk to avoid a vulnerability
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability

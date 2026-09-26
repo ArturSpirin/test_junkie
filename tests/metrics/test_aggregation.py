@@ -55,3 +55,22 @@ def test_basic_aggregation_metrics():
     assert metrics[TestCategory.IGNORE] == 0
     assert metrics[TestCategory.SKIP] == 0
     assert metrics[TestCategory.CANCEL] == 0
+
+
+def test_basic_report_skips_tests_with_no_final_status():
+    # ticket #44 - a test with no final status used to crash report generation with KeyError: None
+    baseline_total = runner_metrics.get_basic_report()["tests"]["total"]
+
+    tampered_test = tests[0]
+    test_metrics = tampered_test.metrics.get_metrics()
+    class_param = list(test_metrics.keys())[0]
+    param = list(test_metrics[class_param].keys())[0]
+    original_status = test_metrics[class_param][param]["status"]
+    test_metrics[class_param][param]["status"] = None
+    try:
+        report = runner_metrics.get_basic_report()["tests"]
+        assert report["total"] == baseline_total - 1
+
+        runner_metrics.get_report_by_suite()  # must not raise KeyError: None either
+    finally:
+        test_metrics[class_param][param]["status"] = original_status

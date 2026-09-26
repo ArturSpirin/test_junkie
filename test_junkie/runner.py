@@ -3,7 +3,6 @@ import inspect
 import threading
 import time
 import traceback
-import sys
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks
 from test_junkie.debugger import LogJunkie, suppressed_stdout
 from test_junkie.decorators import DecoratorType, synchronized
@@ -16,7 +15,10 @@ from test_junkie.builder import Builder
 from test_junkie.reporter.html_reporter import Reporter
 from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.settings import Settings
-from test_junkie.compatability_utils import CompatibilityUtils as CU
+
+# shared lock for __process_event() - can't create it inline there, @synchronized() would just
+# get a new Lock() every call
+_EVENT_PROPERTIES_LOCK = threading.Lock()
 
 
 class Runner:
@@ -35,6 +37,10 @@ class Runner:
         self.__suites = self.__prioritize(suites=suites)
         for suite in self.__suites:
             suite_object = Builder.get_execution_roster().get(suite, None)
+            # suites/tests are singletons, so reset metrics here or a rerun just reuses old statuses (fixes ticket: #43)
+            suite_object.metrics.reset()
+            for test_object in suite_object.get_test_objects():
+                test_object.metrics.reset()
             suite_object.update_test_objects(self.__prioritize(suite_object=suite_object))
             Runner.__process_owners(suite_object)
 
@@ -178,18 +184,21 @@ class Runner:
         runtime = time.time() - initial_start_time
         print("========== Test Junkie finished in {:0.2f} seconds ==========".format(runtime))
         aggregator = Aggregator(self.get_executed_suites())
-        Aggregator.present_console_output(aggregator)
-        if self.__settings.html_report:
-            reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
-                                if resource_monitor is not None else None,
-                                runtime=runtime,
-                                aggregator=aggregator,
-                                multi_threading_enabled=self.__processor.test_multithreading()
-                                or self.__processor.suite_multithreading())
-            reporter.generate_html_report(self.__settings.html_report)
-        XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
-        if self.__settings.monitor_resources:
-            resource_monitor.cleanup()
+        try:
+            Aggregator.present_console_output(aggregator)
+            if self.__settings.html_report:
+                reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
+                                    if resource_monitor is not None else None,
+                                    runtime=runtime,
+                                    aggregator=aggregator,
+                                    multi_threading_enabled=self.__processor.test_multithreading()
+                                    or self.__processor.suite_multithreading())
+                reporter.generate_html_report(self.__settings.html_report)
+            XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
+        finally:
+            # needs to run even if reporting above throws or the temp file never gets removed
+            if self.__settings.monitor_resources:
+                resource_monitor.cleanup()
         return aggregator
 
     @staticmethod
@@ -373,7 +382,7 @@ class Runner:
             _runtime = time.time() - start_time  # start time defined in the outside scope before each decorated func
             if not isinstance(error, TestJunkieExecutionError):
                 if pre_processed:
-                    trace = error.message if sys.version_info[0] < 3 else str(error)
+                    trace = str(error)
                 else:
                     trace = traceback.format_exc()
                 __category, __event = TestCategory.ERROR, Event.ON_ERROR
@@ -541,8 +550,7 @@ class Runner:
             functions_list = suite.get_decorated_definition(decorator_type)
             for func in functions_list:
                 try:
-                    # deprecated but supports Python 2
-                    if "suite_parameter" in CU.getargspec(func["decorated_function"]).args:
+                    if "suite_parameter" in inspect.getfullargspec(func["decorated_function"]).args:
                         func["decorated_function"](suite.get_class_instance(), suite_parameter=class_parameter)
                     else:
                         func["decorated_function"](suite.get_class_instance())
@@ -618,7 +626,7 @@ class Runner:
         custom_function = custom_function \
             if str(custom_function).split(" at ")[0] != str(native_function).split(" at ")[0] else None
 
-        @synchronized(threading.Lock())
+        @synchronized(_EVENT_PROPERTIES_LOCK)
         def __create_properties():
             properties = {"suite_meta": suite.get_meta(copy_of_meta=True),
                           "test_meta": test.get_meta(param, class_param, copy_of_meta=True) if test else None,
@@ -639,12 +647,9 @@ class Runner:
                 native_function(custom_function=custom_function,
                                 properties=__create_properties())
         except Exception:
-            trace = ""
-            if sys.version_info[0] < 3:
-                trace = "\n\n{}".format(traceback.format_exc())
             raise TestListenerError("Exception occurred while processing custom event listener for function: {}. "
-                                    "For help on defining custom event listeners, see documentation: {}{}"
-                                    .format(custom_function, DocumentationLinks.LISTENERS, trace))
+                                    "For help on defining custom event listeners, see documentation: {}"
+                                    .format(custom_function, DocumentationLinks.LISTENERS))
 
     @staticmethod
     def __runnable_tags(test, tag_config):
@@ -702,11 +707,8 @@ class Runner:
                         return False
 
             except Exception:
-                trace = ""
-                if sys.version_info[0] < 3:
-                    trace = "\n\n{}".format(traceback.format_exc())
                 raise ConfigError("Error occurred while trying to parse `tag_config`. For help on defining the config, "
-                                  "see documentation: {}{}".format(DocumentationLinks.TAGS, trace))
+                                  "see documentation: {}".format(DocumentationLinks.TAGS))
         return True
 
     def __positive_skip_condition(self, test):
@@ -719,29 +721,8 @@ class Runner:
 
         # Run only tests that were requested
         if can_skip is False and self.__settings.tests is not None:
-            requested = False
-            if sys.version_info[0] < 3:
-                """
-                While both in Python 2 and 3 function objects look like, tests.junkie_suites.SkipSuites
-                in Python 2 the list gets stored as:
-                    [<unbound method SkipTests.test_1>, <unbound method SkipTests.test_2>]
-                and in Python 3 its stored as:
-                    [<function SkipTests.test_1 at 0x0438A780>, <function SkipTests.test_2 at 0x0438A7C8>]
-                So oddly enough in Python 2 the regular check did not work, thus this hack
-                """
-
-                for t in self.__settings.tests:
-                    if not isinstance(t, str):
-                        if inspect.getsource(test.get_function_object()) == inspect.getsource(t):
-                            requested = True
-                            break
-                    else:
-                        if test.get_function_name() in self.__settings.tests:
-                            requested = True
-                            break
-            else:
-                requested = test.get_function_object() in self.__settings.tests or \
-                                test.get_function_name() in self.__settings.tests
+            requested = test.get_function_object() in self.__settings.tests or \
+                        test.get_function_name() in self.__settings.tests
 
             can_skip = not requested  # if test was not requested as part of the tests set, we can skip it
 

@@ -1,3 +1,4 @@
+import sys
 import traceback
 
 from test_junkie.constants import TestCategory
@@ -68,5 +69,8 @@ class XmlReporter:
                                     if test_status == "failure":
                                         SubElement(test, "failure", type="failure")
                                     ElementTree(root).write(write_file)
-            except:
-                LogJunkie.error(traceback.format_exc())
+            except Exception:
+                trace = traceback.format_exc()
+                print("[WARNING] Failed to write XML report to: {}\n{}".format(write_file, trace),
+                      file=sys.stderr)
+                LogJunkie.error(trace)

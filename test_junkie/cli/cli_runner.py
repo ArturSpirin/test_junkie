@@ -1,5 +1,6 @@
 import ast
-import imp
+import glob
+import importlib.util
 import inspect
 import os
 import sys
@@ -8,8 +9,6 @@ import time
 import re
 from contextlib import contextmanager
 
-from setuptools.glob import glob
-
 from test_junkie.cli.cli import CliUtils
 from test_junkie.constants import CliConstants, Undefined, DocumentationLinks
 from test_junkie.debugger import suppressed_stdout
@@ -17,6 +16,14 @@ from test_junkie.decorators import synchronized
 from test_junkie.errors import BadCliParameters
 from test_junkie.runner import Runner
 from test_junkie.cli.cli_config import Config
+
+
+def _load_source(module_name, file_path):
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 class CliRunner:
@@ -127,7 +134,7 @@ class CliRunner:
                           assumed_root=CliUtils.format_color_string(value=possibility, color="yellow")))
             try:
                 sys.path.insert(0, possibility)
-                return imp.load_source(_module_name, _file_path)
+                return _load_source(_module_name, _file_path)
             except KeyboardInterrupt:
                 print("(Ctrl+C) Exiting!")
                 exit(12)
@@ -142,7 +149,7 @@ class CliRunner:
             module_name = os.path.splitext(os.path.basename(_file_path))[0]
             try:
                 with suppressed_stdout(suppress=True):
-                    module = imp.load_source(module_name, _file_path)
+                    module = _load_source(module_name, _file_path)
             except ImportError as error:
                 if self.guess_root:
                     module = guess_project_root(_file_path, module_name, error)
@@ -180,14 +187,9 @@ class CliRunner:
 
         @contextmanager
         def open_file(_file):
-            if sys.version_info[0] < 3:
-                with open(_file) as _doc:
-                    _source = _doc.read()
-                    yield (_source, _doc)
-            else:
-                with open(_file, encoding="utf-8") as _doc:
-                    _source = _doc.read()
-                    yield (_source, _doc)
+            with open(_file, encoding="utf-8") as _doc:
+                _source = _doc.read()
+                yield (_source, _doc)
 
         def parse_file(_file):
 
@@ -220,7 +222,7 @@ class CliRunner:
                         if self.__skip(source, dirName):
                             continue
 
-                        for file_path in glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
+                        for file_path in glob.glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
                             if parse_file(file_path)is True:
                                 continue
             for thread in CliRunner.__SCANNER_THREADS:

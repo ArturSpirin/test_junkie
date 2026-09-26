@@ -8,5 +8,5 @@ TESTS = ROOT + "{0}tests{0}cli_edge".format(os.sep)
 
 def test_interrupt():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    print(Cmd.run(['python', EXE, 'run', '-s', TESTS]))
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    print(Cmd.run(['python3', EXE, 'run', '-s', TESTS]))

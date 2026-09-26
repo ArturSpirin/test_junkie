@@ -15,11 +15,11 @@ TESTS = ROOT + "{0}tests{0}cli".format(os.sep)
 
 def test_help():
 
-    commands = [['python', EXE, '-h'],
-                ['python', EXE, 'run', '-h'],
-                ['python', EXE, 'audit', '-h'],
-                ['python', EXE, 'config', '-h'],
-                ['python', EXE, 'version', '-h']]
+    commands = [['python3', EXE, '-h'],
+                ['python3', EXE, 'run', '-h'],
+                ['python3', EXE, 'audit', '-h'],
+                ['python3', EXE, 'config', '-h'],
+                ['python3', EXE, 'version', '-h']]
     for cmd in commands:
         output = Cmd.run(cmd)
         for line in output:
@@ -29,14 +29,14 @@ def test_help():
 
 def test_sub_command_help():
 
-    commands = [['python', EXE, 'audit', 'features', '-h'],
-                ['python', EXE, 'audit', 'tags', '-h'],
-                ['python', EXE, 'audit', 'components', '-h'],
-                ['python', EXE, 'audit', 'owners', '-h'],
-                ['python', EXE, 'audit', 'suites', '-h'],
-                ['python', EXE, 'config', 'update', '-h'],
-                ['python', EXE, 'config', 'show', '-h'],
-                ['python', EXE, 'config', 'restore', '-h']]
+    commands = [['python3', EXE, 'audit', 'features', '-h'],
+                ['python3', EXE, 'audit', 'tags', '-h'],
+                ['python3', EXE, 'audit', 'components', '-h'],
+                ['python3', EXE, 'audit', 'owners', '-h'],
+                ['python3', EXE, 'audit', 'suites', '-h'],
+                ['python3', EXE, 'config', 'update', '-h'],
+                ['python3', EXE, 'config', 'show', '-h'],
+                ['python3', EXE, 'config', 'restore', '-h']]
     for cmd in commands:
         output = Cmd.run(cmd)
         for line in output:
@@ -47,12 +47,12 @@ def test_sub_command_help():
 def test_incomplete_inputs():
 
     commands = [
-                ['python', EXE, 'config'],
-                ['python', EXE, 'config', 'update'],
-                ['python', EXE, 'config', 'restore'],
-                ['python', EXE, 'config', 'show'],
-                ['python', EXE, 'audit'],
-                ['python', EXE, 'version']]
+                ['python3', EXE, 'config'],
+                ['python3', EXE, 'config', 'update'],
+                ['python3', EXE, 'config', 'restore'],
+                ['python3', EXE, 'config', 'show'],
+                ['python3', EXE, 'audit'],
+                ['python3', EXE, 'version']]
     for cmd in commands:
         output = Cmd.run(cmd)
         for line in output:
@@ -62,18 +62,18 @@ def test_incomplete_inputs():
 
 def test_config_update():
 
-    commands = [['python', EXE, 'config', 'update', '--test_multithreading_limit', '10'],
-                ['python', EXE, 'config', 'update', '--suite_multithreading_limit', '10'],
-                ['python', EXE, 'config', 'update', '--features', 'feat'],
-                ['python', EXE, 'config', 'update', '--components', 'comp'],
-                ['python', EXE, 'config', 'update', '--owners', 'own'],
-                ['python', EXE, 'config', 'update', '--monitor_resources'],
-                ['python', EXE, 'config', 'update', '--html_report', '/test/path/for/html'],
-                ['python', EXE, 'config', 'update', '--xml_report', '/test/path/for/xml'],
-                ['python', EXE, 'config', 'update', '--run_on_match_all', '1000'],
-                ['python', EXE, 'config', 'update', '--run_on_match_any', '2000'],
-                ['python', EXE, 'config', 'update', '--skip_on_match_all', '3000'],
-                ['python', EXE, 'config', 'update', '--skip_on_match_any', '4000'],
+    commands = [['python3', EXE, 'config', 'update', '--test_multithreading_limit', '10'],
+                ['python3', EXE, 'config', 'update', '--suite_multithreading_limit', '10'],
+                ['python3', EXE, 'config', 'update', '--features', 'feat'],
+                ['python3', EXE, 'config', 'update', '--components', 'comp'],
+                ['python3', EXE, 'config', 'update', '--owners', 'own'],
+                ['python3', EXE, 'config', 'update', '--monitor_resources'],
+                ['python3', EXE, 'config', 'update', '--html_report', '/test/path/for/html'],
+                ['python3', EXE, 'config', 'update', '--xml_report', '/test/path/for/xml'],
+                ['python3', EXE, 'config', 'update', '--run_on_match_all', '1000'],
+                ['python3', EXE, 'config', 'update', '--run_on_match_any', '2000'],
+                ['python3', EXE, 'config', 'update', '--skip_on_match_all', '3000'],
+                ['python3', EXE, 'config', 'update', '--skip_on_match_any', '4000'],
                 ]
     for cmd in commands:
         output = Cmd.run(cmd)
@@ -89,18 +89,18 @@ def test_config_update():
 
 def test_config_restore():
 
-    commands = [['python', EXE, 'config', 'restore', '--test_multithreading_limit'],
-                ['python', EXE, 'config', 'restore', '--suite_multithreading_limit'],
-                ['python', EXE, 'config', 'restore', '--features'],
-                ['python', EXE, 'config', 'restore', '--components'],
-                ['python', EXE, 'config', 'restore', '--owners'],
-                ['python', EXE, 'config', 'restore', '--monitor_resources'],
-                ['python', EXE, 'config', 'restore', '--html_report'],
-                ['python', EXE, 'config', 'restore', '--xml_report'],
-                ['python', EXE, 'config', 'restore', '--run_on_match_all'],
-                ['python', EXE, 'config', 'restore', '--run_on_match_any'],
-                ['python', EXE, 'config', 'restore', '--skip_on_match_all'],
-                ['python', EXE, 'config', 'restore', '--skip_on_match_any'],
+    commands = [['python3', EXE, 'config', 'restore', '--test_multithreading_limit'],
+                ['python3', EXE, 'config', 'restore', '--suite_multithreading_limit'],
+                ['python3', EXE, 'config', 'restore', '--features'],
+                ['python3', EXE, 'config', 'restore', '--components'],
+                ['python3', EXE, 'config', 'restore', '--owners'],
+                ['python3', EXE, 'config', 'restore', '--monitor_resources'],
+                ['python3', EXE, 'config', 'restore', '--html_report'],
+                ['python3', EXE, 'config', 'restore', '--xml_report'],
+                ['python3', EXE, 'config', 'restore', '--run_on_match_all'],
+                ['python3', EXE, 'config', 'restore', '--run_on_match_any'],
+                ['python3', EXE, 'config', 'restore', '--skip_on_match_all'],
+                ['python3', EXE, 'config', 'restore', '--skip_on_match_any'],
                 ]
     for cmd in commands:
         output = Cmd.run(cmd)
@@ -116,9 +116,9 @@ def test_config_restore():
 
 def test_audit_by_owner():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', 'owners', '-s', TESTS],
-                ['python', EXE, 'audit', 'owners', '-s', TESTS, '-o', 'Mike']]
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    commands = [['python3', EXE, 'audit', 'owners', '-s', TESTS],
+                ['python3', EXE, 'audit', 'owners', '-s', TESTS, '-o', 'Mike']]
     for cmd in commands:
         output = Cmd.run(cmd)
         assert_not_in = ["Tag:", "Component:", "Owners:", "Feature:", "Suite:"]
@@ -141,9 +141,9 @@ def test_audit_by_owner():
 
 def test_audit_by_suite():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', 'suites', '-s', TESTS],
-                ['python', EXE, 'audit', 'suites', '-s', TESTS, '-o', 'Mike']]
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    commands = [['python3', EXE, 'audit', 'suites', '-s', TESTS],
+                ['python3', EXE, 'audit', 'suites', '-s', TESTS, '-o', 'Mike']]
     for cmd in commands:
         output = Cmd.run(cmd)
         assert_not_in = ["Tag:", "Owner:", "Component:", "Suites:"]
@@ -166,9 +166,9 @@ def test_audit_by_suite():
 
 
 def test_audit_by_tags():
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', 'tags', '-s', TESTS],
-                ['python', EXE, 'audit', 'tags', '-s', TESTS, '-l', 'sso']]
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    commands = [['python3', EXE, 'audit', 'tags', '-s', TESTS],
+                ['python3', EXE, 'audit', 'tags', '-s', TESTS, '-l', 'sso']]
     for cmd in commands:
         output = Cmd.run(cmd)
         assert_not_in = ["Tags:", "Owner:", "Component:", "Suite:", "Feature:"]
@@ -186,9 +186,9 @@ def test_audit_by_tags():
 
 
 def test_audit_by_features():
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', 'features', '-s', TESTS],
-                ['python', EXE, 'audit', 'features', '-s', TESTS, '-f', 'Store']]
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    commands = [['python3', EXE, 'audit', 'features', '-s', TESTS],
+                ['python3', EXE, 'audit', 'features', '-s', TESTS, '-f', 'Store']]
     for cmd in commands:
         output = Cmd.run(cmd)
         assert_not_in = ["Tag:", "Owner:", "Component:", "Suite:", "Features:"]
@@ -206,9 +206,9 @@ def test_audit_by_features():
 
 
 def test_audit_by_components():
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    commands = [['python', EXE, 'audit', 'components', '-s', TESTS],
-                ['python', EXE, 'audit', 'components', '-s', TESTS, '-c', 'Admin']]
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    commands = [['python3', EXE, 'audit', 'components', '-s', TESTS],
+                ['python3', EXE, 'audit', 'components', '-s', TESTS, '-c', 'Admin']]
     for cmd in commands:
         output = Cmd.run(cmd)
         assert_not_in = ["Tag:", "Owner:", "Components:", "Suite:", "Feature:"]
@@ -227,13 +227,13 @@ def test_audit_by_components():
 
 def test_bad_inputs():
 
-    commands = [['python', EXE, 'run'],
-                ['python', EXE, 'audit'],
-                ['python', EXE, 'config'],
-                ['python', EXE, 'configgg'],
-                ['python', EXE, 'config', 'restore'],
-                ['python', EXE, 'config', 'update'],
-                ['python', EXE, 'config', 'updateee']]
+    commands = [['python3', EXE, 'run'],
+                ['python3', EXE, 'audit'],
+                ['python3', EXE, 'config'],
+                ['python3', EXE, 'configgg'],
+                ['python3', EXE, 'config', 'restore'],
+                ['python3', EXE, 'config', 'update'],
+                ['python3', EXE, 'config', 'updateee']]
     for cmd in commands:
         output = Cmd.run(cmd)
         for line in output:
@@ -244,7 +244,7 @@ def test_bad_inputs():
 
 def test_config_restore_all():
 
-    commands = [['python', EXE, 'config', 'restore', '--all']]
+    commands = [['python3', EXE, 'config', 'restore', '--all']]
     for cmd in commands:
         output = Cmd.run(cmd)
         for line in output:
@@ -255,7 +255,7 @@ def test_config_restore_all():
 
 def test_config_show_all():
 
-    commands = [['python', EXE, 'config', 'show', '--all']]
+    commands = [['python3', EXE, 'config', 'show', '--all']]
     for cmd in commands:
         output = Cmd.run(cmd)
         for line in output:
@@ -276,11 +276,11 @@ def validate_output(expected, output, cmd):
 
 def test_run_with_cmd_args():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    for cmd in [['python', EXE, 'run', '-s', TESTS, '-k', 'api'],
-                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '-q'],
-                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov'],
-                ['python', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov', '-q']]:
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    for cmd in [['python3', EXE, 'run', '-s', TESTS, '-k', 'api'],
+                ['python3', EXE, 'run', '-s', TESTS, '-k', 'api', '-q'],
+                ['python3', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov'],
+                ['python3', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov', '-q']]:
         output = Cmd.run(cmd)
         pprint.pprint(output)
         validate_output(expected=[["6/6 100.00", "SUCCESS"]], output=output, cmd=cmd)
@@ -288,10 +288,10 @@ def test_run_with_cmd_args():
 
 def test_run_with_config_and_cmd_args():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    Cmd.run(['python', EXE, 'config', 'update', '-k', 'api ui'])
-    Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
-    cmd = ['python', EXE, 'run', '-s', TESTS, '-k', 'api']
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-k', 'api ui'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-g', 'sso'])
+    cmd = ['python3', EXE, 'run', '-s', TESTS, '-k', 'api']
     output = Cmd.run(cmd)
     pprint.pprint(output)
     validate_output(expected=[["[4/6 66.67%]", "SUCCESS"]], output=output, cmd=cmd)
@@ -299,10 +299,10 @@ def test_run_with_config_and_cmd_args():
 
 def test_run_with_config():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    Cmd.run(['python', EXE, 'config', 'update', '-k', 'api', 'ui'])
-    Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
-    cmd = ['python', EXE, 'run', '-s', TESTS]
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-k', 'api', 'ui'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-g', 'sso'])
+    cmd = ['python3', EXE, 'run', '-s', TESTS]
     output = Cmd.run(cmd)
     pprint.pprint(output)
     validate_output(expected=[["[9/11 81.82%]", "SUCCESS"]], output=output, cmd=cmd)
@@ -310,9 +310,9 @@ def test_run_with_config():
 
 def test_runner_with_config():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    Cmd.run(['python', EXE, 'config', 'update', '-k', 'ui'])
-    Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-k', 'ui'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-g', 'sso'])
     runner = Runner(suites=[ShoppingCartSuite, AuthApiSuite],
                     config=Config.get_config_path(CliConstants.TJ_CONFIG_NAME))
     runner.run()
@@ -351,9 +351,9 @@ def test_runner_with_config():
 
 def test_runner_without_config():
 
-    Cmd.run(['python', EXE, 'config', 'restore', '--all'])
-    Cmd.run(['python', EXE, 'config', 'update', '-k', 'ui'])
-    Cmd.run(['python', EXE, 'config', 'update', '-g', 'sso'])
+    Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-k', 'ui'])
+    Cmd.run(['python3', EXE, 'config', 'update', '-g', 'sso'])
 
     runner = Runner(suites=[NewProductsSuite])
     runner.run()

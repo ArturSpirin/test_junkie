@@ -1,5 +1,4 @@
 import subprocess
-import sys
 import traceback
 
 
@@ -17,10 +16,7 @@ class Cmd:
                 out = subprocess.check_output(cmd)
             except subprocess.CalledProcessError as ex:
                 out = ex.output
-            if sys.version_info[0] < 3:
-                output = str(out).replace("\r", "").replace("\t", "").strip().split("\n")
-            else:
-                output = str(out).replace("\\r", "").replace("\\t", "").strip().split("\\n")
+            output = str(out).replace("\\r", "").replace("\\t", "").strip().split("\\n")
             for i in list(output):
                 if i == "" or len(i) < 2:
                     output.remove(i)

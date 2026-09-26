@@ -5,6 +5,10 @@ import time
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import synchronized
 
+# guards _build_reverse_restriction() below - two suites starting at the same time could race
+# and one would drop the other's restriction
+_SUITE_REVERSE_RESTRICTION_LOCK = threading.Lock()
+
 
 class ParallelProcessor:
 
@@ -72,7 +76,7 @@ class ParallelProcessor:
 
     def suite_limit_reached(self):
         active = 0
-        for suite, data in ParallelProcessor.__PARALLELS.items():
+        for suite, data in list(ParallelProcessor.__PARALLELS.items()):
             if data["thread"].is_alive():
                 active += 1
         if active >= self.__suite_limit:
@@ -83,7 +87,7 @@ class ParallelProcessor:
     def test_limit_reached(self):
         active = 0
         for suite, info in list(ParallelProcessor.__PARALLELS.items()):
-            for test in info["tests"]:
+            for test in list(info["tests"]):
                 if test["thread"].is_alive():
                     active += 1
                 else:
@@ -145,7 +149,8 @@ class ParallelProcessor:
                     raise Exception("Parallel suite restrictions must be class objects. "
                                     "Instead suite: {} was restricted by a function: {}"
                                     .format(suite.get_class_object(), restriction))
-                _build_reverse_restriction()
+                with _SUITE_REVERSE_RESTRICTION_LOCK:
+                    _build_reverse_restriction()
                 if not _passes_restriction():
                     return False
         if not _passes_reverse_restriction():
