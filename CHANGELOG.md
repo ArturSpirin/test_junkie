@@ -15,3 +15,5 @@
 - Replaced dead Travis CI with GitHub Actions, testing across all supported Python versions
 - Bumped pytest and a few transitive deps to close known Snyk vulnerabilities
 - README cleanup: dropped dead badges, added a features list, license badge, changelog link
+- Fixed CI actually failing on 3.12/3.13/3.14 - pkg_resources isn't available there anymore
+- Deleted the 6 stale snyk-fix branches now that they're consolidated

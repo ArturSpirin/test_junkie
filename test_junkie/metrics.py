@@ -1,4 +1,5 @@
 import errno
+import importlib.metadata
 import multiprocessing
 import os
 import sys
@@ -6,8 +7,6 @@ import threading
 import time
 import traceback
 from datetime import datetime
-
-import pkg_resources
 
 from test_junkie.cli.cli import CliUtils
 
@@ -380,7 +379,7 @@ class Aggregator(object):
                                               status=param_data["statuses"][index].upper()))
         print("\n===========================================================")
         print(". Test Junkie {} (Python{}) {} .".format(
-            pkg_resources.require("test-junkie")[0].version, sys.version_info[0], DocumentationLinks.DOMAIN)
+            importlib.metadata.version("test-junkie"), sys.version_info[0], DocumentationLinks.DOMAIN)
         )
         print("===========================================================")
 

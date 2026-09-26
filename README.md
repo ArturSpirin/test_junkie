@@ -11,11 +11,12 @@
 ## Key Features
 
 - Parallel execution at both the suite and test level, with fine-grained thread limits and restrictions
-- Built-in retry logic (`retry`, `retry_on`, `no_retry_on`) per test or per suite
-- Run exactly the tests you want by tag, feature, component, or owner — from Python or the CLI
+- Built-in retry logic (`retry`, `retry_on`, `no_retry_on`) and parameterized suites/tests
+- Run exactly what you want by tag, feature, component, owner, or priority — from Python or the CLI
+- Reusable `Rules` (shared before/after logic across suites) and `Group Rules` (hooks that run once for a whole group of suites) — both distinct from the simpler per-suite `@beforeClass`/`@beforeTest` decorators
+- Custom event listeners, plus per-test metadata you can read and update at runtime
 - A real CLI (`tj run`, `tj audit`, `tj config`) for running and auditing suites without writing a runner script
 - HTML and XML reports, plus optional CPU/memory resource monitoring during a run
-- Custom event listeners and before/after group rules for cross-suite setup/teardown
 
 ## Installation
 

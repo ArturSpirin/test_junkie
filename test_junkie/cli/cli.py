@@ -1,7 +1,7 @@
 import argparse
+import importlib.metadata
 import sys
 import traceback
-import pkg_resources
 
 from test_junkie.cli.cli_audit import CliAudit
 from test_junkie.constants import DocumentationLinks, CliConstants, Undefined
@@ -196,7 +196,7 @@ Use: tj config COMMAND -h to display COMMAND specific help
                 exit(120)
 
     def version(self):
-        print("Test Junkie {} (Python{})\n{}".format(pkg_resources.require("test-junkie")[0].version,
+        print("Test Junkie {} (Python{})\n{}".format(importlib.metadata.version("test-junkie"),
                                                      sys.version_info[0],
                                                      DocumentationLinks.DOMAIN))
 
