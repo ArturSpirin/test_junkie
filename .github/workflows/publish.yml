@@ -1,0 +1,127 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/test-junkie
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  smoke-test:
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Wait for TestPyPI to index the new release
+        run: sleep 30
+
+      - name: Install from TestPyPI in a clean venv
+        run: |
+          python -m venv smoke-venv
+          smoke-venv/bin/pip install --extra-index-url https://pypi.org/simple/ -i https://test.pypi.org/simple/ test-junkie
+
+      - name: Run the README example
+        run: |
+          cat > demo.py <<'EOF'
+          from test_junkie.decorators import Suite, beforeTest, afterTest, test, beforeClass, afterClass
+
+
+          @Suite()
+          class ExampleTestSuite:
+
+              @beforeClass()
+              def before_class(self):
+                  print("Hi, I'm before class")
+
+              @beforeTest()
+              def before_test(self):
+                  print("Hi, I'm before test")
+
+              @afterTest()
+              def after_test(self):
+                  print("Hi, I'm after test")
+
+              @afterClass()
+              def after_class(self):
+                  print("Hi, I'm after class")
+
+              @test()
+              def something_to_test1(self):
+                  print("Hi, I'm test #1")
+
+              @test()
+              def something_to_test2(self):
+                  print("Hi, I'm test #2")
+
+              @test()
+              def something_to_test3(self):
+                  print("Hi, I'm test #3")
+
+
+          if "__main__" == __name__:
+              from test_junkie.runner import Runner
+              runner = Runner([ExampleTestSuite])
+              result = runner.run()
+              report = result.get_basic_report()["tests"]
+              assert report["total"] == 3, report
+              assert report["success"] == 3, report
+              print("Smoke test passed.")
+          EOF
+          smoke-venv/bin/python demo.py
+
+  publish-pypi:
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/test-junkie
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

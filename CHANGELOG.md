@@ -17,3 +17,4 @@
 - README cleanup: dropped dead badges, added a features list, license badge, changelog link
 - Fixed CI actually failing on 3.12/3.13/3.14 - pkg_resources isn't available there anymore
 - Deleted the 6 stale snyk-fix branches now that they're consolidated
+- Added a real publish pipeline: tag push -> TestPyPI -> smoke test -> PyPI, no stored credentials
