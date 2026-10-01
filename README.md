@@ -14,17 +14,22 @@
   ▸ Zero plugins. Full arsenal.
 </p>
 
-# Test Junkie [![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Test+Junkie+is+one+of+the+most+powerful+testing+frameworks+on+Python+that+you+did+not+hear+of+and+you+are+missing+out!&url=https%3A%2F%2Ftest-junkie.com&hashtags=automation,testing,python&original_referer=https%3A%2F%2Fgithub.com%2F&tw_p=tweetbutton)
+# Test Junkie [![Share on X](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Just+found+Test+Junkie+%E2%80%94+a+Python+test+runner+with+built-in+parallelism%2C+exception-aware+retries%2C+multi-layer+parametrization%2C+and+zero+plugins+required.+This+is+how+Python+testing+should+feel.+%F0%9F%8E%AF&url=https%3A%2F%2Ftest-junkie.com&hashtags=python,testing,automation&original_referer=https%3A%2F%2Fgithub.com%2F&tw_p=tweetbutton)
 
 ## Key Features
 
-- Parallel execution at both the suite and test level, with fine-grained thread limits and restrictions
-- Built-in retry logic (`retry`, `retry_on`, `no_retry_on`) and parameterized suites/tests
-- Run exactly what you want by tag, feature, component, owner, or priority — from Python or the CLI
-- Reusable `Rules` (shared before/after logic across suites) and `Group Rules` (hooks that run once for a whole group of suites) — both distinct from the simpler per-suite `@beforeClass`/`@beforeTest` decorators
-- Custom event listeners, plus per-test metadata you can read and update at runtime
-- A real CLI (`tj run`, `tj audit`, `tj config`) for running and auditing suites without writing a runner script
-- HTML and XML reports, plus optional CPU/memory resource monitoring during a run
+> Not a wrapper around `unittest`. Every capability below ships with the library — no plugins to install, no config files to write, no external orchestrators.
+
+- Decorator-based: `@Suite` and `@test` on plain Python classes — no base class to extend, no config file to maintain
+- Lifecycle hooks: `@beforeClass`, `@afterClass`, `@beforeTest`, `@afterTest` — declared directly on the class
+- Built-in parallel execution with independent thread limits at the suite tier (`-T`) and the test tier (`-S`) — opt-in per class and per test, no external orchestrator needed
+- Exception-aware retries: `retry_on=[ConnectionError]` re-runs on infrastructure noise; `no_retry_on=[AssertionError]` ensures real bugs always surface
+- Multi-layer parametrization: suite params × test params = every combination, each variant tracked and retried independently
+- `Rules` class for shared lifecycle across suites — define hooks once, attach to many suites; one change propagates everywhere
+- First-class `owner`, `component`, `tags`, and `priority` on every test — `tj run --tags smoke` in CI, full suite locally, no test-selection scripts to maintain
+- Typed result objects via `runner.summary.suites` and live-firing `Listener(on_failure=...)` — build alerts and CI gates without a plugin system
+- HTML, XML, and JSON reports after every run — no plugins, no config files, no post-processing step
+- Full CLI: `tj run`, `tj audit`, `tj config` — run and inspect suites without writing a runner script
 
 ## Installation
 
@@ -35,65 +40,24 @@ From your favorite terminal:
 Supports the latest stable Python release plus the five prior minor versions. See the
 [pyversions badge](https://pypi.python.org/pypi/test_junkie/) above for the exact list currently published.
 
-## Basic Usage
+## Getting Started
 
-Save the code below into a Python file. Let's say `demo.py`.
-```python
-from test_junkie.decorators import Suite, beforeTest, afterTest, test, beforeClass, afterClass
+Install it:
 
-
-@Suite()
-class ExampleTestSuite:
-
-    @beforeClass()
-    def before_class(self):
-        print("Hi, I'm before class")
-
-    @beforeTest()
-    def before_test(self):
-        print("Hi, I'm before test")
-
-    @afterTest()
-    def after_test(self):
-        print("Hi, I'm after test")
-
-    @afterClass()
-    def after_class(self):
-        print("Hi, I'm after class")
-
-    @test()
-    def something_to_test1(self):
-        print("Hi, I'm test #1")
-
-    @test()
-    def something_to_test2(self):
-        print("Hi, I'm test #2")
-
-    @test()
-    def something_to_test3(self):
-        print("Hi, I'm test #3")
-
-
-# and to run this marvel programmatically, all you need to do . . .
-if "__main__" == __name__:
-    from test_junkie.runner import Runner
-    runner = Runner([ExampleTestSuite])
-    runner.run()
-    # OR use Test Junkie's CLI: `tj run -s demo.py`
+```
+pip install test-junkie
 ```
 
-## CLI
+<p align="center">
+  <a href="https://www.test-junkie.com/get-started/"><img src="https://img.shields.io/badge/Get_Started-Quickstart_%C2%B7_Examples_%C2%B7_CLI-f37814?style=for-the-badge" alt="Get Started"></a>
+  &nbsp;
+  <a href="https://www.test-junkie.com/documentation/"><img src="https://img.shields.io/badge/Full_Documentation-test--junkie.com-1d2b3a?style=for-the-badge" alt="Full Documentation"></a>
+</p>
 
-Test Junkie has full [CLI](https://www.test-junkie.com/documentation/#cli) support, and the above
-test suite can also be executed with `tj run -s demo.py`
+---
 
-For more examples, see [CLI documentation](https://www.test-junkie.com/documentation/#cli).
-
-## Output Example
-[![Test Junkie Console Output](https://www.test-junkie.com/static/media/console_out.jpg)](https://www.test-junkie.com/static/media/console_out.jpg)
-
-### Full documentation is available on **[test-junkie.com](https://www.test-junkie.com/)**  
-
-#### See [CHANGELOG.md](CHANGELOG.md) for recent changes.
-
-#### Please [report](https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md) any bugs you find.
+<p align="center">
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-recent%20changes-3a3f4b?style=flat-square" alt="Changelog"></a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/ArturSpirin/test_junkie/issues/new?template=bug_report.md"><img src="https://img.shields.io/badge/Bug%20Report-open%20an%20issue-b92c2c?style=flat-square" alt="Report a Bug"></a>
+</p>
