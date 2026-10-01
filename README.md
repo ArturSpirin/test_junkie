@@ -42,9 +42,9 @@ pip install test-junkie
 ## Getting Started
 
 <p align="center">
-  <a href="https://www.test-junkie.com/get-started/"><img src="https://img.shields.io/badge/Get%20Started-f37814?style=for-the-badge" alt="Get Started"></a>
+  <a href="https://www.test-junkie.com/get-started/"><img src="https://img.shields.io/badge/Getting%20Started%20Guide-f37814?style=for-the-badge" alt="Getting Started Guide"></a>
   &nbsp;
-  <a href="https://www.test-junkie.com/documentation/"><img src="https://img.shields.io/badge/Documentation-3a3f4b?style=for-the-badge" alt="Documentation"></a>
+  <a href="https://www.test-junkie.com/documentation/"><img src="https://img.shields.io/badge/Full%20Documentation-3a3f4b?style=for-the-badge" alt="Full Documentation"></a>
 </p>
 
 ---
