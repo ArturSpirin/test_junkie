@@ -31,6 +31,8 @@
 - HTML, XML, and JSON reports after every run — no plugins, no config files, no post-processing step
 - Full CLI: `tj run`, `tj audit`, `tj config` — run and inspect suites without writing a runner script
 
+And [more →](https://www.test-junkie.com/documentation/)
+
 ## Installation
 
 ```
