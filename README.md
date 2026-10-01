@@ -11,7 +11,7 @@
   </a>
   <br><br>
   <strong>The Python test runner built for precision.</strong><br>
-  <em>Built because the alternatives made you choose.</em>
+  <em>▸ Zero plugins. Full arsenal.</em>
 </p>
 
 # Test Junkie [![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Test+Junkie+is+one+of+the+most+powerful+testing+frameworks+on+Python+that+you+did+not+hear+of+and+you+are+missing+out!&url=https%3A%2F%2Ftest-junkie.com&hashtags=automation,testing,python&original_referer=https%3A%2F%2Fgithub.com%2F&tw_p=tweetbutton)
