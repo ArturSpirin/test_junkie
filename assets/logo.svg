@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" role="img" aria-label="Test Junkie">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 118" role="img" aria-label="Test Junkie">
   <title>Test Junkie</title>
   <defs>
     <filter id="logo-glow" x="-80%" y="-80%" width="260%" height="260%">
@@ -63,4 +63,21 @@
         font-family="'IBM Plex Mono', ui-monospace, 'Courier New', monospace"
         font-weight="500" font-size="19" letter-spacing="0.28em"
         fill="#f37814">JUNKIE</text>
+
+  <!-- Divider -->
+  <line x1="16" y1="84" x2="264" y2="84" class="ink-s" stroke-width="0.5" opacity="0.15"/>
+
+  <!-- Primary tagline -->
+  <text x="140" y="97"
+        text-anchor="middle"
+        font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="10.5"
+        class="ink">The Python test runner built for precision.</text>
+
+  <!-- Secondary tagline -->
+  <text x="140" y="112"
+        text-anchor="middle"
+        font-family="'IBM Plex Mono', ui-monospace, 'Courier New', monospace"
+        font-size="8.5" letter-spacing="0.06em"
+        fill="#f37814" opacity="0.75">Built because the alternatives made you choose.</text>
 </svg>
