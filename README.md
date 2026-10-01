@@ -31,27 +31,20 @@
 - HTML, XML, and JSON reports after every run — no plugins, no config files, no post-processing step
 - Full CLI: `tj run`, `tj audit`, `tj config` — run and inspect suites without writing a runner script
 
+And [more →](https://www.test-junkie.com/documentation/)
+
 ## Installation
-
-From your favorite terminal:
-
-`pip install test-junkie` or `python -m pip install test-junkie`
-
-Supports the latest stable Python release plus the five prior minor versions. See the
-[pyversions badge](https://pypi.python.org/pypi/test_junkie/) above for the exact list currently published.
-
-## Getting Started
-
-Install it:
 
 ```
 pip install test-junkie
 ```
 
+## Getting Started
+
 <p align="center">
-  <a href="https://www.test-junkie.com/get-started/"><img src="https://img.shields.io/badge/Get_Started-Quickstart_%C2%B7_Examples_%C2%B7_CLI-f37814?style=for-the-badge" alt="Get Started"></a>
+  <a href="https://www.test-junkie.com/get-started/"><img src="https://img.shields.io/badge/Get%20Started-f37814?style=for-the-badge" alt="Get Started"></a>
   &nbsp;
-  <a href="https://www.test-junkie.com/documentation/"><img src="https://img.shields.io/badge/Full_Documentation-test--junkie.com-1d2b3a?style=for-the-badge" alt="Full Documentation"></a>
+  <a href="https://www.test-junkie.com/documentation/"><img src="https://img.shields.io/badge/Documentation-3a3f4b?style=for-the-badge" alt="Documentation"></a>
 </p>
 
 ---
