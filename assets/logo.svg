@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" role="img" aria-label="Test Junkie">
+  <title>Test Junkie</title>
+  <defs>
+    <filter id="logo-glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      .ink  { fill:   #1c150e; }
+      .ink-s{ stroke: #1c150e; fill: none; }
+      @media (prefers-color-scheme: dark) {
+        .ink  { fill:   #e9edf5; }
+        .ink-s{ stroke: #e9edf5; }
+      }
+    </style>
+  </defs>
+
+  <!-- ── Targeting reticle, centered at (40,40), outer r=32 ── -->
+  <g transform="translate(40,40)">
+    <!-- Outer dashed ring -->
+    <circle r="32" fill="none" stroke="#f37814" stroke-width="1.8" stroke-dasharray="9 5" opacity="0.6"/>
+    <!-- Active lock arc: top-right quarter (3 o'clock → 12 o'clock) -->
+    <path d="M 32,0 A 32,32 0 0,0 0,-32" fill="none" stroke="#f37814" stroke-width="4.5" stroke-linecap="round"/>
+    <!-- Mid ring -->
+    <circle r="21" class="ink-s" stroke-width="1" opacity="0.13"/>
+    <!-- Inner acquisition ring -->
+    <circle r="15" fill="none" stroke="#f37814" stroke-width="2.5"/>
+    <!-- Crosshairs (gap around inner ring) -->
+    <line x1="-32" y1="0"   x2="-18" y2="0"   stroke="#f37814" stroke-width="2"/>
+    <line x1="18"  y1="0"   x2="32"  y2="0"   stroke="#f37814" stroke-width="2"/>
+    <line x1="0"   y1="-32" x2="0"   y2="-18" stroke="#f37814" stroke-width="2"/>
+    <line x1="0"   y1="18"  x2="0"   y2="32"  stroke="#f37814" stroke-width="2"/>
+    <!-- Corner L-bracket acquisition markers -->
+    <path d="M-23,-10 L-23,-23 L-10,-23" class="ink-s" stroke-width="3" stroke-linecap="round"/>
+    <path d="M10,-23 L23,-23 L23,-10"    class="ink-s" stroke-width="3" stroke-linecap="round"/>
+    <path d="M-23,10 L-23,23 L-10,23"   class="ink-s" stroke-width="3" stroke-linecap="round"/>
+    <path d="M10,23 L23,23 L23,10"      class="ink-s" stroke-width="3" stroke-linecap="round"/>
+    <!-- Cardinal precision ticks -->
+    <line x1="0"   y1="-36" x2="0"   y2="-33" class="ink-s" stroke-width="2" opacity="0.4"/>
+    <line x1="33"  y1="0"   x2="36"  y2="0"   class="ink-s" stroke-width="2" opacity="0.4"/>
+    <line x1="0"   y1="33"  x2="0"   y2="36"  class="ink-s" stroke-width="2" opacity="0.4"/>
+    <line x1="-36" y1="0"   x2="-33" y2="0"   class="ink-s" stroke-width="2" opacity="0.4"/>
+    <!-- 45° diagonal micro-ticks -->
+    <line x1="23.3"  y1="-23.3" x2="20.7"  y2="-20.7" class="ink-s" stroke-width="1.2" opacity="0.28"/>
+    <line x1="-23.3" y1="-23.3" x2="-20.7" y2="-20.7" class="ink-s" stroke-width="1.2" opacity="0.28"/>
+    <line x1="23.3"  y1="23.3"  x2="20.7"  y2="20.7"  class="ink-s" stroke-width="1.2" opacity="0.28"/>
+    <line x1="-23.3" y1="23.3"  x2="-20.7" y2="20.7"  class="ink-s" stroke-width="1.2" opacity="0.28"/>
+    <!-- Central glowing diamond -->
+    <polygon points="0,-8 8,0 0,8 -8,0" fill="#f37814" filter="url(#logo-glow)"/>
+    <circle r="2.5" fill="white" opacity="0.95"/>
+  </g>
+
+  <!-- Thin vertical divider -->
+  <line x1="86" y1="12" x2="86" y2="68" class="ink-s" stroke-width="0.8" opacity="0.18"/>
+
+  <!-- Wordmark -->
+  <text x="98" y="44"
+        font-family="'IBM Plex Mono', ui-monospace, 'Courier New', monospace"
+        font-weight="800" font-size="34" letter-spacing="0.05em"
+        class="ink">TEST</text>
+  <line x1="98" y1="50" x2="272" y2="50" stroke="#f37814" stroke-width="1.2" opacity="0.5"/>
+  <text x="99" y="66"
+        font-family="'IBM Plex Mono', ui-monospace, 'Courier New', monospace"
+        font-weight="500" font-size="19" letter-spacing="0.28em"
+        fill="#f37814">JUNKIE</text>
+</svg>
