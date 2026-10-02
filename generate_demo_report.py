@@ -173,6 +173,24 @@ class ApiSuite:
         time.sleep(0.05)
 
 
+@Suite(feature="API", owner="Eve", tags=["api"])
+class EnvironmentSuite:
+
+    @test(component="Health Check", tags=["api", "smoke"],
+          parameters=[{"env": "staging"}, {"env": "production"}, {"env": "dev"}])
+    def check_health(self, parameter):
+        time.sleep(0.06)
+        if parameter["env"] == "production":
+            raise AssertionError("Health check failed: production returned 503")
+
+    @test(component="Config", tags=["api"],
+          parameters=[{"format": "json"}, {"format": "yaml"}, {"format": "toml"}])
+    def load_config(self, parameter):
+        time.sleep(0.04)
+        if parameter["format"] == "toml":
+            raise Exception("TOML parser not available in this environment")
+
+
 @Suite(feature="Notifications", owner="Alice", tags=["notifications"])
 class NotificationSuite:
 
@@ -197,7 +215,8 @@ class NotificationSuite:
 if __name__ == "__main__":
     out = "demo_report.html"
     runner = Runner(
-        suites=[LoginSuite, LogoutSuite, DashboardSuite, ReportSuite, ApiSuite, NotificationSuite],
+        suites=[LoginSuite, LogoutSuite, DashboardSuite, ReportSuite, ApiSuite,
+                EnvironmentSuite, NotificationSuite],
         monitor_resources=True,
         html_report=out,
     )

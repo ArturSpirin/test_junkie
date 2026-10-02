@@ -203,10 +203,17 @@ class Reporter:
             f'stroke="var(--brand)" stroke-width="1" stroke-dasharray="2,3" opacity="0.35"/>')
         parts.append(
             f'<circle cx="{peak_x:.1f}" cy="{peak_y:.1f}" r="3.5" fill="var(--brand)"/>')
-        label_x = peak_x + 5
-        label_y = peak_y - 3
+        label_y = peak_y - 6
+        near_right = peak_x > x0 + w * 0.72
+        if near_right:
+            label_x = peak_x - 5
+            anchor = "end"
+        else:
+            label_x = peak_x + 5
+            anchor = "start"
         parts.append(
             f'<text x="{label_x:.1f}" y="{label_y:.1f}" fill="var(--brand)" '
+            f'text-anchor="{anchor}" '
             f'font-size="9" font-family="\'IBM Plex Mono\',monospace" '
             f'font-weight="600">{peak_val:.0f}% peak</text>')
         parts.append('</svg>')
@@ -317,14 +324,7 @@ class Reporter:
     # ── Insights (plain text) ─────────────────────────────────────────────────
 
     def __get_plain_insights(self):
-        plain = []
-        for item in self.analyzer.analysis:
-            text = re.sub(r"<[^>]+>", "", item)
-            text = (text.replace("&lt;", "<").replace("&gt;", ">")
-                    .replace("&amp;", "&").replace("&nbsp;", " ").strip())
-            if text:
-                plain.append(text)
-        return plain
+        return self.analyzer.structured_analysis
 
     # ── Table / detail data ────────────────────────────────────────────────────
 

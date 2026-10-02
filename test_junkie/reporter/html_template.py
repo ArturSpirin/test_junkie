@@ -69,12 +69,18 @@ header{border-bottom:1px solid var(--border);background:var(--surface);position:
 .bar-legend{display:flex;flex-wrap:wrap;gap:5px 14px;margin-bottom:18px}
 .bar-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-muted);font-family:'IBM Plex Mono',monospace}
 .bar-legend-swatch{width:10px;height:10px;border-radius:2px;flex:none}
-.insights-list{display:flex;flex-direction:column;gap:10px}
+.insights-list{display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:280px}
 .insight-item{display:flex;gap:10px;padding:10px 12px;background:var(--surface-raised);border-radius:6px;border-left:3px solid var(--border-strong);font-size:13px;color:var(--ink-muted);line-height:1.5}
 .insight-item.warn{border-left-color:var(--s-fail)}
 .insight-item.ok{border-left-color:var(--s-success)}
 .insight-item.info{border-left-color:var(--brand)}
 .insight-icon{flex:none;margin-top:1px}
+.traceback-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(255,118,81,0.12);border:1px solid rgba(255,118,81,0.3);border-radius:12px;color:var(--s-error);font-size:11px;font-family:'IBM Plex Mono',monospace;cursor:pointer;transition:background 0.15s;margin-left:6px;vertical-align:middle}
+.traceback-chip:hover{background:rgba(255,118,81,0.24)}
+.tb-filter-strip{display:none;align-items:center;gap:8px;padding:4px 10px;background:rgba(255,118,81,0.08);border-radius:4px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--s-error);margin-left:8px}
+.tb-filter-strip.visible{display:flex}
+.tb-filter-clear{background:none;border:none;color:var(--s-error);cursor:pointer;font-size:12px;padding:0 2px;opacity:0.7}
+.tb-filter-clear:hover{opacity:1}
 .breakdown-section{padding:12px 0 0}
 .breakdown-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .tab-bar{display:flex;border-bottom:1px solid var(--border);padding:0 20px;gap:4px}
@@ -435,6 +441,7 @@ class ReportTemplate:
 
     @staticmethod
     def _build_insights(insights):
+        import html as _html
         if not insights:
             return (
                 '<div class="insight-item ok">'
@@ -443,20 +450,38 @@ class ReportTemplate:
                 '</div>'
             )
         parts = []
-        for text in insights:
+        for item in insights:
+            if isinstance(item, dict):
+                text = item.get("text", "")
+                traceback_str = item.get("traceback")
+                test_ids = item.get("test_ids", [])
+            else:
+                text = item
+                traceback_str = None
+                test_ids = []
             tl = text.lower()
             if "stable" in tl or "no time" in tl:
                 cls, icon = "ok", "✓"
-            elif "retr" in tl or "traceback" in tl or "unique" in tl:
+            elif "retr" in tl or "traceback" in tl or "unique" in tl or "similar" in tl:
                 cls, icon = "warn", "⚠"
             else:
                 cls, icon = "info", "▸"
-            import html as _html
             safe = _html.escape(text)
+            chip_html = ""
+            if traceback_str and test_ids:
+                ids_json = ",".join(str(i) for i in test_ids)
+                tb_escaped = _html.escape(traceback_str, quote=True)
+                chip_html = (
+                    f'<button class="traceback-chip" '
+                    f'title="{tb_escaped}" '
+                    f'onclick="applyTracebackFilter([{ids_json}])">'
+                    f'&#x1F4CB; filter {len(test_ids)} tests'
+                    f'</button>'
+                )
             parts.append(
                 f'<div class="insight-item {cls}">'
                 f'<div class="insight-icon">{icon}</div>'
-                f'<div>{safe}</div></div>'
+                f'<div>{safe}{chip_html}</div></div>'
             )
         return "\n".join(parts)
 
@@ -597,6 +622,10 @@ class ReportTemplate:
             '<div class="filter-bar" id="filter-bar">'
             '<span class="filter-label">Filters</span>'
             '<button class="filter-clear-all" id="clear-all-btn">Clear all \xd7</button>'
+            '<div class="tb-filter-strip" id="tb-filter-strip">'
+            'Traceback group active'
+            '<button class="tb-filter-clear" onclick="clearTracebackFilter()" title="Clear traceback filter">\xd7</button>'
+            '</div>'
             '</div>\n'
             '<div class="table-wrap">'
             '<table id="results-table">'
@@ -736,6 +765,18 @@ let sortDir = 'asc';
 const FILTER_FIELDS = ['suite','feature','component','owner','tags','status'];
 const activeFilters = {};
 FILTER_FIELDS.forEach(f => activeFilters[f] = new Set());
+let tracebackFilterIds = null;
+
+function applyTracebackFilter(idsArr) {
+  tracebackFilterIds = new Set(idsArr.map(Number));
+  document.getElementById('tb-filter-strip').classList.add('visible');
+  applyAndRender();
+}
+function clearTracebackFilter() {
+  tracebackFilterIds = null;
+  document.getElementById('tb-filter-strip').classList.remove('visible');
+  applyAndRender();
+}
 
 function getDistinct(field) {
   if (field === 'tags') return [...new Set(TESTS.flatMap(t => t.tags||[]))].sort();
@@ -832,6 +873,7 @@ function clearField(field) {
 }
 document.getElementById('clear-all-btn').addEventListener('click', () => {
   FILTER_FIELDS.forEach(f => clearField(f));
+  clearTracebackFilter();
 });
 
 function buildTableHead() {
@@ -856,6 +898,7 @@ function buildTableHead() {
 function applyAndRender() {
   const global = (document.getElementById('global-search').value || '').toLowerCase();
   let rows = TESTS.filter(t => {
+    if (tracebackFilterIds !== null && !tracebackFilterIds.has(t.id)) return false;
     for (const field of FILTER_FIELDS) {
       if (activeFilters[field].size === 0) continue;
       if (field === 'tags') {
