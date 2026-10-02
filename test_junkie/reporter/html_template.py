@@ -77,6 +77,29 @@ header{border-bottom:1px solid var(--border);background:var(--surface);position:
 .insight-icon{flex:none;margin-top:1px}
 .traceback-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:rgba(255,118,81,0.12);border:1px solid rgba(255,118,81,0.3);border-radius:12px;color:var(--s-error);font-size:11px;font-family:'IBM Plex Mono',monospace;cursor:pointer;transition:background 0.15s;margin-left:6px;vertical-align:middle}
 .traceback-chip:hover{background:rgba(255,118,81,0.24)}
+.thread-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(243,120,20,0.12);border:1px solid rgba(243,120,20,0.3);border-radius:12px;color:var(--brand);font-size:11px;font-family:'IBM Plex Mono',monospace;cursor:pointer;transition:background 0.15s;margin-left:8px;vertical-align:middle}
+.thread-chip:hover{background:rgba(243,120,20,0.24)}
+#thread-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:900}
+#thread-dialog{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(640px,94vw);max-height:88vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;padding:28px;z-index:901;box-shadow:0 24px 60px rgba(0,0,0,0.45)}
+.td-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+.td-title{font-size:16px;font-weight:600;color:var(--ink)}
+.td-close{background:none;border:none;color:var(--ink-muted);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px}
+.td-close:hover{color:var(--ink);background:var(--surface-raised)}
+.td-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px}
+.td-metric{background:var(--surface-raised);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.td-metric-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;margin-bottom:6px}
+.td-metric-value{font-size:22px;font-weight:700;color:var(--ink);font-family:'IBM Plex Mono',monospace}
+.td-metric-sub{font-size:11px;color:var(--ink-muted);margin-top:4px}
+.td-metric.highlight .td-metric-value{color:var(--brand)}
+.td-code-wrap{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:22px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a5d6ff;white-space:nowrap;overflow-x:auto}
+.td-section-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;margin-bottom:10px}
+.td-table{width:100%;border-collapse:collapse;font-size:12px}
+.td-table th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace}
+.td-table td{padding:7px 8px;border-bottom:1px solid var(--border);color:var(--ink-muted)}
+.td-table tr:last-child td{border-bottom:none}
+.td-table .dur-cell{font-family:'IBM Plex Mono',monospace;color:var(--ink);text-align:right}
+.td-table .rank-bar{display:inline-block;height:6px;background:var(--brand);border-radius:3px;margin-right:6px;opacity:0.6}
+.td-note{font-size:11px;color:var(--ink-faint);margin-top:14px;line-height:1.6;padding:10px 12px;background:var(--surface-raised);border-radius:6px;border-left:3px solid var(--border-strong)}
 .tb-filter-strip{display:none;align-items:center;gap:8px;padding:4px 10px;background:rgba(255,118,81,0.08);border-radius:4px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--s-error);margin-left:8px}
 .tb-filter-strip.visible{display:flex}
 .tb-filter-clear{background:none;border:none;color:var(--s-error);cursor:pointer;font-size:12px;padding:0 2px;opacity:0.7}
@@ -271,6 +294,7 @@ class ReportTemplate:
             + ReportTemplate._results_section()
             + '</div>\n'
             + ReportTemplate._detail_panel()
+            + ReportTemplate._threading_dialog()
             + ReportTemplate._support_fab()
             + ReportTemplate._support_modal()
             + ReportTemplate._scripts(ctx)
@@ -351,6 +375,7 @@ class ReportTemplate:
             "tests_json": data.get("tests_json", "[]"),
             "details_json": data.get("details_json", "{}"),
             "bar_data_json": data.get("bar_data_json", "{}"),
+            "threading_data": data.get("threading_data"),
         }
 
     # ── Donut SVG ─────────────────────────────────────────────────────────────
@@ -467,8 +492,15 @@ class ReportTemplate:
             else:
                 cls, icon = "info", "▸"
             safe = _html.escape(text)
+            dialog = item.get("dialog") if isinstance(item, dict) else None
             chip_html = ""
-            if traceback_str and test_ids:
+            if dialog and dialog.get("type") == "threading":
+                chip_html = (
+                    '<button class="thread-chip" onclick="openThreadingDialog()">'
+                    '&#x26A1; analyze threading'
+                    '</button>'
+                )
+            elif traceback_str and test_ids:
                 ids_json = ",".join(str(i) for i in test_ids)
                 tb_escaped = _html.escape(traceback_str, quote=True)
                 chip_html = (
@@ -635,6 +667,28 @@ class ReportTemplate:
             '</div>\n</div>\n'
         )
 
+    # ── Threading analysis dialog ─────────────────────────────────────────────
+
+    @staticmethod
+    def _threading_dialog():
+        return (
+            '<div id="thread-backdrop" onclick="closeThreadingDialog()"></div>\n'
+            '<div id="thread-dialog" role="dialog" aria-modal="true" aria-labelledby="td-title">\n'
+            '<div class="td-header">'
+            '<div class="td-title" id="td-title">&#x26A1; Multi-threading Analysis</div>'
+            '<button class="td-close" onclick="closeThreadingDialog()" aria-label="Close">&#x2715;</button>'
+            '</div>\n'
+            '<div class="td-summary" id="td-summary"></div>\n'
+            '<div class="td-section-label">Enable in your runner</div>\n'
+            '<div class="td-code-wrap" id="td-code"></div>\n'
+            '<div class="td-section-label" style="margin-top:20px">Slowest tests &#x2014; bottleneck candidates</div>\n'
+            '<table class="td-table"><thead><tr>'
+            '<th>Test</th><th>Suite</th><th style="text-align:right">Duration</th>'
+            '</tr></thead><tbody id="td-tbody"></tbody></table>\n'
+            '<div class="td-note" id="td-note"></div>\n'
+            '</div>\n'
+        )
+
     # ── Detail panel ──────────────────────────────────────────────────────────
 
     @staticmethod
@@ -735,14 +789,17 @@ class ReportTemplate:
 
     @staticmethod
     def _scripts(ctx):
+        import json as _json
         tests_json = ctx["tests_json"].replace("</", "<\\/")
         details_json = ctx["details_json"].replace("</", "<\\/")
         bar_data_json = ctx["bar_data_json"].replace("</", "<\\/")
+        threading_json = _json.dumps(ctx.get("threading_data")).replace("</", "<\\/")
 
         return """<script>
 const TESTS = """ + tests_json + """;
 const DETAILS = """ + details_json + """;
 const BAR_DATA = """ + bar_data_json + """;
+const THREADING_DATA = """ + threading_json + """;
 
 /* ══ Column definitions ═══════════════════════════════════ */
 const COLUMNS = [
@@ -1137,6 +1194,50 @@ function closePanel() {
   backdrop.addEventListener('click', closeSupport);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSupport(); });
 })();
+
+/* ══ Threading dialog ════════════════════════════════════ */
+function openThreadingDialog() {
+  if (!THREADING_DATA) return;
+  const d = THREADING_DATA;
+  const sum = document.getElementById('td-summary');
+  sum.innerHTML = `
+    <div class="td-metric">
+      <div class="td-metric-label">Current (sequential)</div>
+      <div class="td-metric-value">${d.serial_time}s</div>
+      <div class="td-metric-sub">${d.test_count} tests · 1 thread</div>
+    </div>
+    <div class="td-metric highlight">
+      <div class="td-metric-label">Recommended (${d.recommended_threads} threads)</div>
+      <div class="td-metric-value">~${d.estimated_time}s</div>
+      <div class="td-metric-sub">${d.speedup}× faster · saves ~${d.time_saved}s per run</div>
+    </div>`;
+  document.getElementById('td-code').textContent =
+    `Runner(..., test_multithreading_limit=${d.recommended_threads})`;
+  const tbody = document.getElementById('td-tbody');
+  const maxDur = d.top_tests[0] ? d.top_tests[0].dur : 1;
+  tbody.innerHTML = d.top_tests.map((t, i) => {
+    const barW = Math.round(t.dur / maxDur * 80);
+    return `<tr>
+      <td><span class="rank-bar" style="width:${barW}px"></span>${escHtml(t.name)}</td>
+      <td style="color:var(--ink-faint)">${escHtml(t.suite)}</td>
+      <td class="dur-cell">${t.dur.toFixed(3)}s</td>
+    </tr>`;
+  }).join('');
+  const bottleneck = d.top_tests[0] ? d.top_tests[0].dur.toFixed(3) + 's' : '—';
+  document.getElementById('td-note').innerHTML =
+    `The minimum possible parallel run time is bounded by the slowest test: <strong style="color:var(--ink)">${bottleneck}</strong>. ` +
+    `Tests marked <code>parallelized=False</code> run in isolation and are excluded from threading gains. ` +
+    `Thread count above ${d.recommended_threads} shows diminishing returns for this test suite.`;
+  document.getElementById('thread-backdrop').style.display = 'block';
+  document.getElementById('thread-dialog').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+function closeThreadingDialog() {
+  document.getElementById('thread-backdrop').style.display = 'none';
+  document.getElementById('thread-dialog').style.display = 'none';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeThreadingDialog(); });
 
 /* ══ Theme toggle ════════════════════════════════════════ */
 document.getElementById('theme-toggle').addEventListener('click', () => {

@@ -48,6 +48,7 @@ class Reporter:
         self.__cpu_peak = "—"
         self.__mem_average = "—"
         self.__mem_peak = "—"
+        self._thread_tasks = []
 
     # ── Public entry point ────────────────────────────────────────────────────
 
@@ -60,6 +61,12 @@ class Reporter:
             resources_enabled = True
 
         table_data = self.__get_table_data()
+        insights = self.__get_plain_insights()
+        threading_data = next(
+            (i["dialog"] for i in insights
+             if isinstance(i, dict) and i.get("dialog", {}).get("type") == "threading"),
+            None
+        )
 
         totals = self.__build_totals(table_data["status_durations"])
         issues = (totals.get(TestCategory.FAIL, 0)
@@ -91,7 +98,8 @@ class Reporter:
             "mem_peak": self.__mem_peak,
             "resources_enabled": resources_enabled,
             "resource_svg": self.__build_resource_svg(resource_data),
-            "insights": self.__get_plain_insights(),
+            "insights": insights,
+            "threading_data": threading_data,
             "tests_json": json.dumps(table_data["tests_data"]),
             "details_json": json.dumps(table_data["details_data"]),
             "bar_data_json": json.dumps(self.__get_bar_data()),
@@ -324,7 +332,75 @@ class Reporter:
     # ── Insights (plain text) ─────────────────────────────────────────────────
 
     def __get_plain_insights(self):
-        return self.analyzer.structured_analysis
+        insights = list(self.analyzer.structured_analysis)
+        # Strip generic threading message; replaced below with richer analysis
+        insights = [
+            i for i in insights
+            if not (isinstance(i, dict) and "multi-thread" in i.get("text", "").lower())
+        ]
+        if not self.analyzer.multi_threading_enabled:
+            rich = self.__get_threading_insight()
+            if rich:
+                insights.append(rich)
+        return insights
+
+    def __get_threading_insight(self):
+        tasks = self._thread_tasks
+        if len(tasks) < 3:
+            return None
+
+        durations = [t["dur"] for t in tasks]
+        serial = sum(durations)
+
+        def simulate(n):
+            buckets = [0.0] * n
+            for d in sorted(durations, reverse=True):
+                idx = min(range(n), key=lambda i: buckets[i])
+                buckets[idx] += d
+            return max(buckets)
+
+        candidates = []
+        for n in range(2, min(len(tasks) + 1, 17)):
+            est = simulate(n)
+            candidates.append((n, est))
+            if len(candidates) >= 2:
+                prev = candidates[-2][1]
+                if prev > 0 and (prev - est) / prev < 0.05:
+                    break
+
+        # Last candidate before diminishing returns triggered the break;
+        # recommend the one before it if improvement was marginal.
+        if len(candidates) >= 2 and (candidates[-2][1] - candidates[-1][1]) / candidates[-2][1] < 0.05:
+            rec_n, rec_est = candidates[-2]
+        else:
+            rec_n, rec_est = candidates[-1]
+
+        speedup = serial / max(rec_est, 0.001)
+        saved = serial - rec_est
+
+        top_tests = sorted(tasks, key=lambda t: t["dur"], reverse=True)[:10]
+        all_ids = list({t["id"] for t in tasks})
+
+        return {
+            "text": "Multi-threading could save ~{:.1f}s ({:.1f}× faster with {} threads).".format(
+                saved, speedup, rec_n),
+            "traceback": None,
+            "test_ids": all_ids,
+            "dialog": {
+                "type": "threading",
+                "serial_time": round(serial, 2),
+                "recommended_threads": rec_n,
+                "estimated_time": round(rec_est, 2),
+                "speedup": round(speedup, 1),
+                "time_saved": round(saved, 2),
+                "test_count": len(tasks),
+                "top_tests": [
+                    {"id": t["id"], "name": t["name"], "suite": t["suite"],
+                     "dur": round(t["dur"], 3)}
+                    for t in top_tests
+                ],
+            },
+        }
 
     # ── Table / detail data ────────────────────────────────────────────────────
 
@@ -457,6 +533,13 @@ class Reporter:
 
                         raw_perf = list(pd.get("performance", []))
                         all_dur_floats.extend(raw_perf)
+                        if raw_perf:
+                            self._thread_tasks.append({
+                                "id": test_id,
+                                "name": test_name,
+                                "suite": suite_name,
+                                "dur": sum(raw_perf),
+                            })
 
                         start_ts = pd.get("start")
                         end_ts = pd.get("end")
