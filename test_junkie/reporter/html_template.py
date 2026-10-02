@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import math
 
 from test_junkie.constants import TestCategory
