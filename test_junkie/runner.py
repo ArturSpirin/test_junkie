@@ -485,6 +485,7 @@ class Runner:
                             continue  # everything recorded at this point in the metrics and flow is solid
                         # Running actual test
                         start_time = time.time()  # test start time
+                        test_case_start = start_time
                         Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
                                                    test=test, parameter=parameter, class_parameter=class_parameter)
                         runtime = time.time() - start_time
@@ -495,7 +496,7 @@ class Runner:
                     start_time = time.time()  # after test start time
                     if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
                         if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
-                            test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=None, param=parameter,
+                            test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=test_case_start, param=parameter,
                                                         class_param=class_parameter, runtime=runtime)
                             Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
                                                    class_param=class_parameter, param=parameter)

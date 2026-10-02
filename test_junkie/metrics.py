@@ -137,6 +137,10 @@ class TestMetrics(object):
             self.__stats[string_class_param][string_param]["param"] = param
             self.__stats[string_class_param][string_param]["class_param"] = class_param
             self.__stats[string_class_param][string_param]["statuses"].append(status)
+            if start_time is not None:
+                if "start" not in self.__stats[string_class_param][string_param]:
+                    self.__stats[string_class_param][string_param]["start"] = start_time
+                self.__stats[string_class_param][string_param]["end"] = start_time + (runtime or 0)
 
     def get_metrics(self):
 

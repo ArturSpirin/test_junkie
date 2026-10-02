@@ -1,10 +1,15 @@
+# -*- coding: utf-8 -*-
 import copy
-import html
+import html as html_module
 import json
+import math
+import re
 import time
 import traceback
+from datetime import datetime
+from statistics import mean, median
 
-from test_junkie.constants import TestCategory, DecoratorType, Color
+from test_junkie.constants import TestCategory, DecoratorType
 from test_junkie.debugger import LogJunkie
 from test_junkie.metrics import Aggregator
 from test_junkie.reporter.analyzer import Analyzer
@@ -15,7 +20,6 @@ class Reporter:
 
     @staticmethod
     def round(value):
-        from statistics import mean
         return str(float("{0:.2f}".format(float(mean(value))))) if value else "0"
 
     @staticmethod
@@ -24,16 +28,15 @@ class Reporter:
 
     @staticmethod
     def escape(s, quote=True):
-        return html.escape(s, quote=quote)
+        return html_module.escape(s, quote=quote)
 
     def __init__(self, monitoring_file, aggregator, runtime, multi_threading_enabled):
 
-        self.analyzer = Analyzer(monitoring_enabled=monitoring_file, multi_threading_enabled=multi_threading_enabled)
-
+        self.analyzer = Analyzer(monitoring_enabled=monitoring_file,
+                                 multi_threading_enabled=multi_threading_enabled)
         self.monitoring_file = monitoring_file
         self.aggregator = aggregator
         self.runtime = runtime
-
         self.features = aggregator.get_report_by_features()
         self.tags = aggregator.get_report_by_tags()
         self.test_totals = aggregator.get_basic_report()["tests"]
@@ -41,311 +44,598 @@ class Reporter:
         self.suites = aggregator.get_report_by_suite()
         self.average_runtime = aggregator.get_average_test_runtime()
 
-        self.__processed_resources = {}
-        self.__cpu_average = "Unknown"
-        self.__mem_average = "Unknown"
+        self.__cpu_average = "—"
+        self.__cpu_peak = "—"
+        self.__mem_average = "—"
+        self.__mem_peak = "—"
+        self._thread_tasks = []
+
+    # ── Public entry point ────────────────────────────────────────────────────
 
     def generate_html_report(self, write_file):
 
-        html = copy.deepcopy(ReportTemplate.get_body_template())
-
-        row_one_html = "<div class='row'>"
-        row_two_html = "<div class='row'>"
-
-        tiny = [{"label": "Tests Executed:", "value": str(self.test_totals["total"]),
-                 "tooltip": "Absolute # of tests executed.<br>May not match with the # of entries in the table "
-                            "because parameterized tests are nested in the table."},
-                {"label": "Passing Rate:", "value": "{:0.2f}%".format(float(self.test_totals[TestCategory.SUCCESS]) /
-                                                                      float(self.test_totals["total"]) * 100)
-                if self.test_totals[TestCategory.SUCCESS] > 0 else "0%", "tooltip": None},
-                {"label": "Runtime:", "value": time.strftime('%Hh:%Mm:%Ss', time.gmtime(self.runtime)),
-                 "tooltip": "Absolute time that it took to run all of the tests"},
-                {"label": "Average Test Runtime:", "value": str(time.strftime('%Hh:%Mm:%Ss',
-                                                                              time.gmtime(self.average_runtime))),
-                 "tooltip": "Avg. time per test. This accounts only for the functions decorated with @test()"}]
-        for card in tiny:
-            row_one_html += ReportTemplate.get_tiny_card_template(card["label"], card["value"], card["tooltip"])
-
-        row_two_html += ReportTemplate.get_health_of_features(self.__get_health_of_features())
-        absolute_metrics = self.__get_absolute_results_dataset()
-        row_two_html += ReportTemplate.get_absolute_results_template(absolute_metrics["data"],
-                                                                     absolute_metrics["colors"])
         resource_data = None
+        resources_enabled = False
         if self.monitoring_file is not None:
-            # has to be before get_table data due to analysis call there
             resource_data = self.__get_resources_data()
+            resources_enabled = True
 
         table_data = self.__get_table_data()
-        row_two_html += ReportTemplate.get_suggestions(table_data["opportunities"])
+        insights = self.__get_plain_insights()
+        threading_data = next(
+            (i["dialog"] for i in insights
+             if isinstance(i, dict) and i.get("dialog", {}).get("type") == "threading"),
+            None
+        )
 
-        row_two_html += ReportTemplate.get_resource_chart_template(resource_data)
-        row_one_html += ReportTemplate.get_tiny_card_template("Average CPU:", "{}%".format(self.__cpu_average))
-        row_one_html += ReportTemplate.get_tiny_card_template("Average Mem:", "{}%".format(self.__mem_average))
+        totals = self.__build_totals(table_data["status_durations"])
+        issues = (totals.get(TestCategory.FAIL, 0)
+                  + totals.get(TestCategory.ERROR, 0)
+                  + totals.get(TestCategory.CANCEL, 0))
 
-        row_two_html += ReportTemplate.get_stacked_bar_results_template(
-            features_data=self.__get_features_data(),
-            components_data=self.__get_components_data(),
-            team_data=self.__get_owner_data(),
-            suites_data=self.__get_suites_data(),
-            tags_data=self.__get_tags_data())
+        approx_start = datetime.fromtimestamp(time.time() - self.runtime)
+        run_date = approx_start.strftime("%Y-%m-%d")
+        run_time = approx_start.strftime("%H:%M:%S")
 
-        row_two_html += ReportTemplate.get_table(table_data["table_data"])
+        avg_rt_sec = self.average_runtime if self.average_runtime else 0
+        if avg_rt_sec >= 3600:
+            avg_runtime_str = time.strftime("%Hh:%Mm:%Ss", time.gmtime(avg_rt_sec))
+        elif avg_rt_sec >= 60:
+            avg_runtime_str = time.strftime("%Mm:%Ss", time.gmtime(avg_rt_sec))
+        else:
+            avg_runtime_str = "{:.2f}s".format(avg_rt_sec)
 
-        body = "{}</div>{}</div>{}".format(row_one_html, row_two_html, ReportTemplate.get_donation_options())
-        html = html.format(body=body, database_lol=json.dumps(table_data["database_lol"]))
+        template_data = {
+            "totals": totals,
+            "issues": issues,
+            "run_date": run_date,
+            "run_time": run_time,
+            "runtime": time.strftime("%Hh:%Mm:%Ss", time.gmtime(self.runtime)),
+            "avg_runtime": avg_runtime_str,
+            "cpu_avg": self.__cpu_average,
+            "cpu_peak": self.__cpu_peak,
+            "mem_avg": self.__mem_average,
+            "mem_peak": self.__mem_peak,
+            "resources_enabled": resources_enabled,
+            "resource_svg": self.__build_resource_svg(resource_data),
+            "insights": insights,
+            "threading_data": threading_data,
+            "tests_json": json.dumps(table_data["tests_data"]),
+            "details_json": json.dumps(table_data["details_data"]),
+            "bar_data_json": json.dumps(self.__get_bar_data()),
+            "suite_count": len(self.aggregator.executed_suites),
+        }
+
+        html_content = ReportTemplate.render(template_data)
         with open(write_file, "w+", encoding="utf8") as output:
-            output.write(html)
+            output.write(html_content)
+
+    # ── Resource monitoring ───────────────────────────────────────────────────
 
     def __get_resources_data(self):
-
         data = []
         cpu_samples = []
         mem_samples = []
         with open(self.monitoring_file, "r") as f:
             for line in f.readlines():
                 line = line.replace("\n", "")
-                li = line.split(",")
-                cpu, mem = round(float(li[1]), 2), round(float(li[2]), 2)
-                data.append({"date": li[0], "cpu": cpu, "mem": mem})
+                if not line.strip():
+                    continue
+                parts = line.split(",")
+                cpu = round(float(parts[1]), 2)
+                mem = round(float(parts[2]), 2)
+                data.append({"date": parts[0], "cpu": cpu, "mem": mem})
                 cpu_samples.append(cpu)
                 mem_samples.append(mem)
                 self.analyzer.update_resources(cpu, mem)
-        self.__cpu_average = Reporter.round(cpu_samples)
-        self.__mem_average = Reporter.round(mem_samples)
+        if cpu_samples:
+            self.__cpu_average = "{:.1f}%".format(mean(cpu_samples))
+            self.__cpu_peak = "{:.0f}%".format(max(cpu_samples))
+            self.__mem_average = "{:.1f}%".format(mean(mem_samples))
+            self.__mem_peak = "{:.0f}%".format(max(mem_samples))
         return data
 
-    def __get_absolute_results_dataset(self):
+    @staticmethod
+    def __build_resource_svg(resource_data):
+        if not resource_data:
+            return ""
+        n = len(resource_data)
+        x0, x1 = 40.0, 550.0
+        y_base, y_top = 130.0, 10.0
+        w = x1 - x0
+        h = y_base - y_top
 
-        data = []
-        colors = []
-        for status, value in self.test_totals.items():
-            if status != "total" and value > 0:
-                data.append({"status": status, "value": value})
-                colors.append(Color.MAPPING[status])
+        pts_cpu, pts_mem = [], []
+        for i, s in enumerate(resource_data):
+            x = x0 + (i / max(n - 1, 1)) * w
+            pts_cpu.append((x, y_base - min(s["cpu"], 100) / 100.0 * h))
+            pts_mem.append((x, y_base - min(s["mem"], 100) / 100.0 * h))
 
-        return {"data": data, "colors": colors}
+        def fmt(pts):
+            return " ".join("{:.1f},{:.1f}".format(x, y) for x, y in pts)
 
-    def __get_health_of_features(self):
+        def poly(pts):
+            closed = list(pts) + [(pts[-1][0], y_base), (pts[0][0], y_base)]
+            return " ".join("{:.1f},{:.1f}".format(x, y) for x, y in closed)
 
-        data = []
-        for feature, components in self.features.items():
-            data.append({"full": 100, "category": feature if feature is not None else "Not Defined",
-                         "value": Aggregator.percentage(components["_totals_"]["total"],
-                                                        components["_totals_"][TestCategory.SUCCESS])})
-        return data
+        cpu_vals = [s["cpu"] for s in resource_data]
+        peak_i = cpu_vals.index(max(cpu_vals))
+        peak_x, peak_y = pts_cpu[peak_i]
+        peak_val = cpu_vals[peak_i]
 
-    def __get_features_data(self):  # for the stacked bar
-        data = []
-        for feature, components in self.features.items():
-            data_point = {"duration": Reporter.round(components["_totals_"]["performance"]),
-                          "measure": feature if feature is not None else "Not Defined"}
-            for status in TestCategory.ALL:
-                data_point.update({status: components["_totals_"][status]})
-            data.append(data_point)
-        return data
+        def parse_dt(s):
+            for fmt_str in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    return datetime.strptime(s.strip(), fmt_str)
+                except ValueError:
+                    pass
+            return None
 
-    def __get_components_data(self):  # for the stacked bar
-        data = []
-        not_defined = {"measure": "Not Defined", "duration": []}
-        for feature, components in self.features.items():
-            for component, metrics in components.items():
-                if component is None:  # Not defined components have to be aggregated from all features
-                    not_defined["duration"] += metrics["performance"]
-                    for status in TestCategory.ALL:
-                        if status not in not_defined:
-                            not_defined.update({status: metrics[status]})
-                        else:
-                            not_defined[status] += metrics[status]
-                else:
-                    if component != "_totals_":
-                        data_point = {"duration": Reporter.round(metrics["performance"]), "measure": component}
-                        for status in TestCategory.ALL:
-                            data_point.update({status: metrics[status]})
-                        data.append(data_point)
-        if len(not_defined.keys()) > 2:
-            not_defined["duration"] = Reporter.round(not_defined["duration"])
-            data.append(not_defined)
-        return data
+        times = [parse_dt(s["date"]) for s in resource_data]
+        n_labels = min(6, n)
+        idxs = ([0] if n_labels <= 1
+                else [round(i * (n - 1) / (n_labels - 1)) for i in range(n_labels)])
+        x_labels = []
+        for idx in idxs:
+            lx = x0 + (idx / max(n - 1, 1)) * w
+            t = times[idx]
+            x_labels.append((lx, t.strftime("%H:%M:%S") if t else ""))
 
-    def __get_owner_data(self):  # for the stacked bar
-        data = []
-        for owner, metrics in self.owners.items():
-            if owner != "_totals_":
-                data_point = {"duration": Reporter.round(metrics["performance"]),
-                              "measure": owner if owner is not None else "Not Defined"}
-                for status in TestCategory.ALL:
-                    data_point.update({status: metrics[status]})
-                data.append(data_point)
-        return data
+        parts = ['<svg viewBox="0 0 560 160" style="display:block;width:100%">']
+        for y, dash in [(10, True), (40, True), (70, True), (100, True), (130, False)]:
+            d = ' stroke-dasharray="3,3"' if dash else ""
+            parts.append(
+                f'<line x1="40" y1="{y}" x2="550" y2="{y}" '
+                f'stroke="var(--border)" stroke-width="1"{d}/>')
+        for y_lbl, pct in [(14, "100%"), (44, "75%"), (74, "50%"), (104, "25%"), (133, "0%")]:
+            parts.append(
+                f'<text x="36" y="{y_lbl}" text-anchor="end" fill="var(--ink-faint)" '
+                f'font-size="9" font-family="\'IBM Plex Mono\',monospace">{pct}</text>')
+        for lx, label in x_labels:
+            parts.append(
+                f'<text x="{lx:.0f}" y="148" text-anchor="middle" fill="var(--ink-faint)" '
+                f'font-size="9" font-family="\'IBM Plex Mono\',monospace">{label}</text>')
+        parts.append(
+            f'<polygon points="{poly(pts_mem)}" fill="#34bff5" fill-opacity="0.07"/>')
+        parts.append(
+            f'<polyline points="{fmt(pts_mem)}" fill="none" stroke="#34bff5" '
+            f'stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>')
+        parts.append(
+            f'<polygon points="{poly(pts_cpu)}" fill="var(--brand)" fill-opacity="0.09"/>')
+        parts.append(
+            f'<polyline points="{fmt(pts_cpu)}" fill="none" stroke="var(--brand)" '
+            f'stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>')
+        parts.append(
+            f'<line x1="{peak_x:.1f}" y1="{min(peak_y + 5, y_base):.1f}" '
+            f'x2="{peak_x:.1f}" y2="{y_base}" '
+            f'stroke="var(--brand)" stroke-width="1" stroke-dasharray="2,3" opacity="0.35"/>')
+        parts.append(
+            f'<circle cx="{peak_x:.1f}" cy="{peak_y:.1f}" r="3.5" fill="var(--brand)"/>')
+        label_y = peak_y - 6
+        near_right = peak_x > x0 + w * 0.72
+        if near_right:
+            label_x = peak_x - 5
+            anchor = "end"
+        else:
+            label_x = peak_x + 5
+            anchor = "start"
+        parts.append(
+            f'<text x="{label_x:.1f}" y="{label_y:.1f}" fill="var(--brand)" '
+            f'text-anchor="{anchor}" '
+            f'font-size="9" font-family="\'IBM Plex Mono\',monospace" '
+            f'font-weight="600">{peak_val:.0f}% peak</text>')
+        parts.append('</svg>')
+        return "\n".join(parts)
 
-    def __get_tags_data(self):  # for the stacked bar
-        data = []
-        for tag, metrics in self.tags.items():
-            data_point = {"duration": Reporter.round(metrics["performance"]),
-                          "measure": tag}
-            for status in TestCategory.ALL:
-                data_point.update({status: metrics[status]})
-            data.append(data_point)
-        return data
+    # ── Totals ────────────────────────────────────────────────────────────────
 
-    def __get_suites_data(self):  # for the stacked bar
-        data = []
-        for suite, metrics in self.suites.items():
-            if suite != "_totals_":
-                data_point = {"duration": Reporter.round(metrics["performance"]),
-                              "measure": suite}
-                for status in TestCategory.ALL:
-                    data_point.update({status: metrics[status]})
-                data.append(data_point)
-        return data
+    def __build_totals(self, status_durations):
+        t = self.test_totals
+        total = t.get("total", 0)
+        n_success = t.get(TestCategory.SUCCESS, 0)
+        if total > 0 and n_success > 0:
+            passing_rate = "{:.1f}%".format(n_success / total * 100)
+        else:
+            passing_rate = "0.0%"
+        avg_dur = {}
+        for status, durs in status_durations.items():
+            avg_dur[status] = "{:.2f}s".format(mean(durs)) if durs else "—"
+        return {
+            "total": total,
+            TestCategory.SUCCESS: t.get(TestCategory.SUCCESS, 0),
+            TestCategory.FAIL: t.get(TestCategory.FAIL, 0),
+            TestCategory.ERROR: t.get(TestCategory.ERROR, 0),
+            TestCategory.IGNORE: t.get(TestCategory.IGNORE, 0),
+            TestCategory.SKIP: t.get(TestCategory.SKIP, 0),
+            TestCategory.CANCEL: t.get(TestCategory.CANCEL, 0),
+            "passing_rate": passing_rate,
+            "avg_dur": avg_dur,
+        }
 
-    def __get_table_data(self):  # for data table
+    # ── Bar data for stacked charts ────────────────────────────────────────────
 
-        def convert_performance(_data):
+    def __get_bar_data(self):
 
-            for _runtime in _data:
-                _index = _data.index(_runtime)
-                _data[_index] = "{:0.2f}s".format(_runtime)
-
-        def convert_tracebacks(_data):
-
-            for _traceback in _data:
-                if _traceback is not None:
-                    _index = _data.index(_traceback)
-                    # _traceback = _traceback.replace("\n", "<br>").replace("    ", "&emsp;")
-                    _data[_index] = _traceback
-
-        def prioritize_status(_data):
-            # tests are parameterized but table will show only parent test, thus have to give priority to one
-            set(_data)
-            if len(_data) == 1:
-                return _data[0]
-            else:
-                for preferred_status in status_priority:
-                    if preferred_status in _data:
-                        return preferred_status
-
-        def convert_suite_metrics(_data):
-            new_suite_metrics = {}
-            for _decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST,
-                               DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS]:
-                med, avg, minimum, maximum, total = "N/A", "N/A", "N/A", "N/A", "N/A"
-                if _data[_decorator]["performance"]:
-                    med = "{:0.2f}s".format(median(_data[_decorator]["performance"]))
-                    avg = "{:0.2f}s".format(mean(_data[_decorator]["performance"]))
-                    minimum = "{:0.2f}s".format(min(_data[_decorator]["performance"]))
-                    maximum = "{:0.2f}s".format(max(_data[_decorator]["performance"]))
-                    total = "{}s".format(Reporter.total_up(_data[_decorator]["performance"]))
-                executions = 0
-                for traceback in _data[_decorator]["tracebacks"]:
-                    if traceback != "N/A":
-                        executions += 1
-                failures = 0
-                for exception in _data[_decorator]["exceptions"]:
-                    if exception is not None:
-                        failures += 1
-                new_suite_metrics.update({_decorator: {"executions": executions, "failures": failures,
-                                                       "median": med, "avg": avg, "total": total,
-                                                       "minimum": minimum, "maximum": maximum}})
-            return new_suite_metrics
-
-        def convert_test_metrics(_data):
-            """
-            Sanitizes the data for json.dumps(database_lol)
-            See issue: https://github.com/ArturSpirin/test_junkie/issues/30
-            """
-            new_test_metrics = {}
-            for cp, cp_data in _data.items():
-
-                # converting all class params to str as this data is only used for display
-                cp = str(cp)
-                if cp.startswith("<") and cp.endswith(">"):  # have to strip the html tags or wont show up
-                    cp = "&lt;{}&gt;".format(cp[1:-1])
-
-                new_test_metrics.update({cp: {}})
-                for tp, tp_data in cp_data.items():
-
-                    # converting all test params to str as this data is only used for display
-                    tp = str(tp)
-                    if tp.startswith("<") and tp.endswith(">"):  # have to strip the html tags or wont show up
-                        tp = "&lt;{}&gt;".format(tp[1:-1])
-
-                    for param_type in ["param", "class_param"]:  # doing the same thing to the test's data dict
-                        tp_data[param_type] = str(tp_data[param_type])
-                        if tp_data[param_type].startswith("<") and tp_data[param_type].endswith(">"):
-                            tp_data[param_type] = "&lt;{}&gt;".format(tp_data[param_type][1:-1])
-
-                    new_test_metrics[str(cp)].update({tp: tp_data})
-            return new_test_metrics
-
-        def get_copy(value):
-
-            try:
-                return copy.deepcopy(value)
-            except:
-                LogJunkie.error("Failed to deepcopy: {}. Metrics may be missing in the HTML report.".format(value))
-                LogJunkie.error(traceback.format_exc())
+        def make_entry(label, metrics_dict):
+            total = sum(metrics_dict.get(s, 0) for s in TestCategory.ALL)
+            if total == 0:
                 return None
+            perf = metrics_dict.get("performance", [])
+            avg_dur = "{:.2f}s".format(mean(perf)) if perf else "—"
+            entry = {"label": label, "total": total, "avgDur": avg_dur}
+            for s in TestCategory.ALL:
+                entry[s] = metrics_dict.get(s, 0)
+            return entry
 
-        from statistics import median, mean
+        features = []
+        for feat, comps in self.features.items():
+            lbl = feat if feat is not None else "Not Defined"
+            e = make_entry(lbl, comps["_totals_"])
+            if e:
+                features.append(e)
+
+        components = []
+        comp_agg = {}
+        for feat, comps in self.features.items():
+            for comp, metrics in comps.items():
+                if comp == "_totals_":
+                    continue
+                if comp is None:
+                    if None not in comp_agg:
+                        comp_agg[None] = {k: list(v) if isinstance(v, list) else v
+                                          for k, v in metrics.items()}
+                    else:
+                        for s in TestCategory.ALL:
+                            comp_agg[None][s] = comp_agg[None].get(s, 0) + metrics.get(s, 0)
+                        comp_agg[None]["performance"] = (
+                            comp_agg[None].get("performance", []) + metrics.get("performance", []))
+                else:
+                    e = make_entry(comp, metrics)
+                    if e:
+                        components.append(e)
+        if None in comp_agg:
+            e = make_entry("Not Defined", comp_agg[None])
+            if e:
+                components.append(e)
+
+        owners = []
+        for owner, metrics in self.owners.items():
+            if owner == "_totals_":
+                continue
+            lbl = owner if owner is not None else "Not Defined"
+            e = make_entry(lbl, metrics)
+            if e:
+                owners.append(e)
+
+        suites = []
+        for suite_name, metrics in self.suites.items():
+            if suite_name == "_totals_":
+                continue
+            e = make_entry(suite_name, metrics)
+            if e:
+                suites.append(e)
+
+        tags = []
+        for tag, metrics in self.tags.items():
+            e = make_entry(tag, metrics)
+            if e:
+                tags.append(e)
+
+        return {
+            "features": features,
+            "components": components,
+            "owners": owners,
+            "suites": suites,
+            "tags": tags,
+        }
+
+    # ── Insights (plain text) ─────────────────────────────────────────────────
+
+    def __get_plain_insights(self):
+        insights = list(self.analyzer.structured_analysis)
+        # Strip generic threading message; replaced below with richer analysis
+        insights = [
+            i for i in insights
+            if not (isinstance(i, dict) and "multi-thread" in i.get("text", "").lower())
+        ]
+        if not self.analyzer.multi_threading_enabled:
+            rich = self.__get_threading_insight()
+            if rich:
+                insights.append(rich)
+        return insights
+
+    def __get_threading_insight(self):
+        tasks = self._thread_tasks
+        if len(tasks) < 3:
+            return None
+
+        durations = [t["dur"] for t in tasks]
+        serial = sum(durations)
+
+        def simulate(n):
+            buckets = [0.0] * n
+            for d in sorted(durations, reverse=True):
+                idx = min(range(n), key=lambda i: buckets[i])
+                buckets[idx] += d
+            return max(buckets)
+
+        candidates = []
+        for n in range(2, min(len(tasks) + 1, 17)):
+            est = simulate(n)
+            candidates.append((n, est))
+            if len(candidates) >= 2:
+                prev = candidates[-2][1]
+                if prev > 0 and (prev - est) / prev < 0.05:
+                    break
+
+        # Last candidate before diminishing returns triggered the break;
+        # recommend the one before it if improvement was marginal.
+        if len(candidates) >= 2 and (candidates[-2][1] - candidates[-1][1]) / candidates[-2][1] < 0.05:
+            rec_n, rec_est = candidates[-2]
+        else:
+            rec_n, rec_est = candidates[-1]
+
+        speedup = serial / max(rec_est, 0.001)
+        saved = serial - rec_est
+
+        top_tests = sorted(tasks, key=lambda t: t["dur"], reverse=True)[:10]
+        all_ids = list({t["id"] for t in tasks})
+
+        return {
+            "text": "Multi-threading could save ~{:.1f}s ({:.1f}× faster with {} threads).".format(
+                saved, speedup, rec_n),
+            "traceback": None,
+            "test_ids": all_ids,
+            "dialog": {
+                "type": "threading",
+                "serial_time": round(serial, 2),
+                "recommended_threads": rec_n,
+                "estimated_time": round(rec_est, 2),
+                "speedup": round(speedup, 1),
+                "time_saved": round(saved, 2),
+                "test_count": len(tasks),
+                "top_tests": [
+                    {"id": t["id"], "name": t["name"], "suite": t["suite"],
+                     "dur": round(t["dur"], 3)}
+                    for t in top_tests
+                ],
+            },
+        }
+
+    # ── Table / detail data ────────────────────────────────────────────────────
+
+    def __get_table_data(self):
+
+        def _fmt_dur(seconds):
+            return "{:.2f}s".format(seconds)
+
+        def _fmt_ts(epoch):
+            try:
+                return datetime.fromtimestamp(epoch).strftime("%H:%M:%S")
+            except Exception:
+                return "—"
+
+        def _str_param(val):
+            if val is None:
+                return None
+            s = str(val)
+            if s.startswith("<") and s.endswith(">"):
+                s = "&lt;{}&gt;".format(s[1:-1])
+            return s
+
+        def _phase_detail(phase_data, idx):
+            perf = phase_data.get("performance", [])
+            tbs = phase_data.get("tracebacks", [])
+            if idx >= len(perf) or perf[idx] is None:
+                return {"status": "N/A", "trace": "N/A", "dur": "—"}
+            dur_str = _fmt_dur(perf[idx]) if isinstance(perf[idx], (int, float)) else str(perf[idx])
+            tb = tbs[idx] if idx < len(tbs) else None
+            if tb is None:
+                return {"status": "OK", "trace": "OK", "dur": dur_str}
+            if "AssertionError" in str(tb):
+                return {"status": "Fail", "trace": str(tb), "dur": dur_str}
+            return {"status": "Error", "trace": str(tb), "dur": dur_str}
+
+        def _test_phase_detail(pd, idx):
+            perf = pd.get("performance", [])
+            tbs = pd.get("tracebacks", [])
+            if idx >= len(perf):
+                return {"status": "N/A", "trace": "N/A", "dur": "—"}
+            dur_raw = perf[idx]
+            dur_str = _fmt_dur(dur_raw) if isinstance(dur_raw, (int, float)) else str(dur_raw)
+            tb = tbs[idx] if idx < len(tbs) else None
+            status_val = pd.get("statuses", [])
+            attempt_status = status_val[idx] if idx < len(status_val) else pd.get("status", "")
+            if tb is None:
+                return {"status": "OK", "trace": "OK", "dur": dur_str}
+            if "AssertionError" in str(tb):
+                return {"status": "Fail", "trace": str(tb), "dur": dur_str}
+            return {"status": "Error", "trace": str(tb), "dur": dur_str}
+
+        def _convert_suite_metrics(raw):
+            result = {}
+            for dec in [DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS,
+                        DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
+                d = raw.get(dec, {})
+                perf = d.get("performance", [])
+                tbs = d.get("tracebacks", [])
+                excs = d.get("exceptions", [])
+                executions = sum(1 for t in tbs if t != "N/A") if tbs else 0
+                failures = sum(1 for e in excs if e is not None) if excs else 0
+                if perf:
+                    avg_v = "{:.2f}s".format(mean(perf))
+                    med_v = "{:.2f}s".format(median(perf))
+                    min_v = "{:.2f}s".format(min(perf))
+                    max_v = "{:.2f}s".format(max(perf))
+                else:
+                    avg_v = med_v = min_v = max_v = "—"
+                result[dec] = {
+                    "avg": avg_v, "median": med_v, "min": min_v, "max": max_v,
+                    "executions": executions, "failures": failures,
+                }
+            return result
 
         status_priority = [TestCategory.CANCEL, TestCategory.IGNORE, TestCategory.ERROR,
                            TestCategory.FAIL, TestCategory.SKIP, TestCategory.SUCCESS]
-        table_data = []
-        database_lol = {"suites": {}, "tests": {}}
-        executed_suites = self.aggregator.executed_suites
-        suite_id = 0
-        for suite in executed_suites:
-            suite_id += 1
-            suite_metrics = get_copy(suite.metrics.get_metrics())
-            if suite_metrics:
-                database_lol["suites"].update({suite_id: {"name": suite.get_class_name(),
-                                                          "module": suite.get_class_module(),
-                                                          "metrics": convert_suite_metrics(suite_metrics)}})
-                for test in suite.get_test_objects():
 
-                    test_id = test.get_test_id()
-                    test_metrics = get_copy(test.metrics.get_metrics())
-                    if test_metrics:
+        def _priority_status(statuses):
+            unique = set(statuses)
+            if len(unique) == 1:
+                return statuses[0]
+            for s in status_priority:
+                if s in unique:
+                    return s
+            return statuses[-1] if statuses else "unknown"
 
-                        duration, statuses = [], []
+        def _get_copy(value):
+            try:
+                return copy.deepcopy(value)
+            except Exception:
+                LogJunkie.error("Failed to deepcopy metrics.")
+                LogJunkie.error(traceback.format_exc())
+                return None
 
-                        component = test.get_component()
-                        component = "Not Defined" if component is None else component
-                        feature = suite.get_feature()
-                        feature = "Not Defined" if feature is None else feature
-                        assignee = test.get_owner()
-                        assignee = "Not Defined" if assignee is None else assignee
+        tests_data = []
+        details_data = {}
+        status_durations = {s: [] for s in TestCategory.ALL}
 
-                        test_name = test.get_function_name()
-                        suite_name = suite.get_class_name()
+        for suite in self.aggregator.executed_suites:
+            suite_raw_metrics = _get_copy(suite.metrics.get_metrics())
+            suite_metrics_converted = _convert_suite_metrics(suite_raw_metrics) if suite_raw_metrics else {}
+            module = suite.get_class_module()
+            suite_name = suite.get_class_name()
+            feature = suite.get_feature() or "Not Defined"
+            tags_list = [t for t in (suite.get_tags() if hasattr(suite, "get_tags") else []) if t]
 
-                        for class_param, class_param_data in test_metrics.items():
-                            for param, param_data in class_param_data.items():
+            for test in suite.get_test_objects():
+                test_id = test.get_test_id()
+                test_metrics_raw = _get_copy(test.metrics.get_metrics())
+                if not test_metrics_raw:
+                    continue
 
-                                self.analyzer.analyze(test_id=test_id,
-                                                      tracebacks=list(param_data["tracebacks"]),
-                                                      performance=list(param_data["performance"]))
+                component = test.get_component() or "Not Defined"
+                owner = test.get_owner() or "Not Defined"
+                test_name = test.get_function_name()
+                test_tags = list(test.get_tags() or [])
+                if not test_tags:
+                    test_tags = tags_list
 
-                                duration += param_data["performance"]
-                                statuses.append(param_data["status"])
-                                # no value for exception objects in the HTML report, only will consume memory
-                                for decorator in [DecoratorType.BEFORE_TEST, DecoratorType.AFTER_TEST]:
-                                    param_data[decorator].pop("exceptions")
-                                    convert_performance(param_data[decorator]["performance"])
-                                    convert_tracebacks(param_data[decorator]["tracebacks"])
-                                param_data.pop("exceptions")
-                                param_data.update({"params_total": Reporter.total_up(param_data["performance"])})
-                                convert_performance(param_data["performance"])
-                                convert_tracebacks(param_data["tracebacks"])
+                all_statuses = []
+                all_starts = []
+                all_ends = []
+                all_dur_floats = []
+                variants = []
 
-                        duration = Reporter.total_up(duration)
-                        status = str(prioritize_status(statuses))
+                for cp_str, cp_data in test_metrics_raw.items():
+                    for tp_str, pd in cp_data.items():
+                        if pd.get("status") is None:
+                            continue
 
-                        table_data.append({"suite": suite_name, "test": test_name, "feature": feature,
-                                           "component": component, "duration": duration, "status": status,
-                                           "test_id": test_id, "suite_id": suite_id, "assignee": assignee})
-                        database_lol["tests"].update({test_id: {"name": test.get_function_name(),
-                                                                "metrics": convert_test_metrics(test_metrics),
-                                                                "status": status}})
-        return {"table_data": table_data, "database_lol": database_lol, "opportunities": self.analyzer.analysis}
+                        raw_perf = list(pd.get("performance", []))
+                        all_dur_floats.extend(raw_perf)
+                        if raw_perf:
+                            self._thread_tasks.append({
+                                "id": test_id,
+                                "name": test_name,
+                                "suite": suite_name,
+                                "dur": sum(raw_perf),
+                            })
+
+                        start_ts = pd.get("start")
+                        end_ts = pd.get("end")
+                        if start_ts:
+                            all_starts.append(start_ts)
+                        if end_ts:
+                            all_ends.append(end_ts)
+
+                        self.analyzer.analyze(
+                            test_id=test_id,
+                            tracebacks=list(pd.get("tracebacks", [])),
+                            performance=raw_perf,
+                        )
+
+                        # Accumulate duration per status for donut
+                        v_status = pd.get("status", "")
+                        for dur in raw_perf:
+                            if v_status in status_durations:
+                                status_durations[v_status].append(dur)
+
+                        all_statuses.append(v_status)
+
+                        # Build variant
+                        params_total_raw = sum(raw_perf)
+                        params_total_str = _fmt_dur(params_total_raw) if raw_perf else "—"
+
+                        attempts = []
+                        for i in range(len(raw_perf)):
+                            bt_phase = _phase_detail(pd.get(DecoratorType.BEFORE_TEST, {}), i)
+                            t_phase = _test_phase_detail(pd, i)
+                            at_phase = _phase_detail(pd.get(DecoratorType.AFTER_TEST, {}), i)
+                            attempts.append({
+                                "n": i + 1,
+                                "runtime": t_phase["dur"],
+                                "beforeTest": bt_phase,
+                                "test": t_phase,
+                                "afterTest": at_phase,
+                            })
+
+                        variants.append({
+                            "classParam": _str_param(pd.get("class_param")),
+                            "testParam": _str_param(pd.get("param")),
+                            "status": v_status,
+                            "totalDuration": params_total_str,
+                            "attempts": attempts,
+                        })
+
+                if not all_statuses:
+                    continue
+
+                final_status = _priority_status(all_statuses)
+                total_dur = sum(all_dur_floats)
+                duration_str = _fmt_dur(total_dur) if all_dur_floats else "—"
+                dur_sec = round(total_dur, 3)
+
+                started_str = _fmt_ts(min(all_starts)) if all_starts else "—"
+                ended_str = _fmt_ts(max(all_ends)) if all_ends else "—"
+
+                retries = sum(max(0, v.get("retry", 1) - 1)
+                              for cp_d in test_metrics_raw.values()
+                              for v in cp_d.values()
+                              if v.get("status") is not None)
+
+                variant_count = sum(
+                    sum(1 for pd in cp_d.values() if pd.get("status") is not None)
+                    for cp_d in test_metrics_raw.values()
+                )
+
+                test_entry = {
+                    "id": test_id,
+                    "suite": suite_name,
+                    "test": test_name,
+                    "feature": feature,
+                    "component": component,
+                    "owner": owner,
+                    "tags": test_tags,
+                    "started": started_str,
+                    "ended": ended_str,
+                    "duration": duration_str,
+                    "durationSec": dur_sec,
+                    "retries": retries,
+                    "status": final_status,
+                }
+                if variant_count > 1:
+                    test_entry["variantCount"] = variant_count
+                tests_data.append(test_entry)
+
+                details_data[test_id] = {
+                    "module": module,
+                    "suiteMetrics": suite_metrics_converted,
+                    "variants": variants,
+                }
+
+        return {
+            "tests_data": tests_data,
+            "details_data": details_data,
+            "status_durations": status_durations,
+            "opportunities": self.analyzer.analysis,
+        }

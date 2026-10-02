@@ -39,6 +39,8 @@ And [more →](https://www.test-junkie.com/documentation/)
 pip install test-junkie
 ```
 
+> **Python 2.7:** the last release with Python 2.7 support is [`0.8a.8`](https://pypi.org/project/test-junkie/0.8a.8/). All versions from `0.9a0` onwards require Python 3.
+
 ## Getting Started
 
 <p align="center">

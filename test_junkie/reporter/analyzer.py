@@ -120,6 +120,70 @@ class Analyzer:
 
         return analysis
 
+    @property
+    def structured_analysis(self):
+        """Returns insights as a list of dicts: {text, traceback, test_ids}.
+        Use this instead of .analysis when rendering the new HTML report.
+        """
+        insights = []
+
+        if self.__analysis["time_lost_retrying"]:
+            total_sec = round(sum(self.__analysis["time_lost_retrying"]), 2)
+            insights.append({
+                "text": "Total of {} retries cost {} seconds.".format(
+                    len(self.__analysis["time_lost_retrying"]), total_sec),
+                "traceback": None, "test_ids": []
+            })
+        else:
+            if self.__analysis["stable"]:
+                insights.append({
+                    "text": "All of your tests are stable and no time was lost on retries.",
+                    "traceback": None, "test_ids": []
+                })
+
+        if self.__analysis["traceback_insights"]:
+            if not self.__analysis["stable"]:
+                insights.append({
+                    "text": "There are {} unique tracebacks across all unsuccessful tests.".format(
+                        len(self.__analysis["traceback_insights"])),
+                    "traceback": None, "test_ids": []
+                })
+                ones_to_report_on = {}
+                for tb_str, category in self.__analysis["traceback_insights"].items():
+                    test_id = category["test_id"]
+                    if test_id not in ones_to_report_on:
+                        ones_to_report_on[test_id] = {"data": category, "traceback": tb_str}
+                    elif len(category["similar"]) > len(ones_to_report_on[test_id]["data"]["similar"]):
+                        ones_to_report_on[test_id] = {"data": category, "traceback": tb_str}
+
+                for test_id, data in ones_to_report_on.items():
+                    if len(data["data"]["similar"]) > 0:
+                        affected_ids = [test_id] + list(data["data"]["similar"])
+                        insights.append({
+                            "text": "{} test failures share a similar traceback.".format(
+                                len(data["data"]["similar"]) + 1),
+                            "traceback": data["traceback"],
+                            "test_ids": affected_ids
+                        })
+
+        if self.__analysis["resources"]["monitoring_enabled"]:
+            if len(self.__analysis["resources"]["cpu"]["high"]) > 10:
+                suffix = (
+                    " and/or reducing thread allocation"
+                    if self.multi_threading_enabled else ""
+                )
+                msg = ("CPU spiked {} times to critical levels during execution which may "
+                       "have impacted test results. Consider closing background processes{}.".format(
+                           len(self.__analysis["resources"]["cpu"]["high"]), suffix))
+            else:
+                if not self.multi_threading_enabled:
+                    msg = "Consider enabling multi-threading to speed up test execution."
+                else:
+                    msg = "More CPU resources can be utilized; consider allocating more threads."
+            insights.append({"text": msg, "traceback": None, "test_ids": []})
+
+        return insights
+
     @staticmethod
     def is_similar(string_a, string_b):
         return SequenceMatcher(None, string_a, string_b).ratio() >= 0.70
