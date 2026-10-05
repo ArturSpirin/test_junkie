@@ -11,9 +11,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # keep this in sync with setup.py's classifiers/python_requires - latest release + the
-        # five prior minor versions
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        # sample of the versions setup.py supports (latest release + the five prior minors): both
+        # boundaries plus two in between. Move the boundaries when the supported range changes.
+        # 3.13 also uploads coverage, see below
+        python-version: ["3.9", "3.11", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v5
 
