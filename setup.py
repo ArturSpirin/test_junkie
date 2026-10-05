@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.9a0",
+    version="0.9a1",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Modern Testing Framework",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.test-junkie.com/",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude=["tests", "tests.*"]),
     python_requires=">=3.9",
     classifiers=[
         "Development Status :: 3 - Alpha",

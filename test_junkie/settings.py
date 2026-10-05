@@ -196,7 +196,7 @@ class Settings:
             self.__xml_report = self.__get_value(key="xml_report",
                                                  default=Settings.__DEFAULT_XML)
         if self.__xml_report and not self.__xml_report.endswith(".xml"):
-            raise BadParameters("\"xml_report\" parameter requires full path with a file name and .html extension "
+            raise BadParameters("\"xml_report\" parameter requires full path with a file name and .xml extension "
                                 "for example: /var/www/html/my_report.xml. For more info, see documentation: {link}"
                                 .format(link=DocumentationLinks.XML_REPORT))
         return self.__xml_report

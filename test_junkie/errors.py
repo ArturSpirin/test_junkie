@@ -35,3 +35,10 @@ class BadSignature(Exception):
 
     def __init__(self, message):
         Exception.__init__(self, message)
+
+
+class SkipTest(Exception):
+
+    def __init__(self, reason=None):
+        Exception.__init__(self, reason)
+        self.reason = reason

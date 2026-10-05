@@ -10,10 +10,11 @@ import re
 from contextlib import contextmanager
 
 from test_junkie.cli.cli import CliUtils
-from test_junkie.constants import CliConstants, Undefined, DocumentationLinks
+from test_junkie.constants import CliConstants, Undefined, DocumentationLinks, TestCategory
 from test_junkie.debugger import suppressed_stdout
 from test_junkie.decorators import synchronized
 from test_junkie.errors import BadCliParameters
+from test_junkie.metrics import Aggregator
 from test_junkie.runner import Runner
 from test_junkie.cli.cli_config import Config
 
@@ -295,4 +296,9 @@ class CliRunner:
                     except coverage.misc.CoverageException:
                         CliUtils.print_color_traceback()
                         exit(120)
+            report = Aggregator(runner.get_executed_suites()).get_basic_report()["tests"]
+            bad = [TestCategory.FAIL, TestCategory.ERROR, TestCategory.IGNORE]
+            if any(report.get(s, 0) > 0 for s in bad) or report.get("total", 0) == 0:
+                exit(1)
             return
+        exit(1)

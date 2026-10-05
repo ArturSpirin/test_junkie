@@ -4,6 +4,7 @@ import time
 
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import synchronized
+from test_junkie.errors import BadParameters
 
 # guards _build_reverse_restriction() below - two suites starting at the same time could race
 # and one would drop the other's restriction
@@ -146,9 +147,9 @@ class ParallelProcessor:
         if suite.get_parallel_restrictions():
             for restriction in suite.get_parallel_restrictions():
                 if not inspect.isclass(restriction):
-                    raise Exception("Parallel suite restrictions must be class objects. "
-                                    "Instead suite: {} was restricted by a function: {}"
-                                    .format(suite.get_class_object(), restriction))
+                    raise BadParameters("Parallel suite restrictions must be class objects decorated with @Suite(). "
+                                        "Suite {} received a non-class restriction: {!r} (type: {}).".format(
+                                            suite.get_class_object(), restriction, type(restriction).__name__))
                 with _SUITE_REVERSE_RESTRICTION_LOCK:
                     _build_reverse_restriction()
                 if not _passes_restriction():
@@ -208,9 +209,9 @@ class ParallelProcessor:
         if test.get_parallel_restrictions():
             for restriction in test.get_parallel_restrictions():
                 if not inspect.isfunction(restriction) and not inspect.ismethod(restriction):
-                    raise Exception("Parallel test restrictions must be function objects. "
-                                    "Instead test: {} was restricted by: {}"
-                                    .format(test.get_function_name(), restriction))
+                    raise BadParameters("Parallel test restrictions must be function objects decorated with @test(). "
+                                        "Test {} received a non-function restriction: {!r} (type: {}).".format(
+                                            test.get_function_name(), restriction, type(restriction).__name__))
                 _build_reverse_restriction()
                 if not _passes_restriction():
                     return False

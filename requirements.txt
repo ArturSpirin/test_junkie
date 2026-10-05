@@ -1,5 +1,5 @@
 colorama
-coverage
+coverage>=7.10 # 7.10+ needed for [run] patch = subprocess in .coveragerc
 pytest>=8.0
 pytest-cov>=5.0
 psutil

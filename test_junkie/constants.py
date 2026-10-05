@@ -137,6 +137,14 @@ guess_root=None
 """
 
 
+class TestOrder:
+
+    RANDOM = "random"
+    ALPHABETICAL = "alphabetical"
+    PRIORITY_ASC = "priority_asc"
+    PRIORITY_DESC = "priority_desc"
+
+
 class Undefined(object):
     def __init__(self):
         pass
