@@ -405,7 +405,8 @@ class Runner:
                                     test.metrics.update_metrics(status=TestCategory.SKIP, start_time=test_start_time)
                                     Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
                                                            class_param=class_param)
-                        ParallelProcessor.wait_currently_active_tests_to_finish()
+                        # only this suite's tests - waiting on every suite's tests here held parallel suites back
+                        ParallelProcessor.wait_currently_active_tests_to_finish(suite)
                         Runner.__run_after_class(suite, class_param)
                     suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,

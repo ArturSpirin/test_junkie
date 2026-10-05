@@ -5,6 +5,7 @@ from tests.junkie_suites.parallel_restrictions import timeline
 from tests.junkie_suites.parallel_restrictions.BadSuiteRestriction import BadSuiteRestriction
 from tests.junkie_suites.parallel_restrictions.BadTestRestrictionSuite import BadTestRestrictionSuite
 from tests.junkie_suites.parallel_restrictions.BrokenListener import BrokenListenerSuite
+from tests.junkie_suites.parallel_restrictions import StressSuites
 from tests.junkie_suites.parallel_restrictions.ParallelParamsSuite import ParallelParamsSuite
 from tests.junkie_suites.parallel_restrictions.SuiteRestrictionA import SuiteRestrictionA
 from tests.junkie_suites.parallel_restrictions.SuiteRestrictionB import SuiteRestrictionB
@@ -103,3 +104,9 @@ class ParallelRestrictionsSuite:
             raise AssertionError("Expected TestListenerError from a test thread")
         except ListenerError:
             pass
+
+    @test()
+    def suite_and_test_threading_stress(self):
+        violations, incomplete_rounds = StressSuites.run(rounds=8)
+        assert violations == []
+        assert incomplete_rounds == 0

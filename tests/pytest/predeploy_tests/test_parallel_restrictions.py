@@ -11,6 +11,7 @@ from tests.junkie_suites.parallel_restrictions.BadTestRestrictionSuite import Ba
 from tests.junkie_suites.parallel_restrictions.ThrottleSuite import ThrottleSuite
 from tests.junkie_suites.parallel_restrictions.ParallelParamsSuite import ParallelParamsSuite
 from tests.junkie_suites.parallel_restrictions.BrokenListener import BrokenListenerSuite
+from tests.junkie_suites.parallel_restrictions import StressSuites
 from tests.junkie_suites.parallel_restrictions.SuiteThrottleX import SuiteThrottleX
 from tests.junkie_suites.parallel_restrictions.SuiteThrottleY import SuiteThrottleY
 from tests.junkie_suites.parallel_restrictions.SuiteThrottleZ import SuiteThrottleZ
@@ -98,3 +99,11 @@ def test_broken_listener_raises_test_listener_error_in_suite_threads():
 def test_broken_listener_raises_test_listener_error_in_test_threads():
     with pytest.raises(ListenerError):
         Runner([BrokenListenerSuite]).run(test_multithreading_limit=2)
+
+
+def test_suite_and_test_threading_stress():
+    # with suite + test threading together, a test thread was registered before start() and a concurrent wait
+    # could join() it first: "cannot join thread before it is started" - every batch of this stress run hit it
+    violations, incomplete_rounds = StressSuites.run(rounds=8)
+    assert violations == []
+    assert incomplete_rounds == 0
