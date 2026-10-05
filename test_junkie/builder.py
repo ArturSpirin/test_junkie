@@ -171,23 +171,36 @@ class Builder(object):
         return False
 
     @staticmethod
+    def __fmt_expected_types(types):
+        def _name(t):
+            if t == "<type 'function'>":
+                return "function"
+            return t.__name__ if hasattr(t, "__name__") else str(t)
+        names = [_name(t) for t in types]
+        return names[0] if len(names) == 1 else "one of: " + ", ".join(names)
+
+    @staticmethod
     def __validate_suite_kwargs(kwargs):
 
         data = Builder.__validation_failed(kwargs)
         if data:
-            raise BadParameters("Argument: \"{}\" in @Suite() decorator must be of either type: {} but found: {}. "
-                                "For more info, see @Suite() decorator documentation: {}"
-                                .format(data["arg"], data["expected"], data["actual"],
-                                        DocumentationLinks.SUITE_DECORATOR))
+            raise BadParameters("Argument \"{arg}\" in @Suite() decorator expected {expected} "
+                                "but got {actual}. See documentation: {link}".format(
+                                    arg=data["arg"],
+                                    expected=Builder.__fmt_expected_types(data["expected"]),
+                                    actual=data["actual"].__name__,
+                                    link=DocumentationLinks.SUITE_DECORATOR))
 
     @staticmethod
     def __validate_test_kwargs(kwargs, decorated_function):
         data = Builder.__validation_failed(kwargs, suite=False)
         if data:
-            raise BadParameters("Argument: \"{}\" in @test() decorator must be of either type: {} but found: {}. "
-                                "For more info, see @test() decorator documentation: {}"
-                                .format(data["arg"], data["expected"], data["actual"],
-                                        DocumentationLinks.TEST_DECORATOR))
+            raise BadParameters("Argument \"{arg}\" in @test() decorator expected {expected} "
+                                "but got {actual}. See documentation: {link}".format(
+                                    arg=data["arg"],
+                                    expected=Builder.__fmt_expected_types(data["expected"]),
+                                    actual=data["actual"].__name__,
+                                    link=DocumentationLinks.TEST_DECORATOR))
         if "parameter" not in inspect.getfullargspec(decorated_function).args and kwargs.get("parameters") is not None:
             raise BadSignature("When using \"parameters\" argument for @test() decorator, "
                                "you must accept \"parameter\" in the function's signature. "

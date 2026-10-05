@@ -112,8 +112,10 @@ class Runner:
             if suites is not None:
                 _so = Builder.get_execution_roster().get(item, None)
                 if _so is None:
-                    raise BadParameters("Check Runner instance, you initialized it with incorrect test suite object: "
-                                        "{}.".format(item))
+                    raise BadParameters(
+                        "{} was passed to Runner but is not registered as a test suite. "
+                        "Ensure the class is decorated with @Suite() and was imported before Runner was "
+                        "constructed. See documentation: {}".format(item, DocumentationLinks.SUITE_DECORATOR))
                 priority = _so.get_priority()
                 is_parallelized = _so.is_parallelized()
             else:
@@ -191,9 +193,9 @@ class Runner:
                                 self.__run_suite(suite_object)
                                 self.__suites.remove(suite)
                         else:
-                            LogJunkie.warn("Suite: {} not found! Make sure that your input is correct. "
-                                           "If it is, make sure the use of Test Junkie's decorators "
-                                           "is correct.".format(suite))
+                            LogJunkie.warn("Suite {} was not found in the execution roster and will be skipped. "
+                                           "Ensure the class is decorated with @Suite() and was imported "
+                                           "before Runner was constructed.".format(suite))
                             self.__suites.remove(suite)
                     LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
                     time.sleep(0.2)
