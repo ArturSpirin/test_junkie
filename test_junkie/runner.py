@@ -35,13 +35,9 @@ class Runner:
 
         self.__stats = {}
 
-        self.__suites = self.__prioritize(suites=suites)
-        for suite in self.__suites:
+        self.__all_suites = self.__prioritize(suites=suites)
+        for suite in self.__all_suites:
             suite_object = Builder.get_execution_roster().get(suite, None)
-            # suites/tests are singletons, so reset metrics here or a rerun just reuses old statuses (fixes ticket: #43)
-            suite_object.metrics.reset()
-            for test_object in suite_object.get_test_objects():
-                test_object.metrics.reset()
             suite_object.update_test_objects(self.__prioritize(suite_object=suite_object))
             Runner.__process_owners(suite_object)
 
@@ -49,14 +45,30 @@ class Runner:
         self.__settings = None
         self.__processor = None
 
+        self.__suites = []
         self.__cancel = False
-
         self.__executed_suites = []
         self.__active_suites = []
-
-        self.__group_rules = Builder.build_group_definitions(self.__suites)
-
+        # built here too so a bad @beforeGroup/@afterGroup definition still raises when the Runner is created
+        self.__group_rules = Builder.build_group_definitions(self.__all_suites)
         self.__before_group_failure_records = {}
+
+    def __reset_for_run(self):
+        """
+        Everything run() consumes or accumulates, so the same Runner can be run again
+        """
+        self.__suites = list(self.__all_suites)  # run() removes suites from this list as it goes
+        # not resetting __cancel here - cancel() before run() is supported; run() clears it when it ends
+        self.__executed_suites = []
+        self.__active_suites = []
+        self.__before_group_failure_records = {}
+        self.__group_rules = Builder.build_group_definitions(self.__all_suites)
+        for suite in self.__all_suites:
+            suite_object = Builder.get_execution_roster().get(suite, None)
+            # suites/tests are singletons, so reset metrics or a rerun just reuses old statuses (fixes ticket: #43)
+            suite_object.metrics.reset()
+            for test_object in suite_object.get_test_objects():
+                test_object.metrics.reset()
 
     @staticmethod
     def __process_owners(suite_object):
@@ -157,6 +169,7 @@ class Runner:
         Initiates the execution process that runs tests
         :return: None
         """
+        self.__reset_for_run()
         self.__settings = Settings(runner_kwargs=self.__kwargs, run_kwargs=kwargs)
         initial_start_time = time.time()
         resource_monitor = None
@@ -223,6 +236,7 @@ class Runner:
             # needs to run even if reporting above throws or the temp file never gets removed
             if self.__settings.monitor_resources:
                 resource_monitor.cleanup()
+            self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
         return aggregator
 
     @staticmethod

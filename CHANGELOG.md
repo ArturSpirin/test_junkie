@@ -5,6 +5,8 @@
 - Fixed `tj run` / `tj audit` counting the same suite more than once when sources overlap (#25)
 - Fixed every `tj run` crashing after `tj config update --html_report report.html` (or any `--xml_report`/path without a drive)
 - Fixed a saved `guess_root=False` in the config being treated as enabled
+- Fixed `@beforeGroup` / `@afterGroup` not running for any `Runner` after the first one in the same process
+- Fixed a second `run()` on the same `Runner` running no tests, and `run()` arguments leaking into the next `run()`
 - Added `TEST_JUNKIE_HOME` env var to relocate Test Junkie's config and temp files; the test suite now uses it so it never touches a developer's real config
 - Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)
 

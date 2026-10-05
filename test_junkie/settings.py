@@ -24,9 +24,9 @@ class Settings:
         :param runner_kwargs: DICT, arguments that are passed in to initiate the Runner instance
         :param run_kwargs: DICT, arguments that are passes to the run() method of the Runner instance
         """
-        runner_kwargs.update(run_kwargs)
-
-        self.kwargs = runner_kwargs
+        # merged into a copy - updating runner_kwargs in place leaked one run()'s arguments into the next
+        self.kwargs = dict(runner_kwargs)
+        self.kwargs.update(run_kwargs)
 
         self.config = None
         if self.kwargs.get("config", None) is not None:
