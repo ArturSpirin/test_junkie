@@ -228,13 +228,11 @@ class SuiteObject(object):
     def get_unsuccessful_tests(self):
 
         unsuccessful_tests = []
-        tests = self.get_test_objects()
-        for test in tests:
-            for class_param, metrics in test.metrics.get_metrics().items():
-                for value in metrics.values():
-                    if value["status"] in TestCategory.ALL_UN_SUCCESSFUL:
-                        unsuccessful_tests.append(test)
-        unsuccessful_tests = list(set(unsuccessful_tests))
+        for test in self.get_test_objects():  # keeps the suite's test order (a set() used to scramble retries)
+            if test not in unsuccessful_tests and any(value["status"] in TestCategory.ALL_UN_SUCCESSFUL
+                                                      for metrics in test.metrics.get_metrics().values()
+                                                      for value in metrics.values()):
+                unsuccessful_tests.append(test)
         return unsuccessful_tests
 
     def has_unsuccessful_tests(self):

@@ -240,6 +240,14 @@ class Runner:
         return aggregator
 
     @staticmethod
+    def __needs_retry(test, class_param):
+        """
+        :return: BOOLEAN, True if any parameter of the test still qualifies for a retry under this suite parameter
+        """
+        return any(test.is_qualified_for_retry(param, class_param=class_param)
+                   for param in test.get_parameters(process_functions=True))
+
+    @staticmethod
     def __validate_suite_parameters(suite):
         parameters = suite.get_parameters(process_functions=True)
         if not parameters or not isinstance(parameters, list):
@@ -301,17 +309,20 @@ class Runner:
                         LogJunkie.debug("Suite Retry {}/{} with Param: {}"
                                         .format(suite_retry_attempt, suite.get_retry_limit(), class_param))
 
-                        before_class_error = Runner.__run_before_class(suite, class_param)
-
                         if suite_retry_attempt > 1:
                             unsuccessful_tests = suite.get_unsuccessful_tests()
                             LogJunkie.debug("There are {} unsuccessful tests that need to be retried"
                                             .format(len(unsuccessful_tests)))
-                            if not unsuccessful_tests:
-                                break
-                            tests = unsuccessful_tests
+                            # decided before @beforeClass - this used to run @beforeClass and then bail out
+                            # without @afterClass when there was nothing left to retry for this suite parameter
+                            tests = [test for test in unsuccessful_tests
+                                     if Runner.__needs_retry(test, class_param)]
+                            if not tests:
+                                continue
                         else:
                             tests = list(suite.get_test_objects())
+
+                        before_class_error = Runner.__run_before_class(suite, class_param)
 
                         while tests:
                             for test in list(tests):
