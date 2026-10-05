@@ -637,5 +637,4 @@ class Reporter:
             "tests_data": tests_data,
             "details_data": details_data,
             "status_durations": status_durations,
-            "opportunities": self.analyzer.analysis,
         }
