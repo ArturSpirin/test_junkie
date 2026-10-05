@@ -1,0 +1,5 @@
+[run]
+source = test_junkie
+parallel = True
+# CLI tests shell out to cli.py - measure those child processes too
+patch = subprocess

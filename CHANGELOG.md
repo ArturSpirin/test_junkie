@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Fixed `python -m test_junkie` doing nothing (entry point was defined but never called)
+- CI now combines coverage from both test paths (including CLI subprocesses) and uploads it to Codecov
+
 ## 0.9a1
 - Added `@Suite(order=)` — control test execution order per suite via `TestOrder.ALPHABETICAL`, `TestOrder.RANDOM`, `TestOrder.PRIORITY_ASC`, or `TestOrder.PRIORITY_DESC`
 - Added `TestOrder` constants class to `test_junkie.constants`

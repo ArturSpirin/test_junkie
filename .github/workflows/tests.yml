@@ -24,12 +24,27 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip install -e .
 
+      # both paths write coverage data (see .coveragerc), combined below into one report
       - name: Run pytest path
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: pytest --cov=test_junkie tests/pytest tests/cli tests/cli_edge
+        run: coverage run -m pytest tests/pytest tests/cli tests/cli_edge
 
       - name: Run test_junkie path
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: python -m test_junkie run -s tests/test_junkie
+        run: coverage run -m test_junkie run -s tests/test_junkie
+
+      - name: Combined coverage
+        run: |
+          coverage combine
+          coverage report
+          coverage xml
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.13'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: false

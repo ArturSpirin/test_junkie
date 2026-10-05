@@ -27,6 +27,13 @@ def test_help():
                 "Command: {} produced exception".format(cmd, output)
 
 
+def test_module_entry_point():
+
+    output = Cmd.run(['python3', '-m', 'test_junkie', 'version'])
+    assert any("Test Junkie " in line for line in output), \
+        "python -m test_junkie produced no output: {}".format(output)
+
+
 def test_sub_command_help():
 
     commands = [['python3', EXE, 'audit', 'features', '-h'],
