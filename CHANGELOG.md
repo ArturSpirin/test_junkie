@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)
+
 ## 0.9a2
 - Added `@Suite(order=)` — control test execution order per suite via `TestOrder.ALPHABETICAL`, `TestOrder.RANDOM`, `TestOrder.PRIORITY_ASC`, or `TestOrder.PRIORITY_DESC`
 - Added `TestOrder` constants class to `test_junkie.constants`

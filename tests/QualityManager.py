@@ -1,3 +1,6 @@
+import logging
+
+
 
 
 class QualityManager:
@@ -103,3 +106,33 @@ class QualityManager:
         assert len(metrics["performance"]) == expected_performance_count
         for i in metrics["performance"]:
             assert i >= expected_performance
+
+    @staticmethod
+    def setting_sources(runner_kwargs):
+        """
+        Builds Settings from runner_kwargs and returns {setting: source} as reported in the debug log,
+        e.g. {"html_report": "KWARGS", "test_multithreading_limit": "DEFAULTS"}
+        """
+        from test_junkie.debugger import LogJunkie
+        from test_junkie.settings import Settings
+
+        messages = []
+        handler = logging.Handler()
+        handler.emit = lambda record: messages.append(record.getMessage())
+        logger = logging.getLogger("TestJunkieLogger")
+        previous_level = logger.level
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
+        LogJunkie.enable_logging(10)
+        try:
+            Settings(runner_kwargs=dict(runner_kwargs), run_kwargs={})
+        finally:
+            LogJunkie.disable_logging()
+            logger.removeHandler(handler)
+            logger.setLevel(previous_level)
+        sources = {}
+        for message in messages:
+            if message.startswith("Setting: "):
+                setting, source = message[len("Setting: "):].split(" Source: ")
+                sources[setting] = source
+        return sources

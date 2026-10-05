@@ -81,8 +81,7 @@ class Settings:
         # if we have kwargs, attempt to retrieve value for the key
         if self.kwargs is not None:
             value = self.kwargs.get(key, Undefined)
-            # # if value is not Undefined, source=KWARGS
-            if not value is Undefined:
+            if value is not Undefined:
                 source = "KWARGS"
 
         # if value is still __undefined__ and config provided, will check the config for a value to use
