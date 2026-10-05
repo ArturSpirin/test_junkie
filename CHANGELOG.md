@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9a3
 - Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)
 
 ## 0.9a2
