@@ -12,7 +12,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.test-junkie.com/",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude=["tests", "tests.*"]),
     python_requires=">=3.9",
     classifiers=[
         "Development Status :: 3 - Alpha",

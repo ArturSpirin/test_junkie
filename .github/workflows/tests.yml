@@ -24,7 +24,12 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip install -e .
 
-      - name: Run tests
+      - name: Run pytest path
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: pytest --cov=test_junkie tests/
+        run: pytest --cov=test_junkie tests/pytest tests/cli tests/cli_edge
+
+      - name: Run test_junkie path
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m test_junkie run -s tests/test_junkie
