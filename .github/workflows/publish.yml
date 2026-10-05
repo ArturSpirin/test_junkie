@@ -7,11 +7,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -19,21 +19,21 @@ jobs:
       - run: python -m build
       - run: twine check dist/*
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist/
 
   publish-testpypi:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: testpypi
       url: https://test.pypi.org/p/test-junkie
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: dist
           path: dist/
@@ -45,21 +45,27 @@ jobs:
 
   smoke-test:
     needs: publish-testpypi
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
-      - name: Wait for TestPyPI to index the new release
-        run: sleep 30
-
-      - name: Install from TestPyPI in a clean venv
+      # pinned to the tag's version - unpinned, pip could fall back to the previous release on prod PyPI
+      # (via --extra-index-url) while TestPyPI is still indexing, and smoke-test the wrong build
+      - name: Install this release from TestPyPI in a clean venv
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           python -m venv smoke-venv
-          smoke-venv/bin/pip install --extra-index-url https://pypi.org/simple/ -i https://test.pypi.org/simple/ test-junkie
+          for attempt in $(seq 1 20); do
+            smoke-venv/bin/pip install --no-cache-dir --extra-index-url https://pypi.org/simple/ \
+              -i https://test.pypi.org/simple/ "test-junkie==$VERSION" && break
+            [ "$attempt" = 20 ] && { echo "test-junkie==$VERSION never showed up on TestPyPI"; exit 1; }
+            echo "Waiting for TestPyPI to index $VERSION (attempt $attempt)"; sleep 15
+          done
+          smoke-venv/bin/python -c "import importlib.metadata as m; v = m.version('test-junkie'); print('smoke testing', v); assert v == '$VERSION', v"
 
       - name: Run the README example
         run: |
@@ -112,14 +118,14 @@ jobs:
 
   publish-pypi:
     needs: smoke-test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: pypi
       url: https://pypi.org/p/test-junkie
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: dist
           path: dist/

@@ -7,17 +7,18 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        # keep this in sync with setup.py's classifiers/python_requires - latest release + the
-        # five prior minor versions
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        # sample of the versions setup.py supports (latest release + the five prior minors): both
+        # boundaries plus two in between. Move the boundaries when the supported range changes.
+        # 3.13 also uploads coverage, see below
+        python-version: ["3.9", "3.11", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
