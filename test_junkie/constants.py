@@ -113,6 +113,8 @@ class Color:
 class CliConstants:
 
     TJ_CONFIG_NAME = ".tj.cfg"
+    # when set, Test Junkie keeps its config and temp files here instead of the per-user app data dir
+    HOME_ENV_VAR = "TEST_JUNKIE_HOME"
 
     DEFAULTS = """
 [runtime]

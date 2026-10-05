@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.9a3
+- Added `TEST_JUNKIE_HOME` env var to relocate Test Junkie's config and temp files; the test suite now uses it so it never touches a developer's real config
 - Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)
 
 ## 0.9a2

@@ -68,9 +68,10 @@ class Config:
     @staticmethod
     def get_root_dir():
         """
-        :return: STRING, root directory for TJ to store its configs and other assets
+        :return: STRING, root directory for TJ to store its configs and other assets.
+                 $TEST_JUNKIE_HOME if set, otherwise the per-user app data dir
         """
-        return user_data_dir("Test-Junkie")
+        return os.environ.get(CliConstants.HOME_ENV_VAR) or user_data_dir("Test-Junkie")
 
     @staticmethod
     def get_config_path(config_name):

@@ -1,4 +1,8 @@
+import os
+import tempfile
+
 from test_junkie.cli.cli_config import Config
+from test_junkie.constants import CliConstants
 from test_junkie.decorators import Suite, test
 from test_junkie.errors import BadParameters
 from test_junkie.runner import Runner
@@ -30,3 +34,18 @@ class LowRiskItemsSuite:
         assert sources["html_report"] == "KWARGS"
         assert sources["test_multithreading_limit"] == "DEFAULTS"
         assert sources["suite_multithreading_limit"] == "DEFAULTS"
+
+    @test()
+    def test_junkie_home_env_var_overrides_root_dir(self):
+        home = tempfile.mkdtemp()
+        previous = os.environ.get(CliConstants.HOME_ENV_VAR)
+        os.environ[CliConstants.HOME_ENV_VAR] = home
+        try:
+            assert Config.get_root_dir() == home
+            assert Config.get_config_path(CliConstants.TJ_CONFIG_NAME).startswith(home)
+        finally:
+            if previous is None:
+                del os.environ[CliConstants.HOME_ENV_VAR]
+            else:
+                os.environ[CliConstants.HOME_ENV_VAR] = previous
+            os.rmdir(home)

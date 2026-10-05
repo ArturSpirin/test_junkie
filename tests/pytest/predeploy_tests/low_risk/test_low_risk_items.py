@@ -1,4 +1,7 @@
+import os
+
 from test_junkie.cli.cli_config import Config
+from test_junkie.constants import CliConstants
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
 from test_junkie.runner import Runner
@@ -33,3 +36,16 @@ def test_settings_only_report_kwargs_as_source_when_actually_passed():
     assert sources["html_report"] == "KWARGS"
     assert sources["test_multithreading_limit"] == "DEFAULTS"
     assert sources["suite_multithreading_limit"] == "DEFAULTS"
+
+
+def test_test_junkie_home_env_var_overrides_root_dir(tmp_path):
+    previous = os.environ.get(CliConstants.HOME_ENV_VAR)
+    os.environ[CliConstants.HOME_ENV_VAR] = str(tmp_path)
+    try:
+        assert Config.get_root_dir() == str(tmp_path)
+        assert Config.get_config_path(CliConstants.TJ_CONFIG_NAME).startswith(str(tmp_path))
+    finally:
+        if previous is None:
+            del os.environ[CliConstants.HOME_ENV_VAR]
+        else:
+            os.environ[CliConstants.HOME_ENV_VAR] = previous
