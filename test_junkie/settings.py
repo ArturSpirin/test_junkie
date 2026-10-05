@@ -1,4 +1,3 @@
-import ast
 from test_junkie.constants import DocumentationLinks, Undefined
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
@@ -90,10 +89,7 @@ class Settings:
             if key in self.config.config.options("runtime"):
                 value = self.config.get_value(key)
                 if value is not Undefined:
-                    try:
-                        value = ast.literal_eval(value)
-                    except SyntaxError:
-                        pass
+                    value = Config.parse(value)
                     source = "CONFIG @ {}".format(self.config.path)
 
         LogJunkie.debug("Setting: {setting} Source: {source}".format(setting=key, source=source))

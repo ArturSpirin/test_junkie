@@ -1,4 +1,3 @@
-import ast
 import glob
 import importlib.util
 import inspect
@@ -58,7 +57,7 @@ class CliRunner:
     @property
     def sources(self):
         if self.__sources == Undefined:
-            self.__sources = ast.literal_eval(self.__config.get_value("sources"))
+            self.__sources = Config.parse(self.__config.get_value("sources"))
         if self.__sources == Undefined or not isinstance(self.__sources, list):
             raise BadCliParameters("Sources is a required parameter. You can set it in the config via tj config "
                                    "update -s / --sources to persist or pass it in directly to the command you "
@@ -68,21 +67,20 @@ class CliRunner:
     @property
     def code_cov(self):
         if self.__code_cov == Undefined:
-            self.__code_cov = ast.literal_eval(self.__config.get_value("code_cov", default=False))
+            self.__code_cov = Config.parse(self.__config.get_value("code_cov", default=False))
         return self.__code_cov
 
     @property
     def cov_rcfile(self):
         if self.__cov_rcfile == Undefined:
-            self.__cov_rcfile = self.__config.get_value("cov_rcfile", default=None)
-            if self.__cov_rcfile == "None":
-                self.__cov_rcfile = None
+            self.__cov_rcfile = Config.parse(self.__config.get_value("cov_rcfile", default=None))
         return self.__cov_rcfile
 
     @property
     def guess_root(self):
         if self.__guess_root == Undefined:
-            self.__guess_root = self.__config.get_value("guess_root", default=False)
+            # was returned raw, so a saved guess_root=False came back as the (truthy) string "False"
+            self.__guess_root = Config.parse(self.__config.get_value("guess_root", default=False))
         return self.__guess_root
 
     @property

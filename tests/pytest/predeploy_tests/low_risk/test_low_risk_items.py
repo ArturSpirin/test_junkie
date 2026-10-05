@@ -6,6 +6,7 @@ from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
 from test_junkie.runner import Runner
 from tests.QualityManager import QualityManager
+from tests.junkie_suites import config_samples
 
 LogJunkie.enable_logging(10)
 
@@ -49,3 +50,27 @@ def test_test_junkie_home_env_var_overrides_root_dir(tmp_path):
             del os.environ[CliConstants.HOME_ENV_VAR]
         else:
             os.environ[CliConstants.HOME_ENV_VAR] = previous
+
+
+def test_config_values_round_trip_with_their_types(tmp_path):
+    # tj config update --html_report report.html used to make every tj run crash: values were saved with str()
+    # and read back with ast.literal_eval, which raised ValueError on a bare report.html
+    path = config_samples.make_config(str(tmp_path))
+    config_samples.save(path, html_report="report.html", xml_report="reports/out.xml",
+                        test_multithreading_limit=4, owners=["qa", "dev"], quiet=True, features=None)
+    settings = config_samples.runtime_settings(path)
+    assert settings.html_report == "report.html"
+    assert settings.xml_report == "reports/out.xml"
+    assert settings.test_thread_limit == 4
+    assert settings.owners == ["qa", "dev"]
+    assert settings.quiet is True
+    assert settings.features is None
+
+
+def test_configs_written_by_older_versions_still_load(tmp_path):
+    path = config_samples.make_config(str(tmp_path), config_samples.LEGACY_LINES)
+    settings = config_samples.runtime_settings(path)
+    assert settings.html_report == "report.html"
+    assert settings.xml_report == "reports/out.xml"
+    # guess_root was read raw, so a saved False came back as the truthy string "False"
+    assert config_samples.cli_runner(path).guess_root is False
