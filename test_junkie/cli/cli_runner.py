@@ -223,7 +223,7 @@ class CliRunner:
                         if self.__skip(source, dirName):
                             continue
 
-                        for file_path in glob.glob(os.path.join(os.path.dirname(dirName+"\\"), "*.py")):
+                        for file_path in glob.glob(os.path.join(dirName, "*.py")):
                             if parse_file(file_path)is True:
                                 continue
             for thread in CliRunner.__SCANNER_THREADS:

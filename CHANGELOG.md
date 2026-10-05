@@ -1,16 +1,19 @@
 # Changelog
 
-## Unreleased
-- Fixed `python -m test_junkie` doing nothing (entry point was defined but never called)
-- CI now combines coverage from both test paths (including CLI subprocesses) and uploads it to Codecov
-
-## 0.9a1
+## 0.9a2
 - Added `@Suite(order=)` — control test execution order per suite via `TestOrder.ALPHABETICAL`, `TestOrder.RANDOM`, `TestOrder.PRIORITY_ASC`, or `TestOrder.PRIORITY_DESC`
 - Added `TestOrder` constants class to `test_junkie.constants`
 - Added `SuiteObject.get_order()` accessor
 - Added full test coverage for all four ordering modes including regression guard for default behavior
 - Added `shortcuts.skip(reason=None)` — raise a runtime skip from within a test body; fires `on_skip` event, counts as skip in all reports, does not retry
 - Added `shortcuts.SkipTest` exception class
+- Improved error messages across builder, runner, objects, parallels, and settings
+- CLI now exits with code 1 on failures, errors, ignored tests, or when no tests ran
+- Fixed `python -m test_junkie` doing nothing (entry point was defined but never called)
+- Fixed `tj run -s <dir>` on Linux/macOS missing suites in directories without subdirectories
+- Fixed `tj run -v` hanging forever while scanning for suites
+- Tests are no longer included in the published wheel
+- CI now combines coverage from both test paths (including CLI subprocesses) and uploads it to Codecov
 
 ## 0.9a0
 - Fix for KeyError: None during report generation (#44)

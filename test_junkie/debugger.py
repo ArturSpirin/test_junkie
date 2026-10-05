@@ -1,6 +1,7 @@
 import io
 import logging
 import sys
+import threading
 from contextlib import contextmanager
 
 from test_junkie.decorators import synchronized
@@ -26,7 +27,9 @@ class LogJunkie:
         LogJunkie.__ENABLED = False
 
     @staticmethod
-    @synchronized()
+    # own lock - a bare @synchronized() shares one lock with the CLI scanner, which holds it while importing
+    # suites, so logging during suite import (tj run -v) deadlocked
+    @synchronized(threading.Lock())
     def __get_logger():
 
         if LogJunkie.__LOGGER is None:
