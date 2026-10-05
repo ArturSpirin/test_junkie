@@ -53,13 +53,19 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Wait for TestPyPI to index the new release
-        run: sleep 30
-
-      - name: Install from TestPyPI in a clean venv
+      # pinned to the tag's version - unpinned, pip could fall back to the previous release on prod PyPI
+      # (via --extra-index-url) while TestPyPI is still indexing, and smoke-test the wrong build
+      - name: Install this release from TestPyPI in a clean venv
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           python -m venv smoke-venv
-          smoke-venv/bin/pip install --extra-index-url https://pypi.org/simple/ -i https://test.pypi.org/simple/ test-junkie
+          for attempt in $(seq 1 20); do
+            smoke-venv/bin/pip install --no-cache-dir --extra-index-url https://pypi.org/simple/ \
+              -i https://test.pypi.org/simple/ "test-junkie==$VERSION" && break
+            [ "$attempt" = 20 ] && { echo "test-junkie==$VERSION never showed up on TestPyPI"; exit 1; }
+            echo "Waiting for TestPyPI to index $VERSION (attempt $attempt)"; sleep 15
+          done
+          smoke-venv/bin/python -c "import importlib.metadata as m; v = m.version('test-junkie'); print('smoke testing', v); assert v == '$VERSION', v"
 
       - name: Run the README example
         run: |
