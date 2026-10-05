@@ -9,6 +9,7 @@
 - Fixed a second `run()` on the same `Runner` running no tests, and `run()` arguments leaking into the next `run()`
 - Fixed suite retries running `@beforeClass` without `@afterClass`, and setting up suite parameters that had nothing to retry
 - Suite retries now rerun failed tests in their original order
+- Fixed errors inside suite/test threads (e.g. a failing custom listener) being swallowed: `run()` returned normally and the affected tests disappeared from the results. `run()` now raises them, same as without threads
 - Added `TEST_JUNKIE_HOME` env var to relocate Test Junkie's config and temp files; the test suite now uses it so it never touches a developer's real config
 - Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)
 

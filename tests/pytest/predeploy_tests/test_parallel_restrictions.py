@@ -86,3 +86,15 @@ def test_broken_listener_raises_test_listener_error():
     runner = Runner([BrokenListenerSuite])
     with pytest.raises(ListenerError):
         runner.run()
+
+
+def test_broken_listener_raises_test_listener_error_in_suite_threads():
+    # an exception in a suite thread used to die with the thread - run() returned normally and the suite's
+    # unfinished tests vanished from the results
+    with pytest.raises(ListenerError):
+        Runner([BrokenListenerSuite]).run(suite_multithreading_limit=2)
+
+
+def test_broken_listener_raises_test_listener_error_in_test_threads():
+    with pytest.raises(ListenerError):
+        Runner([BrokenListenerSuite]).run(test_multithreading_limit=2)

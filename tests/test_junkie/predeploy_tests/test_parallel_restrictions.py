@@ -85,3 +85,21 @@ class ParallelRestrictionsSuite:
         except ListenerError:
             raised = True
         assert raised
+
+    @test()
+    def broken_listener_raises_test_listener_error_in_suite_threads(self):
+        # an exception in a suite thread used to die with the thread - run() returned normally and the suite's
+        # unfinished tests vanished from the results
+        try:
+            Runner([BrokenListenerSuite]).run(suite_multithreading_limit=2)
+            raise AssertionError("Expected TestListenerError from a suite thread")
+        except ListenerError:
+            pass
+
+    @test()
+    def broken_listener_raises_test_listener_error_in_test_threads(self):
+        try:
+            Runner([BrokenListenerSuite]).run(test_multithreading_limit=2)
+            raise AssertionError("Expected TestListenerError from a test thread")
+        except ListenerError:
+            pass

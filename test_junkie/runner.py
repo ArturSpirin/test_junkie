@@ -62,6 +62,7 @@ class Runner:
         self.__executed_suites = []
         self.__active_suites = []
         self.__before_group_failure_records = {}
+        self.__thread_errors = []
         self.__group_rules = Builder.build_group_definitions(self.__all_suites)
         for suite in self.__all_suites:
             suite_object = Builder.get_execution_roster().get(suite, None)
@@ -189,7 +190,8 @@ class Runner:
                                     if self.__processor.suite_qualifies(suite_object):
                                         time.sleep(Limiter.get_suite_throttling())
                                         self.__executed_suites.append(suite_object)
-                                        ParallelProcessor.run_suite_in_a_thread(self.__run_suite, suite_object)
+                                        ParallelProcessor.run_suite_in_a_thread(
+                                            self.__capture_thread_errors(self.__run_suite), suite_object)
                                         self.__suites.remove(suite)
                                         break
                                     elif suite_object.get_priority() is None:
@@ -214,8 +216,12 @@ class Runner:
                     time.sleep(0.2)
 
                 ParallelProcessor.wait_currently_active_suites_to_finish()
+                if self.__thread_errors:
+                    for error in self.__thread_errors[1:]:
+                        LogJunkie.error("Another error in a suite/test thread: {!r}".format(error))
+                    raise self.__thread_errors[0]  # same as when the suite runs on the main thread
         finally:
-            if self.__settings.monitor_resources:
+            if resource_monitor is not None:  # is None if ResourceMonitor() itself failed - don't mask that error
                 resource_monitor.shutdown()
 
         runtime = time.time() - initial_start_time
@@ -238,6 +244,19 @@ class Runner:
                 resource_monitor.cleanup()
             self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
         return aggregator
+
+    def __capture_thread_errors(self, func):
+        """
+        Wraps a suite/test thread target. An unexpected exception in a thread used to die with the thread: its
+        unfinished tests vanished from the results and run() returned normally. run() now re-raises it once the
+        threads are done, same as when the suite runs on the main thread.
+        """
+        def target(*args):
+            try:
+                func(*args)
+            except BaseException as error:
+                self.__thread_errors.append(error)
+        return target
 
     @staticmethod
     def __needs_retry(test, class_param):
@@ -366,7 +385,9 @@ class Runner:
                                                 while self.__processor.test_limit_reached():
                                                     time.sleep(0.2)
                                                 time.sleep(Limiter.get_test_throttling())
-                                                self.__processor.run_test_in_a_thread(Runner.__run_test,
+                                                self.__processor.run_test_in_a_thread(
+                                                                                      self.__capture_thread_errors(
+                                                                                          Runner.__run_test),
                                                                                       suite, test, param,
                                                                                       class_param,
                                                                                       before_class_error,
