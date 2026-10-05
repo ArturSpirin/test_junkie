@@ -7,7 +7,7 @@ import traceback
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks, TestOrder
 from test_junkie.debugger import LogJunkie, suppressed_stdout
 from test_junkie.decorators import DecoratorType, synchronized
-from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
+from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
 from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.objects import Limiter
@@ -511,6 +511,14 @@ class Runner:
                         Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
                                                    test=test, parameter=parameter, class_parameter=class_parameter)
                         runtime = time.time() - start_time
+                    except SkipTest:
+                        test.metrics.update_metrics(status=TestCategory.SKIP,
+                                                    start_time=test_start_time,
+                                                    param=parameter,
+                                                    class_param=class_parameter)
+                        Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
+                                               class_param=class_parameter, param=parameter)
+                        return
                     except Exception as test_error:
                         runtime = time.time() - start_time
                         process_failure(test_error)

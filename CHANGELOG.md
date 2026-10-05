@@ -5,6 +5,8 @@
 - Added `TestOrder` constants class to `test_junkie.constants`
 - Added `SuiteObject.get_order()` accessor
 - Added full test coverage for all four ordering modes including regression guard for default behavior
+- Added `shortcuts.skip(reason=None)` — raise a runtime skip from within a test body; fires `on_skip` event, counts as skip in all reports, does not retry
+- Added `shortcuts.SkipTest` exception class
 
 ## 0.9a0
 - Fix for KeyError: None during report generation (#44)
