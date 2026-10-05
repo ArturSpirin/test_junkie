@@ -4,15 +4,13 @@ import importlib.util
 import inspect
 import os
 import sys
-import threading
 import time
 import re
-from contextlib import contextmanager
 
+from test_junkie.builder import Builder
 from test_junkie.cli.cli import CliUtils
 from test_junkie.constants import CliConstants, Undefined, DocumentationLinks, TestCategory
 from test_junkie.debugger import suppressed_stdout
-from test_junkie.decorators import synchronized
 from test_junkie.errors import BadCliParameters
 from test_junkie.metrics import Aggregator
 from test_junkie.runner import Runner
@@ -29,9 +27,9 @@ def _load_source(module_name, file_path):
 
 class CliRunner:
 
-    __REGEX_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite as.*?\n"
-    __REGEX_NO_ALIAS_IMPORT = ".*?from test_junkie.decorators import(.*?)Suite.*?\n"
-    __SCANNER_THREADS = []
+    # cheap text pre-filter only - which classes are suites is decided by importing the file and checking the
+    # Builder's roster, so base classes, comments, multi-line imports etc. don't matter
+    __REGEX_SUITE_ALIAS = re.compile(r"\bSuite\s+as\s+(\w+)")
 
     def __init__(self, sources, ignore, suites, **kwargs):
 
@@ -94,25 +92,19 @@ class CliRunner:
         return self.__execution_config
 
     @staticmethod
-    def start_in_a_thread(target, args):
+    def may_define_suites(source):
+        """
+        :param source: STRING, contents of a .py file
+        :return: BOOLEAN, True if the file looks like it applies the @Suite() decorator (directly, via a module
+                 alias like @tj.Suite() or via an import alias like `Suite as S` -> @S()) and is worth importing
+        """
+        if "test_junkie" not in source:
+            return False
+        names = ["Suite"] + CliRunner.__REGEX_SUITE_ALIAS.findall(source)
+        decorator = r"@\s*(?:[\w.]+\.)?(?:{})\s*\(".format("|".join(re.escape(name) for name in names))
+        return re.search(decorator, source) is not None
 
-        def get_active_count():
-            active = 0
-            for thread in CliRunner.__SCANNER_THREADS:
-                if thread.is_alive():
-                    active += 1
-                else:
-                    CliRunner.__SCANNER_THREADS.remove(thread)
-            return active
-
-        while get_active_count() > 50:
-            time.sleep(1)
-        new_thread = threading.Thread(target=target, args=args)
-        CliRunner.__SCANNER_THREADS.append(new_thread)
-        new_thread.start()
-        return new_thread
-
-    def __find_and_register_suite(self, _suite_alias, _source, _file_path):
+    def __find_and_register_suite(self, _file_path):
 
         def raise_import_error(error):
 
@@ -144,35 +136,21 @@ class CliRunner:
                     return guess_project_root(possibility, _module_name, error)
                 raise_import_error(error)
 
-        @synchronized()
-        def load_module(_decorated_classes):
-
-            module_name = os.path.splitext(os.path.basename(_file_path))[0]
-            try:
-                with suppressed_stdout(suppress=True):
-                    module = _load_source(module_name, _file_path)
-            except ImportError as error:
-                if self.guess_root:
-                    module = guess_project_root(_file_path, module_name, error)
-                else:
-                    raise_import_error(error)
-            for name, data in inspect.getmembers(module):
-                if name in _decorated_classes and inspect.isclass(data):
-                    if not self.requested_suites or \
-                            (self.requested_suites and name in self.requested_suites):
-                        self.suites.append(data)
-
-        matches = re.findall("@{alias}((.|\n)*?):\n".format(alias=_suite_alias), _source)
-        decorated_classes = []
-        for match in matches:
-            if isinstance(match, tuple):
-                for item in match:
-                    if "\nclass " in item:
-                        decorated_classes.append(item.split("\nclass ")[-1].strip())
+        module_name = os.path.splitext(os.path.basename(_file_path))[0]
+        try:
+            with suppressed_stdout(suppress=True):
+                module = _load_source(module_name, _file_path)
+        except ImportError as error:
+            if self.guess_root:
+                module = guess_project_root(_file_path, module_name, error)
             else:
-                if "\nclass " in match:
-                    decorated_classes.append(match.split("\nclass ")[-1].strip())
-        load_module(decorated_classes)
+                raise_import_error(error)
+        roster = Builder.get_execution_roster()
+        for name, data in list(vars(module).items()):  # definition order, same order the suites will run in
+            # only suites defined in this file - a suite imported from elsewhere is picked up from its own file
+            if inspect.isclass(data) and data in roster and data.__module__ == module.__name__:
+                if not self.requested_suites or name in self.requested_suites:
+                    self.suites.append(data)
 
     def __skip(self, source, directory):
 
@@ -186,28 +164,17 @@ class CliRunner:
 
     def scan(self):
 
-        @contextmanager
-        def open_file(_file):
-            with open(_file, encoding="utf-8") as _doc:
-                _source = _doc.read()
-                yield (_source, _doc)
+        scanned = set()
 
         def parse_file(_file):
-
-            with open_file(_file) as __source:
-
-                suite_imported_as_alias = re.findall(CliRunner.__REGEX_ALIAS_IMPORT, __source[0])
-                if suite_imported_as_alias:
-                    suite_alias = suite_imported_as_alias[-1].split("Suite")[-1].split("as")[-1].split(",")[0].strip()
-                    CliRunner.start_in_a_thread(target=self.__find_and_register_suite,
-                                                args=(suite_alias, __source[0], __source[1].name))
-                    return True
-
-                suite_imported = re.findall(CliRunner.__REGEX_NO_ALIAS_IMPORT, __source[0])
-                if suite_imported:
-                    CliRunner.start_in_a_thread(target=self.__find_and_register_suite,
-                                                args=("Suite", __source[0], __source[1].name))
-                    return True
+            path = os.path.normcase(os.path.realpath(_file))
+            if path in scanned:  # overlapping sources, e.g. -s tests tests/cli
+                return
+            scanned.add(path)
+            with open(_file, encoding="utf-8") as _doc:
+                source = _doc.read()
+            if CliRunner.may_define_suites(source):
+                self.__find_and_register_suite(_file)
 
         try:
             print("\n[{status}] Scanning: {location} ..."
@@ -219,15 +186,13 @@ class CliRunner:
                     parse_file(source)
                 else:
                     for dirName, subdirList, fileList in os.walk(source, topdown=True):
+                        subdirList.sort()  # walk/glob order is OS-dependent - keep suite order deterministic
 
                         if self.__skip(source, dirName):
                             continue
 
-                        for file_path in glob.glob(os.path.join(dirName, "*.py")):
-                            if parse_file(file_path)is True:
-                                continue
-            for thread in CliRunner.__SCANNER_THREADS:
-                thread.join()
+                        for file_path in sorted(glob.glob(os.path.join(dirName, "*.py"))):
+                            parse_file(file_path)
             print("[{status}] Scan finished in: {time} seconds. Found: {suites} suite(s)."
                   .format(status=CliUtils.format_color_string(value="INFO", color="blue"),
                           time="{0:.2f}".format(time.time() - start),

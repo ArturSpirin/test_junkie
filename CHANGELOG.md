@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.9a3
+- Fixed `tj run` / `tj audit` silently skipping suites that inherit from a base class, have a comment on the class line, use multi-line or aliased imports, or `@module.Suite()`
+- Fixed `tj run` / `tj audit` counting the same suite more than once when sources overlap (#25)
 - Added `TEST_JUNKIE_HOME` env var to relocate Test Junkie's config and temp files; the test suite now uses it so it never touches a developer's real config
 - Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)
 
