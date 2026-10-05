@@ -1,9 +1,10 @@
 import copy
 import inspect
+import random
 import threading
 import time
 import traceback
-from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks
+from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks, TestOrder
 from test_junkie.debugger import LogJunkie, suppressed_stdout
 from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters
@@ -68,33 +69,57 @@ class Runner:
     @staticmethod
     def __prioritize(suites=None, suite_object=None):
         """
-        This function will order the lists of suites and tests according to the priority set by user
-        - Suites/Tests with priorities, will be pushed towards the front according to the priorities defined
-        - Suites/Tests with no priority defined, will be pushed towards the middle
-        - Suites/Tests with no priority defined and not parallelized, will be pushed towards the end
-        :param suites: LIST of class objects decorated with @Suite
-        :param suite_object: SuiteObject
-        :return: LIST ordered list of suites or tests
+        Orders suites or the tests within a suite for execution.
+
+        When called with suite_object, the suite's @Suite(order=) value controls test ordering:
+          - TestOrder.ALPHABETICAL  : sort tests by function name
+          - TestOrder.RANDOM        : shuffle tests (random.shuffle)
+          - TestOrder.PRIORITY_ASC  : explicit numeric priority ascending (default)
+          - TestOrder.PRIORITY_DESC : explicit numeric priority descending
+        Tests without a numeric priority always trail prioritized tests in both ASC and DESC modes.
+
+        :param suites: LIST of class objects decorated with @Suite  (suite-level ordering)
+        :param suite_object: SuiteObject                             (test-level ordering)
+        :return: LIST ordered accordingly
         """
+        items = suites if suites is not None else suite_object.get_test_objects()
+        order = suite_object.get_order() if suite_object is not None and suites is None else None
+
+        if order is not None:
+            _valid = {TestOrder.RANDOM, TestOrder.ALPHABETICAL, TestOrder.PRIORITY_ASC, TestOrder.PRIORITY_DESC}
+            if order not in _valid:
+                raise BadParameters(
+                    "Invalid value '{}' for 'order' argument in @Suite() decorator. "
+                    "Expected one of: {}. See documentation: {}".format(
+                        order, sorted(_valid), DocumentationLinks.SUITE_DECORATOR))
+
+        if order == TestOrder.RANDOM:
+            result = list(items)
+            random.shuffle(result)
+            return result
+
+        if order == TestOrder.ALPHABETICAL:
+            return sorted(items, key=lambda t: t.get_function_name())
+
+        reverse = order == TestOrder.PRIORITY_DESC
+
         ordered = []
         priorities = {}
         no_priority = []
         not_parallelized = []
 
-        items = suites if suites is not None else suite_object.get_test_objects()
-
         for item in items:
-
             if suites is not None:
-                suite_object = Builder.get_execution_roster().get(item, None)
-                if suite_object is None:
+                _so = Builder.get_execution_roster().get(item, None)
+                if _so is None:
                     raise BadParameters("Check Runner instance, you initialized it with incorrect test suite object: "
                                         "{}.".format(item))
-                priority = suite_object.get_priority()
-                is_parallelized = suite_object.is_parallelized()
+                priority = _so.get_priority()
+                is_parallelized = _so.is_parallelized()
             else:
                 priority = item.get_priority()
                 is_parallelized = item.is_parallelized()
+
             if priority is None:
                 if is_parallelized:
                     no_priority.append(item)
@@ -102,15 +127,12 @@ class Runner:
                     not_parallelized.append(item)
             else:
                 if priority not in priorities:
-                    priorities.update({priority: [item]})
+                    priorities[priority] = [item]
                 else:
                     priorities[priority].append(item)
 
-        ordered_priorities = list(priorities.keys())
-        ordered_priorities.sort()
-        for priority in ordered_priorities:
-            for item in priorities[priority]:
-                ordered.append(item)
+        for priority in sorted(priorities.keys(), reverse=reverse):
+            ordered.extend(priorities[priority])
 
         ordered += no_priority + not_parallelized
         return ordered

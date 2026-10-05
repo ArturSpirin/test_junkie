@@ -271,6 +271,10 @@ class SuiteObject(object):
 
         return self.get_kwargs().get("priority", None)
 
+    def get_order(self):
+
+        return self.get_kwargs().get("order", None)
+
     def get_runtime(self):
 
         return self.metrics.get_metrics().get("runtime", None)

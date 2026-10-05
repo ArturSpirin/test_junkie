@@ -17,6 +17,7 @@ class Builder(object):
     __CURRENT_SUITE_OBJECT = None
     __SUITE_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int], "listener": [Listener], "rules": [Rules],
                                "parallelized": [bool], "priority": [int], "feature": [str], "pr": [list],
+                               "order": [str],
                                "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
     __TEST_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int], "parallelized_parameters": [bool],
                               "parallelized": [bool], "priority": [int], "component": [str], "tags": [list],

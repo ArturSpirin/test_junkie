@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="test_junkie",
-    version="0.9a0",
+    version="0.9a1",
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Modern Testing Framework",
