@@ -155,6 +155,7 @@ class Settings:
                                                           default=Settings.__DEFAULT_TAGS)})
                 self.__tag_config = config
             else:
+                Settings.__validate_tag_config_type(config)  # before .items() - a list used to raise AttributeError
                 for prop, value in config.items():
                     if value is Undefined:
                         config.update({prop: self.__get_value(key=prop,
@@ -164,11 +165,15 @@ class Settings:
         return self.__tag_config
 
     @staticmethod
-    def __validate_tag_config(config):
-        # a bad value used to surface as a bare TypeError from deep inside the suite filters
+    def __validate_tag_config_type(config):
         if not isinstance(config, dict):
             raise ConfigError("`tag_config` must be a dict, got {}. See documentation: {}"
                               .format(type(config).__name__, DocumentationLinks.TAGS))
+
+    @staticmethod
+    def __validate_tag_config(config):
+        # a bad value used to surface as a bare TypeError from deep inside the suite filters
+        Settings.__validate_tag_config_type(config)
         for prop, value in config.items():
             if value is not None and value is not Undefined and \
                     not (isinstance(value, (list, tuple)) and all(isinstance(tag, str) for tag in value)):
