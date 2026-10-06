@@ -102,7 +102,8 @@ class Config:
         :return: ConfigParser object
         """
         import configparser
-        config = configparser.ConfigParser()
+        # no %-interpolation: a "%" in a value (e.g. a report path) made saving and reading fail
+        config = configparser.ConfigParser(interpolation=None)
         config.read(self.path)
         return config
 

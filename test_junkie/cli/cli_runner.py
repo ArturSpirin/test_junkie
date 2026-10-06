@@ -210,15 +210,11 @@ class CliRunner:
 
     def run_suites(self, args):
 
-        def tags():
-            config = {"run_on_match_all": args.run_on_match_all,
+        # unset CLI tag args are Undefined (never None), so Settings falls back to the config for each of them
+        tag_config = {"run_on_match_all": args.run_on_match_all,
                       "run_on_match_any": args.run_on_match_any,
                       "skip_on_match_all": args.skip_on_match_all,
                       "skip_on_match_any": args.skip_on_match_any}
-            for prop, value in config.items():
-                if value is not None:
-                    return config
-            return None
 
         if self.suites:
             print("[{status}] Running tests ...\n"
@@ -234,7 +230,7 @@ class CliRunner:
                            owners=args.owners,
                            components=args.components,
                            features=args.features,
-                           tag_config=tags(),
+                           tag_config=tag_config,
                            quiet=args.quiet)
             except KeyboardInterrupt:
                 print("(Ctrl+C) Exiting!")
