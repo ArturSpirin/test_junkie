@@ -286,6 +286,32 @@ def git_folders_are_not_scanned():
     assert code is None and "Found: 1 suite(s)" in out and "HiddenInGitSuite" not in out, out
 
 
+
+def same_named_files_and_stdlib_names():
+    # every suite file used to be loaded under its bare file name: tests/a/login.py and tests/b/login.py were both
+    # `login` (audit merged their suites), and a suite file named json.py replaced the real json module - the HTML
+    # report then crashed with "module 'json' has no attribute 'dumps'"
+    import json
+    directory = tempfile.mkdtemp()
+    for folder, test_name in (("a", "from_a"), ("b", "from_b")):
+        os.makedirs(os.path.join(directory, folder))
+        with open(os.path.join(directory, folder, "login.py"), "w") as doc:
+            doc.write(PASSING_SUITE.replace("CliPassingSuite", "SameNameSuite").replace("def passes", "def " + test_name))
+    with open(os.path.join(directory, "b", "json.py"), "w") as doc:
+        doc.write(PASSING_SUITE.replace("CliPassingSuite", "StdlibNamedSuite"))
+    report = os.path.join(directory, "report.html")
+    code, out = run_cli("run", "-s", directory, "--html_report", report, cwd=directory)
+    assert code is None and "Found: 3 suite(s)" in out, out
+    assert sys.modules["json"] is json and hasattr(json, "dumps")
+    with io.open(report, encoding="utf-8") as doc:
+        html = doc.read()
+    assert "from_a" in html and "from_b" in html
+    code, out = run_cli("audit", "suites", "-s", directory, cwd=directory)
+    audited = re.findall(r"Suite: (\S*SameNameSuite)", out)
+    assert code is None and len(set(audited)) == 2, out  # listed separately, as module.SameNameSuite
+    shutil.rmtree(directory, ignore_errors=True)
+
+
 def config_dir_is_created_on_first_use():
     home = os.path.join(tempfile.mkdtemp(), "not", "created", "yet")
     code, out = run_cli("config", "show", "--all", home=home)
@@ -334,5 +360,5 @@ CHECKS = [audit_lists_every_suite, audit_no_flags_filter_out_suites_that_have_th
           run_exit_codes, run_with_missing_config_file, run_import_error_and_guess_root, config_commands,
           unknown_command_and_version, run_with_code_coverage, ctrl_c_exits_12,
           unexpected_error_during_run_exits_120, guess_root_gives_up_when_nothing_resolves,
-          git_folders_are_not_scanned, config_dir_is_created_on_first_use, config_values_with_percent_signs,
+          git_folders_are_not_scanned, same_named_files_and_stdlib_names, config_dir_is_created_on_first_use, config_values_with_percent_signs,
           broken_config_fails_cleanly, config_helpers]

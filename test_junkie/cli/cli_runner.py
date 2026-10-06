@@ -1,4 +1,5 @@
 import glob
+import hashlib
 import importlib.util
 import inspect
 import os
@@ -14,6 +15,38 @@ from test_junkie.errors import BadCliParameters
 from test_junkie.metrics import Aggregator
 from test_junkie.runner import Runner
 from test_junkie.cli.cli_config import Config
+
+
+def _module_name(file_path):
+    """
+    Name to load a suite file under. Every file used to be loaded under its bare file name, so `tests/a/login.py` and
+    `tests/b/login.py` were both `login` (the second replaced the first in sys.modules) and a suite file named like an
+    importable module (`json.py`, `logging.py`, ...) replaced that module for the whole process.
+    The bare name is still used when it's free; otherwise the path relative to the working directory (`tests.b.login`)
+    """
+    file_path = os.path.abspath(file_path)
+
+    def free(name):
+        module = sys.modules.get(name)
+        if module is not None:
+            return os.path.abspath(getattr(module, "__file__", None) or "") == file_path
+        if "." in name:
+            return True
+        try:  # importable from elsewhere (stdlib, an installed package) even though nothing imported it yet
+            spec = importlib.util.find_spec(name)
+        except (ImportError, ValueError):
+            return True
+        return spec is None or os.path.abspath(spec.origin or "") == file_path
+
+    name = os.path.splitext(os.path.basename(file_path))[0]
+    if free(name):
+        return name
+    relative = os.path.splitext(os.path.relpath(file_path))[0] if os.path.splitdrive(file_path)[0].lower() == \
+        os.path.splitdrive(os.getcwd())[0].lower() else os.path.splitext(file_path)[0]
+    dotted = ".".join(re.sub(r"\W", "_", part) for part in relative.split(os.sep) if part not in ("", ".."))
+    if dotted and free(dotted):
+        return dotted
+    return "{}_{}".format(dotted or name, hashlib.md5(file_path.encode("utf-8")).hexdigest()[:8])
 
 
 def _load_source(module_name, file_path):
@@ -134,7 +167,7 @@ class CliRunner:
                     return guess_project_root(possibility, _module_name, error)
                 raise_import_error(error)
 
-        module_name = os.path.splitext(os.path.basename(_file_path))[0]
+        module_name = _module_name(_file_path)
         try:
             with suppressed_stdout(suppress=True):
                 module = _load_source(module_name, _file_path)

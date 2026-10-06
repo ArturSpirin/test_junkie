@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.9a5
+- Fixed `tj run`/`tj audit` mixing up suite files that share a file name in different folders (audit merged their suites into one), and a suite file named like an existing module (e.g. `json.py`) replacing that module for the whole run - the HTML report crashed with `module 'json' has no attribute 'dumps'`
 - Fixed a failing run (for example a broken custom listener) exiting without the console summary or the HTML/XML reports - they are now written first, then the error is raised
 - Every run is ~200ms faster: removed a fixed sleep after the suite queue was processed
 - Parallel runs no longer poll every 200ms (1s for prioritized suites) for a free thread or a lifted restriction - waiting suites and tests start as soon as a thread finishes
