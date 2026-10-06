@@ -325,7 +325,9 @@ class TestObject(object):
         return self.get_kwargs().get("testjunkie_test_id", 0)
 
     def get_suite_id(self):
-        return self.get_kwargs().get("testjunkie_suite_id", 0)
+        # @test() runs before its class's @Suite() bumps the id counter, so the id recorded on the test was the
+        # *previous* suite's - ask the suite instead
+        return self.suite.get_suite_id()
 
     def get_skip(self):
         return self.get_kwargs().get("skip", False)

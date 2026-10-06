@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.9a3
+- A malformed `tag_config` now raises a clear `ConfigError` instead of a bare `TypeError`
+- Fixed `TestObject.get_suite_id()` returning the previous suite's id
 - Fixed `Runner.cancel()` during a run raising `TypeError` for the remaining tests instead of cancelling them
 - Fixed listener events `on_before_group_failure` / `on_before_group_error` never firing when a `@beforeGroup` failed
 - Fixed `tj audit` ignoring `-x/--suites`, counting tests excluded by `--no-*` filters, and `--no-test-meta` checking the suite's meta instead of the test's
