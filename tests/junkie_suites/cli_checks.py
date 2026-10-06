@@ -344,7 +344,8 @@ def config_update_that_cannot_be_saved_exits_120():
         code, out = run_cli("config", "update", "--sources", home, home=home)
         assert code == 120 and "Unexpected error occurred during update" in out, out
     finally:
-        os.chmod(config, stat.S_IREAD | stat.S_IWRITE)
+        if os.path.exists(config):  # run_cli already removed it on Linux; Windows can't delete a read-only file
+            os.chmod(config, stat.S_IREAD | stat.S_IWRITE)
         shutil.rmtree(home, ignore_errors=True)
 
 
