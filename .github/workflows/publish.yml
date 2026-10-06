@@ -10,6 +10,19 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # full history + branches, for the master check below
+
+      # releases are tagged on master only, and the tag has to match the version being built
+      - name: Check the tag
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::$GITHUB_REF_NAME is not on master - releases are tagged on master only"; exit 1
+          fi
+          version=$(python3 -c "import re; print(re.search(r'^__version__ = \"([^\"]+)\"', open('test_junkie/__init__.py').read(), re.M).group(1))")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the package version $version"; exit 1
+          fi
 
       - uses: actions/setup-python@v6
         with:
