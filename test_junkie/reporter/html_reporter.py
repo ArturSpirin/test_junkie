@@ -351,6 +351,8 @@ class Reporter:
 
         durations = [t["dur"] for t in tasks]
         serial = sum(durations)
+        if serial <= 0:
+            return None  # near-instant tests: nothing to gain from threads (and the math below divides by zero)
 
         def simulate(n):
             buckets = [0.0] * n
@@ -370,7 +372,9 @@ class Reporter:
 
         # Last candidate before diminishing returns triggered the break;
         # recommend the one before it if improvement was marginal.
-        if len(candidates) >= 2 and (candidates[-2][1] - candidates[-1][1]) / candidates[-2][1] < 0.05:
+        # used to divide by zero (crashing report generation) when an estimate rounded down to 0
+        if len(candidates) >= 2 and candidates[-2][1] > 0 and \
+                (candidates[-2][1] - candidates[-1][1]) / candidates[-2][1] < 0.05:
             rec_n, rec_est = candidates[-2]
         else:
             rec_n, rec_est = candidates[-1]
@@ -491,12 +495,19 @@ class Reporter:
             return statuses[-1] if statuses else "unknown"
 
         def _get_copy(value):
+            # deepcopy fails on e.g. an exception object holding a lock or socket - this used to return None and
+            # the test silently disappeared from the report. Copy the structure and keep un-copyable leaves as is
+            # (the report only reads them)
             try:
                 return copy.deepcopy(value)
             except Exception:
-                LogJunkie.error("Failed to deepcopy metrics.")
-                LogJunkie.error(traceback.format_exc())
-                return None
+                LogJunkie.debug("Metrics are not deep-copyable, copying structure only: {}"
+                                .format(traceback.format_exc()))
+                if isinstance(value, dict):
+                    return {key: _get_copy(item) for key, item in value.items()}
+                if isinstance(value, (list, tuple)):
+                    return type(value)(_get_copy(item) for item in value)
+                return value
 
         tests_data = []
         details_data = {}

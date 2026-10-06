@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9a4
+- Fixed HTML report generation crashing with `ZeroDivisionError` for runs without threading that have 3+ near-instant tests
+- Fixed a test whose exception can't be deep-copied (e.g. it holds a lock or socket) disappearing from the HTML report
+- Fixed `tj config update` failing on values containing `%` (e.g. report paths)
+- Fixed failed `tj config` commands exiting with code 0; an unknown `tj config` sub-command now exits 120
+- Removed unreachable CLI error handling
+
 ## 0.9a3
 - A malformed `tag_config` now raises a clear `ConfigError` instead of a bare `TypeError`
 - Fixed `TestObject.get_suite_id()` returning the previous suite's id

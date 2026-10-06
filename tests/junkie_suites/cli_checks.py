@@ -79,23 +79,60 @@ class CliFailingSuite:
 '''
 
 
-def run_cli(*argv):
+COVERAGE_RC = """[run]
+branch = True
+"""
+
+BROKEN_CONFIG = """not a config file
+"""
+
+INTERRUPTED_IMPORT = """raise KeyboardInterrupt
+""" + PASSING_SUITE
+
+INTERRUPTED_TEST = PASSING_SUITE.replace("""    def passes(self):
+        pass""", """    def passes(self):
+        raise KeyboardInterrupt""")
+
+BROKEN_LISTENER = """from test_junkie.listener import Listener
+
+
+class Broken(Listener):
+
+    def on_success(self, **kwargs):
+        raise ValueError("listener bug")
+""" + PASSING_SUITE.replace("@Suite()", "@Suite(listener=Broken)")
+
+UNRESOLVABLE_IMPORT = """import module_that_does_not_exist_tj
+""" + PASSING_SUITE
+
+
+def run_cli(*argv, home=None, cwd=None, home_files=None):
     """
+    :param home: TEST_JUNKIE_HOME to use - defaults to a fresh temp dir (may point at a dir that doesn't exist yet)
+    :param cwd: run with this working directory
+    :param home_files: DICT of file name -> contents to put in the home dir first (e.g. a broken config)
     :return: (exit code - None if the command returned normally, stdout with colors stripped)
     """
     from test_junkie.cli.cli import Cli
-    home = tempfile.mkdtemp()
-    previous_home, previous_argv = os.environ.get(CliConstants.HOME_ENV_VAR), sys.argv
+    home = home or tempfile.mkdtemp()
+    for name, contents in (home_files or {}).items():
+        os.makedirs(home, exist_ok=True)
+        with open(os.path.join(home, name), "w") as doc:
+            doc.write(contents)
+    previous_home, previous_argv, previous_cwd = os.environ.get(CliConstants.HOME_ENV_VAR), sys.argv, os.getcwd()
     os.environ[CliConstants.HOME_ENV_VAR] = home
     sys.argv = ["tj"] + [str(arg) for arg in argv]
     out = io.StringIO()
     code = None
     try:
+        if cwd:
+            os.chdir(cwd)
         with contextlib.redirect_stdout(out):
             Cli()
     except SystemExit as exit_:
         code = exit_.code
     finally:
+        os.chdir(previous_cwd)
         sys.argv = previous_argv
         if previous_home is None:
             del os.environ[CliConstants.HOME_ENV_VAR]
@@ -211,8 +248,91 @@ def unknown_command_and_version():
     assert code is None and out.startswith("Test Junkie "), out
 
 
+def run_with_code_coverage():
+    # own working dir, so the inner coverage session doesn't pick up the repo's .coveragerc or write data files into it
+    directory = _write(PASSING_SUITE, "passing_suite.py")
+    code, out = run_cli("run", "-s", directory, "--code-cov", cwd=directory)
+    assert code is None and "Code coverage report:" in out, out
+    rcfile = os.path.join(directory, "cov.rc")
+    with open(rcfile, "w") as doc:
+        doc.write(COVERAGE_RC)
+    code, out = run_cli("run", "-s", directory, "--code-cov", "--cov-rcfile", rcfile, cwd=directory)
+    assert code is None and "Code coverage report:" in out, out
+
+
+def ctrl_c_exits_12():
+    code, out = run_cli("run", "-s", _write(INTERRUPTED_IMPORT, "interrupted_scan.py"))
+    assert code == 12 and "(Ctrl+C) Exiting!" in out, out
+    code, out = run_cli("run", "-s", _write(INTERRUPTED_TEST, "interrupted_run.py"))
+    assert code == 12 and "(Ctrl+C) Exiting!" in out, out
+
+
+def unexpected_error_during_run_exits_120():
+    code, out = run_cli("run", "-s", _write(BROKEN_LISTENER, "broken_listener.py"))
+    assert code == 120 and "Unexpected error during test execution" in out, out
+
+
+def guess_root_gives_up_when_nothing_resolves():
+    code, out = run_cli("run", "-s", _write(UNRESOLVABLE_IMPORT, "unresolvable.py"), "--guess-root")
+    assert code == 120 and "There is an import error" in out, out
+
+
+def git_folders_are_not_scanned():
+    directory = _write(PASSING_SUITE, "passing_suite.py")
+    os.makedirs(os.path.join(directory, ".git", "hooks"))
+    with open(os.path.join(directory, ".git", "hooks", "hidden_suite.py"), "w") as doc:
+        doc.write(PASSING_SUITE.replace("CliPassingSuite", "HiddenInGitSuite"))
+    code, out = run_cli("run", "-s", directory)
+    assert code is None and "Found: 1 suite(s)" in out and "HiddenInGitSuite" not in out, out
+
+
+def config_dir_is_created_on_first_use():
+    home = os.path.join(tempfile.mkdtemp(), "not", "created", "yet")
+    code, out = run_cli("config", "show", "--all", home=home)
+    assert code is None and "Config is located at:" in out, out
+
+
+def config_values_with_percent_signs():
+    # "%" used to be treated as configparser interpolation - saving a report path like this failed
+    home = tempfile.mkdtemp()
+    code, out = run_cli("config", "update", "--html_report", "reports/100%/r.html", home=home)
+    assert code is None and "[OK]\thtml_report=reports/100%/r.html" in out, out
+
+
+def broken_config_fails_cleanly():
+    broken = {CliConstants.TJ_CONFIG_NAME: BROKEN_CONFIG}
+    for command in (["config", "show", "--sources"], ["config", "update", "--owners", "qa"]):
+        # used to exit 0 after the error was printed
+        code, out = run_cli(*command, home_files=broken)
+        assert code == 120 and ("Error" in out or "error" in out), (command, out)
+
+
+def config_helpers():
+    from test_junkie.cli.cli import CliUtils
+    from test_junkie.cli.cli_config import Config
+    assert Config.parse(5) == 5 and Config.parse("['a']") == ["a"] and Config.parse("report.html") == "report.html"
+    home = tempfile.mkdtemp()
+    previous = os.environ.get(CliConstants.HOME_ENV_VAR)
+    os.environ[CliConstants.HOME_ENV_VAR] = home
+    try:
+        assert "[runtime]" in Config(CliConstants.TJ_CONFIG_NAME).read()
+    finally:
+        if previous is None:
+            del os.environ[CliConstants.HOME_ENV_VAR]
+        else:
+            os.environ[CliConstants.HOME_ENV_VAR] = previous
+        shutil.rmtree(home, ignore_errors=True)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        CliUtils.print_color_traceback(trace="custom trace text")
+    assert "custom trace text" in out.getvalue()
+
+
 CHECKS = [audit_lists_every_suite, audit_no_flags_filter_out_suites_that_have_them,
           audit_no_test_meta_checks_the_tests_meta, audit_only_covers_the_requested_suites, audit_by_feature_and_verbose, audit_unknown_view_is_rejected,
           audit_and_run_without_sources_explain_what_is_missing, audit_reports_when_nothing_matches,
           run_exit_codes, run_with_missing_config_file, run_import_error_and_guess_root, config_commands,
-          unknown_command_and_version]
+          unknown_command_and_version, run_with_code_coverage, ctrl_c_exits_12,
+          unexpected_error_during_run_exits_120, guess_root_gives_up_when_nothing_resolves,
+          git_folders_are_not_scanned, config_dir_is_created_on_first_use, config_values_with_percent_signs,
+          broken_config_fails_cleanly, config_helpers]

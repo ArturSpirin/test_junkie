@@ -5,7 +5,6 @@ import traceback
 
 from test_junkie.cli.cli_audit import CliAudit
 from test_junkie.constants import DocumentationLinks, CliConstants, Undefined
-from test_junkie.errors import BadCliParameters
 from colorama import Fore, Style
 
 
@@ -59,14 +58,11 @@ Use: tj COMMAND -h to display COMMAND specific help
             LogJunkie.enable_logging(10)
 
         from test_junkie.cli.cli_runner import CliRunner
-        try:
-            tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
-                           code_cov=args.code_cov, cov_rcfile=args.cov_rcfile, guess_root=args.guess_root,
-                           config=args.config)
-            tj.scan()
-        except BadCliParameters as error:
-            print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
-            return
+        # scan() reports bad parameters (e.g. no sources) itself and exits 120
+        tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
+                       code_cov=args.code_cov, cov_rcfile=args.cov_rcfile, guess_root=args.guess_root,
+                       config=args.config)
+        tj.scan()
         tj.run_suites(args)
 
     def audit(self):
@@ -146,13 +142,9 @@ usage: tj audit [COMMAND] [OPTIONS]
                     LogJunkie.enable_logging(10)
 
                 from test_junkie.cli.cli_runner import CliRunner
-                try:
-                    tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
-                                   guess_root=args.guess_root)
-                    tj.scan()
-                except BadCliParameters as error:
-                    print("[{status}] {error}".format(status=CliUtils.format_color_string("ERROR", "red"), error=error))
-                    return
+                tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
+                               guess_root=args.guess_root)
+                tj.scan()
                 aggregator = CliAudit(suites=tj.suites, args=args)
                 aggregator.aggregate()
                 aggregator.print_results()
@@ -185,15 +177,18 @@ Use: tj config COMMAND -h to display COMMAND specific help
                     print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
                           status=CliUtils.format_color_string(value="ERROR", color="red"),
                           command=command))
+                    parser.print_help()
+                    exit(120)
             else:
                 print("[{status}]\tDude, what do you want to do with the config?".format(
                       status=CliUtils.format_color_string(value="ERROR", color="red")))
             parser.print_help()
-        except:
-            if "SystemExit:" not in traceback.format_exc():
-                CliUtils.print_color_traceback()
-                parser.print_help()
-                exit(120)
+        except SystemExit:
+            raise  # was swallowed here, so a failed `tj config update` exited 0
+        except Exception:
+            CliUtils.print_color_traceback()
+            parser.print_help()
+            exit(120)
 
     def version(self):
         print("Test Junkie {} (Python{})\n{}".format(importlib.metadata.version("test-junkie"),
@@ -208,10 +203,6 @@ class CliUtils:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     END = '\033[0m'
-
-    def __init__(self):
-
-        pass
 
     @staticmethod
     def add_standard_tj_args(parser, audit=False):
