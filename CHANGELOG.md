@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.9a3
+- Fixed `Runner.cancel()` during a run raising `TypeError` for the remaining tests instead of cancelling them
+- Fixed listener events `on_before_group_failure` / `on_before_group_error` never firing when a `@beforeGroup` failed
 - Fixed `tj audit` ignoring `-x/--suites`, counting tests excluded by `--no-*` filters, and `--no-test-meta` checking the suite's meta instead of the test's
 - Fixed `tj run` / `tj audit` silently skipping suites that inherit from a base class, have a comment on the class line, use multi-line or aliased imports, or `@module.Suite()`
 - Fixed `tj run` / `tj audit` counting the same suite more than once when sources overlap (#25)

@@ -316,7 +316,13 @@ class Runner:
                 result = self.__group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
                 if result is not None:
                     self.__before_group_failure_records.update(result)
-                    exception = result[list(result.keys())[0]]["trace"]
+                    failure = result[list(result.keys())[0]]
+                    exception = failure["trace"]
+                    # documented listener events that were never fired (after-group ones always were)
+                    event = Event.ON_BEFORE_GROUP_FAIL if isinstance(failure["exception"], AssertionError) \
+                        else Event.ON_BEFORE_GROUP_ERROR
+                    Runner.__process_event(event=event, suite=suite, error=failure["exception"],
+                                           formatted_traceback=failure["trace"])
 
         if not suite.can_skip(self.__settings) and not self.__cancel and not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
@@ -369,8 +375,6 @@ class Runner:
 
                                     while not self.__processor.test_qualifies(test):
                                         time.sleep(0.2)
-                                        if test.get_priority() is None:
-                                            continue
 
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None and \
@@ -508,15 +512,18 @@ class Runner:
                     return  # fixes ticket: #27
             _status = TestCategory.IGNORE if not cancel else TestCategory.CANCEL
             _event = Event.ON_IGNORE if not cancel else Event.ON_CANCEL
+            # a cancel has no @beforeClass error - indexing None here made Runner.cancel() mid-run raise TypeError
+            _exception = before_class_error["exception"] if before_class_error else None
+            _traceback = before_class_error["traceback"] if before_class_error else None
             test.metrics.update_metrics(status=_status,
                                         start_time=test_start_time,
                                         param=parameter,
                                         class_param=class_parameter,
-                                        exception=before_class_error["exception"],
-                                        formatted_traceback=before_class_error["traceback"])
-            Runner.__process_event(event=_event, error=before_class_error["exception"], suite=suite, test=test,
+                                        exception=_exception,
+                                        formatted_traceback=_traceback)
+            Runner.__process_event(event=_event, error=_exception, suite=suite, test=test,
                                    class_param=class_parameter, param=parameter,
-                                   formatted_traceback=before_class_error["traceback"])
+                                   formatted_traceback=_traceback)
             return
 
         status = test.get_status(parameter, class_parameter)
