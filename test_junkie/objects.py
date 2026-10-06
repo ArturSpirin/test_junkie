@@ -321,6 +321,20 @@ class TestObject(object):
     def __repr__(self):
         return "<{}.{}>".format(self.suite.get_class_name(), self.get_function_name())
 
+    def __deepcopy__(self, memo):
+        """
+        Copies the test's own definition (tags, meta, parameters, ...). The suite is NOT copied unless it's the one
+        being copied (then the copy points at the suite copy): copying a test used to drag in its suite, every other
+        test and all their metrics, which made each Rules hook call O(suite size) and a run O(N^2).
+        Metrics are shared, same as TestMetrics.__deepcopy__ always did.
+        """
+        clone = TestObject.__new__(TestObject)
+        memo[id(self)] = clone
+        clone.__test_definition = copy.deepcopy(self.__test_definition, memo)
+        clone.suite = memo.get(id(self.suite), self.suite)
+        clone.metrics = self.metrics
+        return clone
+
     def get_test_id(self):
         return self.get_kwargs().get("testjunkie_test_id", 0)
 

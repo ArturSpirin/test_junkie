@@ -15,6 +15,7 @@ from test_junkie.parallels import ParallelProcessor
 from test_junkie.builder import Builder
 from test_junkie.reporter.html_reporter import Reporter
 from test_junkie.reporter.xml_reporter import XmlReporter
+from test_junkie.rules import Rules
 from test_junkie.settings import Settings
 
 # shared lock for __process_event() - can't create it inline there, @synchronized() would just
@@ -434,11 +435,19 @@ class Runner:
             Runner.__process_event(event=Event.ON_CLASS_SKIP, suite=suite)
 
     @staticmethod
+    def __overrides(rules, hook):
+        """
+        :return: BOOLEAN, True if this Rules subclass overrides the hook - the base hooks are no-ops, so for them we
+                 skip the call and the per-test copy of the test object it would need
+        """
+        return getattr(type(rules), hook) is not getattr(Rules, hook)
+
+    @staticmethod
     def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
 
         def run_before_test():
             try:
-                if not test.skip_before_test_rule():
+                if not test.skip_before_test_rule() and Runner.__overrides(suite.get_rules(), "before_test"):
                     suite.get_rules().before_test(test=copy.deepcopy(test))
                 if not test.skip_before_test():
                     before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
@@ -489,7 +498,7 @@ class Runner:
                     if after_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(after_test_error, pre_processed=True)
                         return False
-                if not test.skip_after_test_rule():
+                if not test.skip_after_test_rule() and Runner.__overrides(suite.get_rules(), "after_test"):
                     suite.get_rules().after_test(test=copy.deepcopy(test))
                 return True
             except Exception as after_test_error:

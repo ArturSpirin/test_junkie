@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.9a5
+- Fixed run time growing quadratically with suite size since 0.9a0 (1,000 tests: ~55s → ~2s): `Rules` hooks no longer deep-copy the whole suite per test, and hooks a `Rules` subclass doesn't override are skipped
 
 ## 0.9a4
 - Fixed HTML report generation crashing with `ZeroDivisionError` for runs without threading that have 3+ near-instant tests
