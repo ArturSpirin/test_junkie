@@ -1,6 +1,7 @@
 import inspect
 import threading
 
+from test_junkie.constants import DocumentationLinks
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
 
@@ -216,9 +217,10 @@ class ParallelProcessor:
                 for restriction in suite.get_parallel_restrictions():
                     if not inspect.isclass(restriction):
                         raise BadParameters("Parallel suite restrictions must be class objects decorated with "
-                                            "@Suite(). Suite {} received a non-class restriction: {!r} (type: {})."
+                                            "@Suite(). Suite {} received a non-class restriction: {!r} (type: {}). "
+                                            "See documentation: {}"
                                             .format(suite.get_class_object(), restriction,
-                                                    type(restriction).__name__))
+                                                    type(restriction).__name__, DocumentationLinks.THREADING))
                     _build_reverse_restriction()
                     if not _passes_restriction():
                         return False
@@ -273,9 +275,10 @@ class ParallelProcessor:
                 for restriction in test.get_parallel_restrictions():
                     if not inspect.isfunction(restriction) and not inspect.ismethod(restriction):
                         raise BadParameters("Parallel test restrictions must be function objects decorated with "
-                                            "@test(). Test {} received a non-function restriction: {!r} (type: {})."
+                                            "@test(). Test {} received a non-function restriction: {!r} (type: {}). "
+                                            "See documentation: {}"
                                             .format(test.get_function_name(), restriction,
-                                                    type(restriction).__name__))
+                                                    type(restriction).__name__, DocumentationLinks.THREADING))
                     _build_reverse_restriction()
                     if not _passes_restriction():
                         return False

@@ -1,6 +1,3 @@
-# TODO overhaul errors and add documentation links
-
-
 class TestJunkieExecutionError(Exception):
 
     def __init__(self, message):

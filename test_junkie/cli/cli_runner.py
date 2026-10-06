@@ -94,7 +94,8 @@ class CliRunner:
         if self.__sources == Undefined or not isinstance(self.__sources, list):
             raise BadCliParameters("Sources is a required parameter. You can set it in the config via tj config "
                                    "update -s / --sources to persist or pass it in directly to the command you "
-                                   "are running via -s / --sources")
+                                   "are running via -s / --sources. See documentation: {}"
+                                   .format(DocumentationLinks.CLI_RUN))
         return self.__sources
 
     @property
