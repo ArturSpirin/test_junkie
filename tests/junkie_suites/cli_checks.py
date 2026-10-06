@@ -299,9 +299,11 @@ def same_named_files_and_stdlib_names():
             doc.write(PASSING_SUITE.replace("CliPassingSuite", "SameNameSuite").replace("def passes", "def " + test_name))
     with open(os.path.join(directory, "b", "json.py"), "w") as doc:
         doc.write(PASSING_SUITE.replace("CliPassingSuite", "StdlibNamedSuite"))
+    with open(os.path.join(directory, "json.py"), "w") as doc:  # bare and dotted name both taken
+        doc.write(PASSING_SUITE.replace("CliPassingSuite", "RootStdlibNamedSuite"))
     report = os.path.join(directory, "report.html")
     code, out = run_cli("run", "-s", directory, "--html_report", report, cwd=directory)
-    assert code is None and "Found: 3 suite(s)" in out, out
+    assert code is None and "Found: 4 suite(s)" in out, out
     assert sys.modules["json"] is json and hasattr(json, "dumps")
     with io.open(report, encoding="utf-8") as doc:
         html = doc.read()
@@ -310,6 +312,40 @@ def same_named_files_and_stdlib_names():
     audited = re.findall(r"Suite: (\S*SameNameSuite)", out)
     assert code is None and len(set(audited)) == 2, out  # listed separately, as module.SameNameSuite
     shutil.rmtree(directory, ignore_errors=True)
+
+
+def audit_no_owners_checks_test_owners():
+    source = PASSING_SUITE.replace("CliPassingSuite", "AuditTestOwner").replace("@test()", "@test(owner=\"carol\")")
+    directory = _write(source, "test_owner.py")
+    code, out = run_cli("audit", "suites", "-s", directory)
+    assert code is None and "AuditTestOwner" in out, out
+    code, out = run_cli("audit", "suites", "-s", directory, "--no-owners")
+    assert "AuditTestOwner" not in out, out
+
+
+def code_coverage_report_failure_exits_120():
+    # nothing measured -> coverage can't report ("No data to report")
+    directory = _write(PASSING_SUITE, "passing_suite.py")
+    rcfile = os.path.join(directory, "cov.rc")
+    with open(rcfile, "w") as doc:
+        doc.write("[run]\nsource = no_such_package_tj\n")
+    code, out = run_cli("run", "-s", directory, "--code-cov", "--cov-rcfile", rcfile, cwd=directory)
+    assert code == 120, out
+
+
+def config_update_that_cannot_be_saved_exits_120():
+    import stat
+    home = tempfile.mkdtemp()
+    config = os.path.join(home, CliConstants.TJ_CONFIG_NAME)
+    with open(config, "w") as doc:
+        doc.write("[runtime]\n")
+    os.chmod(config, stat.S_IREAD)
+    try:
+        code, out = run_cli("config", "update", "--sources", home, home=home)
+        assert code == 120 and "Unexpected error occurred during update" in out, out
+    finally:
+        os.chmod(config, stat.S_IREAD | stat.S_IWRITE)
+        shutil.rmtree(home, ignore_errors=True)
 
 
 def config_dir_is_created_on_first_use():
@@ -360,5 +396,7 @@ CHECKS = [audit_lists_every_suite, audit_no_flags_filter_out_suites_that_have_th
           run_exit_codes, run_with_missing_config_file, run_import_error_and_guess_root, config_commands,
           unknown_command_and_version, run_with_code_coverage, ctrl_c_exits_12,
           unexpected_error_during_run_exits_120, guess_root_gives_up_when_nothing_resolves,
-          git_folders_are_not_scanned, same_named_files_and_stdlib_names, config_dir_is_created_on_first_use, config_values_with_percent_signs,
+          git_folders_are_not_scanned, same_named_files_and_stdlib_names, audit_no_owners_checks_test_owners,
+          code_coverage_report_failure_exits_120, config_update_that_cannot_be_saved_exits_120,
+          config_dir_is_created_on_first_use, config_values_with_percent_signs,
           broken_config_fails_cleanly, config_helpers]

@@ -124,9 +124,10 @@ def runner_import_stays_lean():
     import sys
     import test_junkie
     root = os.path.dirname(os.path.dirname(os.path.abspath(test_junkie.__file__)))
-    probe = ("import sys, test_junkie.runner; "
+    # only what the import itself adds - under `coverage run` the child already has coverage's own imports loaded
+    probe = ("import sys; before = set(sys.modules); import test_junkie.runner; "
              "print(sorted(m for m in ('importlib.metadata', 'colorama', 'multiprocessing', 'test_junkie.cli.cli', "
-             "'test_junkie.reporter.html_reporter') if m in sys.modules))")
+             "'test_junkie.reporter.html_reporter') if m in sys.modules and m not in before))")
     loaded = subprocess.run([sys.executable, "-c", probe], cwd=root, capture_output=True, text=True, check=True)
     assert loaded.stdout.strip() == "[]", loaded.stdout + loaded.stderr
     version = subprocess.run([sys.executable, "-m", "test_junkie", "version"], cwd=root, capture_output=True,
