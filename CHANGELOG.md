@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.9a5
+- Fixed `monitor_resources=True` leaving a `.resources_*` temp file behind after short runs: the monitor thread could re-create it after cleanup
 - Fixed a `tag_config` that isn't a dict (e.g. a list) crashing with `AttributeError` instead of the intended `ConfigError`
 - Fixed `tj run`/`tj audit` mixing up suite files that share a file name in different folders (audit merged their suites into one), and a suite file named like an existing module (e.g. `json.py`) replacing that module for the whole run - the HTML report crashed with `module 'json' has no attribute 'dumps'`
 - Fixed a failing run (for example a broken custom listener) exiting without the console summary or the HTML/XML reports - they are now written first, then the error is raised
