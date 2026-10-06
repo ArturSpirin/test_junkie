@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.9a5
+
 ## 0.9a4
 - Fixed HTML report generation crashing with `ZeroDivisionError` for runs without threading that have 3+ near-instant tests
 - Fixed a test whose exception can't be deep-copied (e.g. it holds a lock or socket) disappearing from the HTML report
