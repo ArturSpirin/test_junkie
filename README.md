@@ -87,21 +87,23 @@ Everything above ships in one package — no plugins to add for parallel runs or
 
 | Framework | Core (KB) | Parallel | Parametrization | Total (KB) |
 |---|---:|---|---|---:|
-| **test_junkie** | **651** | built-in | built-in | **651** |
+| **test_junkie** | **621** | built-in | built-in | **621** |
 | unittest | 528 | built-in (`ThreadPoolExecutor`) | +139 (`parameterized`) | 667 |
 | pytest | 2,932 | +532 (`pytest-xdist`) | built-in | 3,464 |
 | Robot Framework | 5,980 | +539 (`robotframework-pabot`) | built-in | 6,519 |
 
-**Sequential wall clock** — N tests that each sleep 1 ms, run one at a time, process start to exit (median of 100 runs):
+**Wall clock** — N tests that each sleep 1 ms, process start to exit (median of 30 runs; every run verified to have passed all N tests):
 
-| Framework | N = 1 | N = 100 | N = 1,000 |
-|---|---:|---:|---:|
-| **test_junkie** | **146 ms** | **162 ms** | **382 ms** |
-| unittest | 166 ms | 104 ms | 165 ms |
-| Robot Framework | 336 ms | 552 ms | 2,680 ms |
-| pytest | 459 ms | 680 ms | 2,992 ms |
+| Framework | N = 1 | N = 100 | N = 1,000 | N = 1,000 · 10 workers |
+|---|---:|---:|---:|---:|
+| **test_junkie** | 95 ms | 296 ms | **1,972 ms** | 308 ms |
+| unittest | **92 ms** | **289 ms** | 2,028 ms | **268 ms** ¹ |
+| pytest | 296 ms | 573 ms | 2,741 ms | 2,064 ms (`pytest-xdist`) |
+| Robot Framework | 308 ms | 581 ms | 3,395 ms | 85.3 s (`pabot`) ² |
 
-Measured with test_junkie 0.9a2, pytest 9.1.1, Robot Framework 7.5 on Python 3.12.5 (Windows 11, Intel Core i9-10980HK).
+¹ a bare `ThreadPoolExecutor` with no test runner. ² median of 3 runs; pabot starts a process per test.
+
+Measured with test_junkie 0.9a5, pytest 9.1.1, Robot Framework 7.5 on Python 3.12.5 (Windows 11, Intel Core i9-10980HK).
 Parametrized and parallel results, per-phase timings and the exact commands are in the
 [full benchmark →](https://www.test-junkie.com/performance/)
 
