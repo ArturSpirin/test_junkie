@@ -12,5 +12,6 @@ test_junkie.egg-info
 .resources*
 coverage.xml
 test_*.html
-test_*.xmlpytest_output.txt
+test_*.xml
+pytest_output.txt
 tj_output.txt
