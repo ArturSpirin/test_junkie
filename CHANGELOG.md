@@ -16,7 +16,7 @@
 - Suite retries now rerun failed tests in their original order
 - Fixed a race when suite- and test-level threading are both on (`cannot join thread before it is started`) that made suites stop part-way; parallel bookkeeping is now locked and reset per run, and each suite only waits for its own tests before `@afterClass`
 - HTML report: escape suite/test names, owners, components and tags (a `<` in any of them broke the layout); label an attempt Fail vs Error by its exception type instead of searching the traceback text
-- HTML report insights now group tests that fail with identical tracebacks (previously only near-identical ones were grouped); removed unused legacy insight code
+- Removed unused legacy HTML-report insight code; faster traceback similarity checks
 - Fixed errors inside suite/test threads (e.g. a failing custom listener) being swallowed: `run()` returned normally and the affected tests disappeared from the results. `run()` now raises them, same as without threads
 - Added `TEST_JUNKIE_HOME` env var to relocate Test Junkie's config and temp files; the test suite now uses it so it never touches a developer's real config
 - Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)

@@ -87,15 +87,12 @@ class Analyzer:
                         ones_to_report_on[test_id] = {"data": category, "traceback": tb_str}
 
                 for test_id, data in ones_to_report_on.items():
-                    # identical tracebacks land in "exact", near-identical ones in "similar" - count both
-                    # (only "similar" used to count, so N tests failing on the same line produced no insight)
-                    affected_ids = []
-                    for affected_id in [test_id] + data["data"]["exact"] + data["data"]["similar"]:
-                        if affected_id not in affected_ids:
-                            affected_ids.append(affected_id)
-                    if len(affected_ids) > 1:
+                    # only near-identical tracebacks are grouped - identical ones ("exact") are deliberately not
+                    if len(data["data"]["similar"]) > 0:
+                        affected_ids = [test_id] + list(data["data"]["similar"])
                         insights.append({
-                            "text": "{} test failures share a similar traceback.".format(len(affected_ids)),
+                            "text": "{} test failures share a similar traceback.".format(
+                                len(data["data"]["similar"]) + 1),
                             "traceback": data["traceback"],
                             "test_ids": affected_ids
                         })

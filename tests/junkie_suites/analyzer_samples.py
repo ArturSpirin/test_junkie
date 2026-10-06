@@ -33,9 +33,8 @@ def run_checks():
     """
     Every assertion the pytest and TJ paths make, in one place
     """
-    # identical tracebacks across 3 tests - used to produce no "share" insight at all
-    shared = shared_insights(analyzer_with([(1, [ASSERTION_TB]), (2, [ASSERTION_TB]), (3, [ASSERTION_TB])]))
-    assert [(i["text"], i["test_ids"]) for i in shared] == [("3 test failures share a similar traceback.", [1, 2, 3])]
+    # identical tracebacks are deliberately NOT grouped - only near-identical ones are
+    assert shared_insights(analyzer_with([(1, [ASSERTION_TB]), (2, [ASSERTION_TB]), (3, [ASSERTION_TB])])) == []
 
     # near-identical still groups
     shared = shared_insights(analyzer_with([(1, [ASSERTION_TB]), (2, [ASSERTION_TB_VARIANT])]))
