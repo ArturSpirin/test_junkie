@@ -127,7 +127,22 @@ def report_resource_data_and_long_runtimes():
             html = doc.read()
         assert expected in html, expected
         assert "99%" in html  # CPU peak
+        assert "const RESOURCES_ENABLED = true;" in html
+
+
+def report_inlines_its_assets():
+    # the CSS and JS ship as package data (reporter/assets) since 0.9a5 - the report must still be one
+    # self-contained file
+    import test_junkie.reporter
+    _, html = _report(VariantsSuite)
+    assets = os.path.join(os.path.dirname(test_junkie.reporter.__file__), "assets")
+    for name in ("report.css", "report.js"):
+        with open(os.path.join(assets, name), encoding="utf-8") as doc:
+            assert doc.read() in html, name
+    assert "const RESOURCES_ENABLED = false;" in html  # no resource monitoring in this run
+    assert html.count("<script>") == 1 and html.count("<style>") == 1
 
 
 CHECKS = [report_keeps_tests_with_uncopyable_exceptions, report_variants_and_parameters,
-          report_handles_a_suite_that_never_ran, report_resource_data_and_long_runtimes]
+          report_handles_a_suite_that_never_ran, report_resource_data_and_long_runtimes,
+          report_inlines_its_assets]
