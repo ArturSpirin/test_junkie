@@ -1,6 +1,10 @@
 # Changelog
 
 ## 0.9a5
+- Fixed a failing run (for example a broken custom listener) exiting without the console summary or the HTML/XML reports - they are now written first, then the error is raised
+- Every run is ~200ms faster: removed a fixed sleep after the suite queue was processed
+- Parallel runs no longer poll every 200ms (1s for prioritized suites) for a free thread or a lifted restriction - waiting suites and tests start as soon as a thread finishes
+- Faster event dispatch: listener hooks your `Listener` doesn't override are skipped, and function signatures are inspected once instead of several times per test
 - Fixed run time growing quadratically with suite size since 0.9a0 (1,000 tests: ~55s → ~2s): `Rules` hooks no longer deep-copy the whole suite per test, and hooks a `Rules` subclass doesn't override are skipped
 
 ## 0.9a4

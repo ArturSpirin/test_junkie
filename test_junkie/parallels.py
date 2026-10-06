@@ -1,6 +1,5 @@
 import inspect
 import threading
-import time
 
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters
@@ -8,10 +7,28 @@ from test_junkie.errors import BadParameters
 # guards all of the bookkeeping below - suite threads, test threads and the main thread all read and write it.
 # Re-entrant because the qualification checks call the other locked helpers.
 _LOCK = threading.RLock()
+# signalled whenever a suite/test thread finishes, so the scheduler wakes up right away instead of polling.
+# _GENERATION counts those events: a waiter captures it *before* checking its condition, so a thread that finishes
+# between the check and the wait is never missed
+_CHANGED = threading.Condition(_LOCK)
+_GENERATION = [0]
 
 
 def _alive(thread):
-    return thread is not None and thread.is_alive()
+    # `finished` is set right before the thread signals - is_alive() is still True at that point
+    return thread is not None and not getattr(thread, "finished", False) and thread.is_alive()
+
+
+def _signals_when_done(func):
+    def target(*args):
+        try:
+            func(*args)
+        finally:
+            with _CHANGED:
+                threading.current_thread().finished = True
+                _GENERATION[0] += 1
+                _CHANGED.notify_all()
+    return target
 
 
 class ParallelProcessor:
@@ -60,8 +77,38 @@ class ParallelProcessor:
         return ParallelProcessor.__PARALLELS.setdefault(suite_class, {"thread": None, "tests": []})
 
     @staticmethod
+    def generation():
+        """
+        :return: INT, changes every time a suite/test thread finishes. Capture it before checking a condition and pass
+                 it to wait_for_change() if the condition isn't met yet
+        """
+        with _LOCK:
+            return _GENERATION[0]
+
+    @staticmethod
+    def wait_for_change(generation, timeout=1.0):
+        """
+        Blocks until a suite/test thread finishes after `generation` was captured (returns right away if one already
+        has). The timeout is only a safety net - every state change the scheduler waits on comes from a thread finishing
+        """
+        with _CHANGED:
+            if _GENERATION[0] == generation:
+                _CHANGED.wait(timeout)
+
+    @staticmethod
+    def wait_while(condition):
+        """
+        Blocks while condition() is True, re-checking it each time a suite/test thread finishes
+        """
+        while True:
+            generation = ParallelProcessor.generation()
+            if not condition():
+                return
+            ParallelProcessor.wait_for_change(generation)
+
+    @staticmethod
     def run_suite_in_a_thread(func, suite):
-        thread = threading.Thread(target=func, args=(suite,))
+        thread = threading.Thread(target=_signals_when_done(func), args=(suite,))
         with _LOCK:
             # registered and started under the lock, so nobody can see (and join) a thread that isn't started yet
             ParallelProcessor.__entry(suite.get_class_object())["thread"] = thread
@@ -70,8 +117,8 @@ class ParallelProcessor:
 
     @staticmethod
     def run_test_in_a_thread(func, suite, test, parameter, class_parameter, before_class_error, cancel):
-        thread = threading.Thread(target=func, args=(suite, test, parameter, class_parameter,
-                                                     before_class_error, cancel))
+        thread = threading.Thread(target=_signals_when_done(func), args=(suite, test, parameter, class_parameter,
+                                                                         before_class_error, cancel))
         with _LOCK:
             # a test thread used to be registered *before* start() - a concurrent wait could join() it and crash
             # with "cannot join thread before it is started"
@@ -114,7 +161,7 @@ class ParallelProcessor:
             for info in ParallelProcessor.__PARALLELS.values():
                 # drop finished tests so we don't accumulate stale data - under the lock, so two suite threads
                 # can't both remove the same entry (used to raise "list.remove(x): x not in list")
-                info["tests"] = [test for test in info["tests"] if test["thread"].is_alive()]
+                info["tests"] = [test for test in info["tests"] if _alive(test["thread"])]
                 active += len(info["tests"])
         if active >= self.__test_limit:
             LogJunkie.debug("Test limit: {}/{}".format(active, self.__test_limit))
@@ -179,8 +226,7 @@ class ParallelProcessor:
                 return False
 
         # waiting for a free slot happens outside the lock - the suites holding the slots need it to finish
-        while self.suite_limit_reached():
-            time.sleep(0.2)
+        ParallelProcessor.wait_while(self.suite_limit_reached)
         return True
 
     def test_qualifies(self, test):
@@ -203,7 +249,7 @@ class ParallelProcessor:
 
         def _running_tests():
             return [test_mapping for suite_mapping in ParallelProcessor.__PARALLELS.values()
-                    for test_mapping in suite_mapping["tests"] if test_mapping["thread"].is_alive()]
+                    for test_mapping in suite_mapping["tests"] if _alive(test_mapping["thread"])]
 
         def _passes_restriction():
             """

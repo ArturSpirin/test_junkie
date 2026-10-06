@@ -1,4 +1,5 @@
 import copy
+import functools
 import inspect
 import traceback
 from test_junkie.decorators import DecoratorType
@@ -6,6 +7,21 @@ from test_junkie.constants import TestCategory
 from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
 
+
+
+@functools.lru_cache(maxsize=None)
+def _cached_arg_names(func):
+    return inspect.getfullargspec(func).args
+
+
+def arg_names(func):
+    """
+    :return: LIST of the function's argument names. Cached - inspect.getfullargspec() was called ~6 times per test
+    """
+    try:
+        return _cached_arg_names(func)
+    except TypeError:  # unhashable callable
+        return inspect.getfullargspec(func).args
 
 class _FuncEval:
 
@@ -16,7 +32,7 @@ class _FuncEval:
         if not isinstance(val, bool):
             if inspect.isfunction(val):
                 try:
-                    val = val(meta=obj.get_meta()) if "meta" in inspect.getfullargspec(val).args else val()
+                    val = val(meta=obj.get_meta()) if "meta" in arg_names(val) else val()
                 except Exception as e:
                     raise TestJunkieExecutionError(
                         "skip function '{name}' in {mod}.{test} raised an unexpected error: {err}".format(
@@ -25,7 +41,7 @@ class _FuncEval:
             elif inspect.ismethod(val):
                 try:
                     val = getattr(val.__self__, val.__name__)(meta=obj.get_meta()) \
-                        if "meta" in inspect.getfullargspec(val).args \
+                        if "meta" in arg_names(val) \
                         else getattr(val.__self__, val.__name__)()
                 except Exception as e:
                     raise TestJunkieExecutionError(
@@ -449,16 +465,16 @@ class TestObject(object):
 
     def accepts_test_and_suite_parameters(self):
 
-        return "parameter" in inspect.getfullargspec(self.get_function_object()).args and \
-               "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "parameter" in arg_names(self.get_function_object()) and \
+               "suite_parameter" in arg_names(self.get_function_object())
 
     def accepts_test_parameters(self):
 
-        return "parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "parameter" in arg_names(self.get_function_object())
 
     def accepts_suite_parameters(self):
 
-        return "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "suite_parameter" in arg_names(self.get_function_object())
 
     def __not_ran(self, param, class_param):
         """
