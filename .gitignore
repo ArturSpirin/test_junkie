@@ -13,3 +13,5 @@ test_junkie.egg-info
 coverage.xml
 test_*.html
 test_*.xml
+pytest_output.txt
+tj_output.txt

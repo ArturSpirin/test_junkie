@@ -35,13 +35,9 @@ class Runner:
 
         self.__stats = {}
 
-        self.__suites = self.__prioritize(suites=suites)
-        for suite in self.__suites:
+        self.__all_suites = self.__prioritize(suites=suites)
+        for suite in self.__all_suites:
             suite_object = Builder.get_execution_roster().get(suite, None)
-            # suites/tests are singletons, so reset metrics here or a rerun just reuses old statuses (fixes ticket: #43)
-            suite_object.metrics.reset()
-            for test_object in suite_object.get_test_objects():
-                test_object.metrics.reset()
             suite_object.update_test_objects(self.__prioritize(suite_object=suite_object))
             Runner.__process_owners(suite_object)
 
@@ -49,14 +45,31 @@ class Runner:
         self.__settings = None
         self.__processor = None
 
+        self.__suites = []
         self.__cancel = False
-
         self.__executed_suites = []
         self.__active_suites = []
-
-        self.__group_rules = Builder.build_group_definitions(self.__suites)
-
+        # built here too so a bad @beforeGroup/@afterGroup definition still raises when the Runner is created
+        self.__group_rules = Builder.build_group_definitions(self.__all_suites)
         self.__before_group_failure_records = {}
+
+    def __reset_for_run(self):
+        """
+        Everything run() consumes or accumulates, so the same Runner can be run again
+        """
+        self.__suites = list(self.__all_suites)  # run() removes suites from this list as it goes
+        # not resetting __cancel here - cancel() before run() is supported; run() clears it when it ends
+        self.__executed_suites = []
+        self.__active_suites = []
+        self.__before_group_failure_records = {}
+        self.__thread_errors = []
+        self.__group_rules = Builder.build_group_definitions(self.__all_suites)
+        for suite in self.__all_suites:
+            suite_object = Builder.get_execution_roster().get(suite, None)
+            # suites/tests are singletons, so reset metrics or a rerun just reuses old statuses (fixes ticket: #43)
+            suite_object.metrics.reset()
+            for test_object in suite_object.get_test_objects():
+                test_object.metrics.reset()
 
     @staticmethod
     def __process_owners(suite_object):
@@ -157,6 +170,7 @@ class Runner:
         Initiates the execution process that runs tests
         :return: None
         """
+        self.__reset_for_run()
         self.__settings = Settings(runner_kwargs=self.__kwargs, run_kwargs=kwargs)
         initial_start_time = time.time()
         resource_monitor = None
@@ -176,7 +190,8 @@ class Runner:
                                     if self.__processor.suite_qualifies(suite_object):
                                         time.sleep(Limiter.get_suite_throttling())
                                         self.__executed_suites.append(suite_object)
-                                        ParallelProcessor.run_suite_in_a_thread(self.__run_suite, suite_object)
+                                        ParallelProcessor.run_suite_in_a_thread(
+                                            self.__capture_thread_errors(self.__run_suite), suite_object)
                                         self.__suites.remove(suite)
                                         break
                                     elif suite_object.get_priority() is None:
@@ -201,8 +216,12 @@ class Runner:
                     time.sleep(0.2)
 
                 ParallelProcessor.wait_currently_active_suites_to_finish()
+                if self.__thread_errors:
+                    for error in self.__thread_errors[1:]:
+                        LogJunkie.error("Another error in a suite/test thread: {!r}".format(error))
+                    raise self.__thread_errors[0]  # same as when the suite runs on the main thread
         finally:
-            if self.__settings.monitor_resources:
+            if resource_monitor is not None:  # is None if ResourceMonitor() itself failed - don't mask that error
                 resource_monitor.shutdown()
 
         runtime = time.time() - initial_start_time
@@ -223,7 +242,29 @@ class Runner:
             # needs to run even if reporting above throws or the temp file never gets removed
             if self.__settings.monitor_resources:
                 resource_monitor.cleanup()
+            self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
         return aggregator
+
+    def __capture_thread_errors(self, func):
+        """
+        Wraps a suite/test thread target. An unexpected exception in a thread used to die with the thread: its
+        unfinished tests vanished from the results and run() returned normally. run() now re-raises it once the
+        threads are done, same as when the suite runs on the main thread.
+        """
+        def target(*args):
+            try:
+                func(*args)
+            except BaseException as error:
+                self.__thread_errors.append(error)
+        return target
+
+    @staticmethod
+    def __needs_retry(test, class_param):
+        """
+        :return: BOOLEAN, True if any parameter of the test still qualifies for a retry under this suite parameter
+        """
+        return any(test.is_qualified_for_retry(param, class_param=class_param)
+                   for param in test.get_parameters(process_functions=True))
 
     @staticmethod
     def __validate_suite_parameters(suite):
@@ -275,7 +316,13 @@ class Runner:
                 result = self.__group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
                 if result is not None:
                     self.__before_group_failure_records.update(result)
-                    exception = result[list(result.keys())[0]]["trace"]
+                    failure = result[list(result.keys())[0]]
+                    exception = failure["trace"]
+                    # documented listener events that were never fired (after-group ones always were)
+                    event = Event.ON_BEFORE_GROUP_FAIL if isinstance(failure["exception"], AssertionError) \
+                        else Event.ON_BEFORE_GROUP_ERROR
+                    Runner.__process_event(event=event, suite=suite, error=failure["exception"],
+                                           formatted_traceback=failure["trace"])
 
         if not suite.can_skip(self.__settings) and not self.__cancel and not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
@@ -287,17 +334,20 @@ class Runner:
                         LogJunkie.debug("Suite Retry {}/{} with Param: {}"
                                         .format(suite_retry_attempt, suite.get_retry_limit(), class_param))
 
-                        before_class_error = Runner.__run_before_class(suite, class_param)
-
                         if suite_retry_attempt > 1:
                             unsuccessful_tests = suite.get_unsuccessful_tests()
                             LogJunkie.debug("There are {} unsuccessful tests that need to be retried"
                                             .format(len(unsuccessful_tests)))
-                            if not unsuccessful_tests:
-                                break
-                            tests = unsuccessful_tests
+                            # decided before @beforeClass - this used to run @beforeClass and then bail out
+                            # without @afterClass when there was nothing left to retry for this suite parameter
+                            tests = [test for test in unsuccessful_tests
+                                     if Runner.__needs_retry(test, class_param)]
+                            if not tests:
+                                continue
                         else:
                             tests = list(suite.get_test_objects())
+
+                        before_class_error = Runner.__run_before_class(suite, class_param)
 
                         while tests:
                             for test in list(tests):
@@ -325,8 +375,6 @@ class Runner:
 
                                     while not self.__processor.test_qualifies(test):
                                         time.sleep(0.2)
-                                        if test.get_priority() is None:
-                                            continue
 
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None and \
@@ -341,7 +389,9 @@ class Runner:
                                                 while self.__processor.test_limit_reached():
                                                     time.sleep(0.2)
                                                 time.sleep(Limiter.get_test_throttling())
-                                                self.__processor.run_test_in_a_thread(Runner.__run_test,
+                                                self.__processor.run_test_in_a_thread(
+                                                                                      self.__capture_thread_errors(
+                                                                                          Runner.__run_test),
                                                                                       suite, test, param,
                                                                                       class_param,
                                                                                       before_class_error,
@@ -359,7 +409,8 @@ class Runner:
                                     test.metrics.update_metrics(status=TestCategory.SKIP, start_time=test_start_time)
                                     Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
                                                            class_param=class_param)
-                        ParallelProcessor.wait_currently_active_tests_to_finish()
+                        # only this suite's tests - waiting on every suite's tests here held parallel suites back
+                        ParallelProcessor.wait_currently_active_tests_to_finish(suite)
                         Runner.__run_after_class(suite, class_param)
                     suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
@@ -461,15 +512,18 @@ class Runner:
                     return  # fixes ticket: #27
             _status = TestCategory.IGNORE if not cancel else TestCategory.CANCEL
             _event = Event.ON_IGNORE if not cancel else Event.ON_CANCEL
+            # a cancel has no @beforeClass error - indexing None here made Runner.cancel() mid-run raise TypeError
+            _exception = before_class_error["exception"] if before_class_error else None
+            _traceback = before_class_error["traceback"] if before_class_error else None
             test.metrics.update_metrics(status=_status,
                                         start_time=test_start_time,
                                         param=parameter,
                                         class_param=class_parameter,
-                                        exception=before_class_error["exception"],
-                                        formatted_traceback=before_class_error["traceback"])
-            Runner.__process_event(event=_event, error=before_class_error["exception"], suite=suite, test=test,
+                                        exception=_exception,
+                                        formatted_traceback=_traceback)
+            Runner.__process_event(event=_event, error=_exception, suite=suite, test=test,
                                    class_param=class_parameter, param=parameter,
-                                   formatted_traceback=before_class_error["traceback"])
+                                   formatted_traceback=_traceback)
             return
 
         status = test.get_status(parameter, class_parameter)

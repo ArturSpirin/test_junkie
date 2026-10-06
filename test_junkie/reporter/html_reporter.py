@@ -423,6 +423,15 @@ class Reporter:
                 s = "&lt;{}&gt;".format(s[1:-1])
             return s
 
+        def _fail_or_error(phase_data, idx, tb):
+            # by the recorded exception type - searching the traceback text for "AssertionError" mislabelled
+            # errors whose message merely mentions an AssertionError
+            exceptions = phase_data.get("exceptions", [])
+            exception = exceptions[idx] if idx < len(exceptions) else None
+            if exception is not None:
+                return "Fail" if isinstance(exception, AssertionError) else "Error"
+            return "Fail" if "AssertionError" in str(tb) else "Error"
+
         def _phase_detail(phase_data, idx):
             perf = phase_data.get("performance", [])
             tbs = phase_data.get("tracebacks", [])
@@ -432,9 +441,7 @@ class Reporter:
             tb = tbs[idx] if idx < len(tbs) else None
             if tb is None:
                 return {"status": "OK", "trace": "OK", "dur": dur_str}
-            if "AssertionError" in str(tb):
-                return {"status": "Fail", "trace": str(tb), "dur": dur_str}
-            return {"status": "Error", "trace": str(tb), "dur": dur_str}
+            return {"status": _fail_or_error(phase_data, idx, tb), "trace": str(tb), "dur": dur_str}
 
         def _test_phase_detail(pd, idx):
             perf = pd.get("performance", [])
@@ -444,13 +451,9 @@ class Reporter:
             dur_raw = perf[idx]
             dur_str = _fmt_dur(dur_raw) if isinstance(dur_raw, (int, float)) else str(dur_raw)
             tb = tbs[idx] if idx < len(tbs) else None
-            status_val = pd.get("statuses", [])
-            attempt_status = status_val[idx] if idx < len(status_val) else pd.get("status", "")
             if tb is None:
                 return {"status": "OK", "trace": "OK", "dur": dur_str}
-            if "AssertionError" in str(tb):
-                return {"status": "Fail", "trace": str(tb), "dur": dur_str}
-            return {"status": "Error", "trace": str(tb), "dur": dur_str}
+            return {"status": _fail_or_error(pd, idx, tb), "trace": str(tb), "dur": dur_str}
 
         def _convert_suite_metrics(raw):
             result = {}
@@ -637,5 +640,4 @@ class Reporter:
             "tests_data": tests_data,
             "details_data": details_data,
             "status_durations": status_durations,
-            "opportunities": self.analyzer.analysis,
         }

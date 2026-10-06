@@ -52,6 +52,9 @@ class Builder(object):
     def build_group_definitions(suites):
 
         Builder.__REQUESTED_SUITES = suites
+        # fresh definitions every time - GroupRulesObject consumes them during a run (pops the before-group rules,
+        # removes finished suites), so reusing them made every later Runner skip @beforeGroup/@afterGroup
+        Builder.__GROUP_RULE_DEFINITIONS = {}
         for group_rule in Builder.__GROUP_RULES:
             func = group_rule["decorated_function"]
             func(func)

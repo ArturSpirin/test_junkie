@@ -44,9 +44,24 @@ class Config:
         with open(self.path, "w+") as doc:
             doc.write(data if data else CliConstants.DEFAULTS)
 
+    @staticmethod
+    def parse(value):
+        """
+        Values are saved with repr() and read back as Python literals. Configs written by older versions saved
+        plain strings unquoted (e.g. html_report=report.html) - those come back as the string itself.
+        :param value: STRING value as stored in the config
+        :return: DATA VALUE
+        """
+        if not isinstance(value, str):
+            return value
+        try:
+            return ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            return value
+
     def set_value(self, option, value):
 
-        self.config.set('runtime', option, str(value))
+        self.config.set('runtime', option, repr(value))
         with open(self.path, 'w+') as doc:
             self.config.write(doc)
 
@@ -68,9 +83,10 @@ class Config:
     @staticmethod
     def get_root_dir():
         """
-        :return: STRING, root directory for TJ to store its configs and other assets
+        :return: STRING, root directory for TJ to store its configs and other assets.
+                 $TEST_JUNKIE_HOME if set, otherwise the per-user app data dir
         """
-        return user_data_dir("Test-Junkie")
+        return os.environ.get(CliConstants.HOME_ENV_VAR) or user_data_dir("Test-Junkie")
 
     @staticmethod
     def get_config_path(config_name):
@@ -119,7 +135,7 @@ class CliConfig:
         if option in self.config.config.options("runtime"):
             value = self.config.get_value(option)
             if value != Undefined:
-                print("{option}={value}".format(option=option, value=ast.literal_eval(value)))
+                print("{option}={value}".format(option=option, value=Config.parse(value)))
 
     def update(self):
 

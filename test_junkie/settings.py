@@ -1,7 +1,6 @@
-import ast
 from test_junkie.constants import DocumentationLinks, Undefined
 from test_junkie.debugger import LogJunkie
-from test_junkie.errors import BadParameters
+from test_junkie.errors import BadParameters, ConfigError
 from test_junkie.cli.cli_config import Config
 
 
@@ -25,9 +24,9 @@ class Settings:
         :param runner_kwargs: DICT, arguments that are passed in to initiate the Runner instance
         :param run_kwargs: DICT, arguments that are passes to the run() method of the Runner instance
         """
-        runner_kwargs.update(run_kwargs)
-
-        self.kwargs = runner_kwargs
+        # merged into a copy - updating runner_kwargs in place leaked one run()'s arguments into the next
+        self.kwargs = dict(runner_kwargs)
+        self.kwargs.update(run_kwargs)
 
         self.config = None
         if self.kwargs.get("config", None) is not None:
@@ -81,7 +80,8 @@ class Settings:
         # if we have kwargs, attempt to retrieve value for the key
         if self.kwargs is not None:
             value = self.kwargs.get(key, Undefined)
-            source = "KWARGS"
+            if value is not Undefined:
+                source = "KWARGS"
 
         # if value is still __undefined__ and config provided, will check the config for a value to use
         if value is Undefined and self.config is not None:
@@ -89,10 +89,7 @@ class Settings:
             if key in self.config.config.options("runtime"):
                 value = self.config.get_value(key)
                 if value is not Undefined:
-                    try:
-                        value = ast.literal_eval(value)
-                    except SyntaxError:
-                        pass
+                    value = Config.parse(value)
                     source = "CONFIG @ {}".format(self.config.path)
 
         LogJunkie.debug("Setting: {setting} Source: {source}".format(setting=key, source=source))
@@ -163,7 +160,20 @@ class Settings:
                         config.update({prop: self.__get_value(key=prop,
                                                               default=Settings.__DEFAULT_TAGS)})
                 self.__tag_config = config
+            Settings.__validate_tag_config(self.__tag_config)
         return self.__tag_config
+
+    @staticmethod
+    def __validate_tag_config(config):
+        # a bad value used to surface as a bare TypeError from deep inside the suite filters
+        if not isinstance(config, dict):
+            raise ConfigError("`tag_config` must be a dict, got {}. See documentation: {}"
+                              .format(type(config).__name__, DocumentationLinks.TAGS))
+        for prop, value in config.items():
+            if value is not None and value is not Undefined and \
+                    not (isinstance(value, (list, tuple)) and all(isinstance(tag, str) for tag in value)):
+                raise ConfigError("`tag_config` value for \"{}\" must be a list of tag strings, got: {!r}. "
+                                  "See documentation: {}".format(prop, value, DocumentationLinks.TAGS))
 
     @property
     def monitor_resources(self):

@@ -26,15 +26,27 @@ jobs:
       - run: pip install -e .
 
       # both paths write coverage data (see .coveragerc), combined below into one report
+      # TEST_JUNKIE_HOME keeps Test Junkie's config and temp files in a throwaway dir
       - name: Run pytest path
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: coverage run -m pytest tests/pytest tests/cli tests/cli_edge
+          TEST_JUNKIE_HOME: ${{ runner.temp }}/tj_home
+        run: |
+          set -o pipefail
+          coverage run -m pytest -rfE tests/pytest tests/cli tests/cli_edge 2>&1 | tee pytest_output.txt
 
       - name: Run test_junkie path
         env:
           PYTHONPATH: ${{ github.workspace }}
-        run: coverage run -m test_junkie run -s tests/test_junkie
+          TEST_JUNKIE_HOME: ${{ runner.temp }}/tj_home
+        run: |
+          set -o pipefail
+          coverage run -m test_junkie run -s tests/test_junkie 2>&1 | tee tj_output.txt
+
+      # job logs need a login to read; annotations don't - so failures stay diagnosable from the public API
+      - name: Annotate failures
+        if: failure()
+        run: python .github/scripts/annotate_failures.py pytest_output.txt tj_output.txt
 
       - name: Combined coverage
         run: |

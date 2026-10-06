@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9a3
+- A malformed `tag_config` now raises a clear `ConfigError` instead of a bare `TypeError`
+- Fixed `TestObject.get_suite_id()` returning the previous suite's id
+- Fixed `Runner.cancel()` during a run raising `TypeError` for the remaining tests instead of cancelling them
+- Fixed listener events `on_before_group_failure` / `on_before_group_error` never firing when a `@beforeGroup` failed
+- Fixed `tj audit` ignoring `-x/--suites`, counting tests excluded by `--no-*` filters, and `--no-test-meta` checking the suite's meta instead of the test's
+- Fixed `tj run` / `tj audit` silently skipping suites that inherit from a base class, have a comment on the class line, use multi-line or aliased imports, or `@module.Suite()`
+- Fixed `tj run` / `tj audit` counting the same suite more than once when sources overlap (#25)
+- Fixed every `tj run` crashing after `tj config update --html_report report.html` (or any `--xml_report`/path without a drive)
+- Fixed a saved `guess_root=False` in the config being treated as enabled
+- Fixed `@beforeGroup` / `@afterGroup` not running for any `Runner` after the first one in the same process
+- Fixed a second `run()` on the same `Runner` running no tests, and `run()` arguments leaking into the next `run()`
+- Fixed suite retries running `@beforeClass` without `@afterClass`, and setting up suite parameters that had nothing to retry
+- Suite retries now rerun failed tests in their original order
+- Fixed a race when suite- and test-level threading are both on (`cannot join thread before it is started`) that made suites stop part-way; parallel bookkeeping is now locked and reset per run, and each suite only waits for its own tests before `@afterClass`
+- HTML report: escape suite/test names, owners, components and tags (a `<` in any of them broke the layout); label an attempt Fail vs Error by its exception type instead of searching the traceback text
+- Removed unused legacy HTML-report insight code; faster traceback similarity checks
+- Fixed errors inside suite/test threads (e.g. a failing custom listener) being swallowed: `run()` returned normally and the affected tests disappeared from the results. `run()` now raises them, same as without threads
+- Added `TEST_JUNKIE_HOME` env var to relocate Test Junkie's config and temp files; the test suite now uses it so it never touches a developer's real config
+- Fixed debug log reporting a setting as coming from KWARGS when it wasn't passed (#45, thanks @etaixiee)
+
 ## 0.9a2
 - Added `@Suite(order=)` — control test execution order per suite via `TestOrder.ALPHABETICAL`, `TestOrder.RANDOM`, `TestOrder.PRIORITY_ASC`, or `TestOrder.PRIORITY_DESC`
 - Added `TestOrder` constants class to `test_junkie.constants`

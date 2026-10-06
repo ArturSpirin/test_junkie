@@ -995,13 +995,14 @@ function renderTable(rows) {
   tbody.innerHTML = rows.map(t => {
     const cells = COLUMNS.map(col => {
       let val = col.accessor(t);
+      if (typeof val === 'string') val = escHtml(val);  // names/owners/etc come from user code
       if (col.key === 'test' && t.variantCount > 1) {
         val = `${val}<span class="variant-count-chip">⊞ ×${t.variantCount}</span>`;
       } else if (col.key === 'tags') {
         const MAX = 1;
         const visible = (t.tags||[]).slice(0, MAX);
         const extra = (t.tags||[]).length - MAX;
-        const chips = visible.map(tag => `<span class="tag-chip">${tag}</span>`).join('');
+        const chips = visible.map(tag => `<span class="tag-chip">${escHtml(tag)}</span>`).join('');
         const overflow = extra > 0 ? `<span class="tag-overflow">+${extra}</span>` : '';
         val = `<div class="tag-chips">${chips}${overflow}</div>`;
       } else if (col.key === 'status') {
@@ -1091,7 +1092,7 @@ function openPanel(id) {
   document.getElementById('panel-suite-path').textContent =
     (detail ? detail.module + '.' : '') + test.suite + '.' + test.test;
   document.getElementById('panel-tags').innerHTML =
-    (test.tags||[]).map(tag => `<span class="tag-chip">${tag}</span>`).join('');
+    (test.tags||[]).map(tag => `<span class="tag-chip">${escHtml(tag)}</span>`).join('');
 
   let html = '';
   if (detail) {

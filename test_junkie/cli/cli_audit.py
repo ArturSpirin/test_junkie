@@ -61,8 +61,12 @@ class CliAudit:
                 if self.args.no_test_retries and _test.get_retry_limit() > 1:
                     return False
 
-                if self.args.no_test_meta and _suite.get_meta():
-                    return False
+                if self.args.no_test_meta:
+                    # the test's declared meta - this used to check the *suite's* meta. get_meta() isn't used
+                    # because it builds the per-parameter structure as a side effect
+                    declared = _test.get_kwargs().get("meta") or {}
+                    if declared.get("original", declared):
+                        return False
 
                 if self.args.no_owners and _test.get_owner():
                     return False
@@ -90,11 +94,24 @@ class CliAudit:
                     return False
             return True
 
-        for suite, suite_object in self.exe_roster.items():
-            if not is_relevant(_suite=suite_object):
+        # the suites that were scanned / asked for with -x - this used to walk every suite registered in the
+        # process, so -x was ignored and a long-lived process audited everything it had ever loaded
+        for suite in self.suites:
+            suite_object = self.exe_roster.get(suite, None)
+            if suite_object is None or not is_relevant(_suite=suite_object):
                 continue
 
-            tests = suite_object.get_test_objects()
+            all_tests = suite_object.get_test_objects()
+            self.aggregated_data["absolute_test_count"] += len(all_tests)
+            tests = []
+            for test in all_tests:
+                if test.get_owner() is None:
+                    test.get_kwargs().update({"owner": suite_object.get_owner()})
+                # test-level filters apply *before* counting - filtered-out tests used to still be counted
+                if is_relevant(_suite=suite_object, _test=test):
+                    tests.append(test)
+            if not tests:
+                continue
             self.aggregated_data["absolute_suite_count"] += 1
             if suite_object.get_parameters() != [None]:
                 self.aggregated_data["parameterized_suite_count"] += 1
@@ -114,15 +131,7 @@ class CliAudit:
                              "components": {},
                              "feature": feature}
 
-            self.aggregated_data["absolute_test_count"] += len(tests)
             for test in tests:
-
-                if test.get_owner() is None:
-                    test.get_kwargs().update({"owner": suite_object.get_owner()})
-
-                if not is_relevant(_suite=suite, _test=test):
-                    continue
-                # self.aggregated_data["absolute_test_count"] += 1
                 if test.accepts_suite_parameters() or test.accepts_test_parameters():
                     self.aggregated_data["parameterized_test_count"] += 1
 
