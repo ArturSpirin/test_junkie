@@ -12,7 +12,6 @@ from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.objects import Limiter, arg_names
 from test_junkie.parallels import ParallelProcessor
 from test_junkie.builder import Builder
-from test_junkie.reporter.html_reporter import Reporter
 from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.rules import Rules
 from test_junkie.settings import Settings
@@ -255,6 +254,7 @@ class Runner:
         try:
             Aggregator.present_console_output(aggregator)
             if self.__settings.html_report:
+                from test_junkie.reporter.html_reporter import Reporter  # only loaded when a report is requested
                 reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
                                     if resource_monitor is not None else None,
                                     runtime=runtime,

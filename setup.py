@@ -1,11 +1,16 @@
+import re
+
 import setuptools
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+with open("test_junkie/__init__.py", "r") as fh:  # single source of the version
+    version = re.search(r'^__version__ = "([^"]+)"', fh.read(), re.M).group(1)
+
 setuptools.setup(
     name="test_junkie",
-    version="0.9a5",
+    version=version,
     author="Artur Spirin",
     author_email="as.no.replies@gmail.com",
     description="Modern Testing Framework",

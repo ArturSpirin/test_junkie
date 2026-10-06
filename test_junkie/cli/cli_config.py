@@ -4,7 +4,18 @@ import os
 from appdirs import user_data_dir
 
 from test_junkie.constants import CliConstants, Undefined
-from test_junkie.cli.cli import CliUtils
+
+
+class _CliUtils(object):
+    """
+    Loads test_junkie.cli.cli (and colorama) on first use - Config is imported by every run, the CLI parts aren't
+    """
+    def __getattr__(self, name):
+        from test_junkie.cli.cli import CliUtils as utils
+        return getattr(utils, name)
+
+
+CliUtils = _CliUtils()
 
 
 class Config:

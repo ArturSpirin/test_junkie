@@ -117,5 +117,22 @@ def scheduler_waits_without_polling():
     assert polls == [], polls
 
 
+def runner_import_stays_lean():
+    # importlib.metadata (~25ms, just for the version string), the HTML reporter, the CLI + colorama and
+    # multiprocessing used to load on every `import test_junkie.runner` - none are needed to run tests
+    import subprocess
+    import sys
+    import test_junkie
+    root = os.path.dirname(os.path.dirname(os.path.abspath(test_junkie.__file__)))
+    probe = ("import sys, test_junkie.runner; "
+             "print(sorted(m for m in ('importlib.metadata', 'colorama', 'multiprocessing', 'test_junkie.cli.cli', "
+             "'test_junkie.reporter.html_reporter') if m in sys.modules))")
+    loaded = subprocess.run([sys.executable, "-c", probe], cwd=root, capture_output=True, text=True, check=True)
+    assert loaded.stdout.strip() == "[]", loaded.stdout + loaded.stderr
+    version = subprocess.run([sys.executable, "-m", "test_junkie", "version"], cwd=root, capture_output=True,
+                             text=True)
+    assert version.stdout.startswith("Test Junkie {} ".format(test_junkie.__version__)), version.stdout
+
+
 CHECKS = [copies_are_cheap_and_independent, rules_still_get_independent_copies,
-          runtime_scales_linearly_with_suite_size, scheduler_waits_without_polling]
+          runtime_scales_linearly_with_suite_size, scheduler_waits_without_polling, runner_import_stays_lean]
