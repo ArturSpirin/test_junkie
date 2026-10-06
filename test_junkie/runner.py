@@ -201,35 +201,30 @@ class Runner:
                 while self.__suites:
                     generation = ParallelProcessor.generation()
                     for suite in list(self.__suites):
-                        suite_object = Builder.get_execution_roster().get(suite, None)
-                        if suite_object is not None:
-                            if self.__processor.suite_multithreading() and suite_object.is_parallelized():
-                                while True:
-                                    suite_generation = ParallelProcessor.generation()
-                                    if self.__processor.suite_qualifies(suite_object):
-                                        time.sleep(Limiter.get_suite_throttling())
-                                        self.__executed_suites.append(suite_object)
-                                        ParallelProcessor.run_suite_in_a_thread(
-                                            self.__capture_thread_errors(self.__run_suite), suite_object)
-                                        self.__suites.remove(suite)
-                                        break
-                                    elif suite_object.get_priority() is None:
-                                        break
-                                    else:  # a prioritized suite holds its place until a running suite finishes
-                                        ParallelProcessor.wait_for_change(suite_generation)
-                            else:
-                                if not suite_object.is_parallelized():
-                                    LogJunkie.debug("Cant run suite: {} in parallel with any other suites. Waiting for "
-                                                    "parallel suites to finish so I can run it by itself."
-                                                    .format(suite_object.get_class_object()))
-                                    ParallelProcessor.wait_currently_active_suites_to_finish()
-                                self.__executed_suites.append(suite_object)
-                                self.__run_suite(suite_object)
-                                self.__suites.remove(suite)
+                        # never missing - Runner() already rejected anything that isn't a registered suite
+                        suite_object = Builder.get_execution_roster()[suite]
+                        if self.__processor.suite_multithreading() and suite_object.is_parallelized():
+                            while True:
+                                suite_generation = ParallelProcessor.generation()
+                                if self.__processor.suite_qualifies(suite_object):
+                                    time.sleep(Limiter.get_suite_throttling())
+                                    self.__executed_suites.append(suite_object)
+                                    ParallelProcessor.run_suite_in_a_thread(
+                                        self.__capture_thread_errors(self.__run_suite), suite_object)
+                                    self.__suites.remove(suite)
+                                    break
+                                elif suite_object.get_priority() is None:
+                                    break
+                                else:  # a prioritized suite holds its place until a running suite finishes
+                                    ParallelProcessor.wait_for_change(suite_generation)
                         else:
-                            LogJunkie.warn("Suite {} was not found in the execution roster and will be skipped. "
-                                           "Ensure the class is decorated with @Suite() and was imported "
-                                           "before Runner was constructed.".format(suite))
+                            if not suite_object.is_parallelized():
+                                LogJunkie.debug("Cant run suite: {} in parallel with any other suites. Waiting for "
+                                                "parallel suites to finish so I can run it by itself."
+                                                .format(suite_object.get_class_object()))
+                                ParallelProcessor.wait_currently_active_suites_to_finish()
+                            self.__executed_suites.append(suite_object)
+                            self.__run_suite(suite_object)
                             self.__suites.remove(suite)
                     LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
                     if self.__suites:  # the rest wait on running suites - used to be a fixed 0.2s sleep every pass

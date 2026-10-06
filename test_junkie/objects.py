@@ -164,13 +164,6 @@ class SuiteObject(object):
         """
         return self.__test_tags
 
-    def get_test_function_objects(self):
-        """
-        Use to get actual function objects
-        :return: LIST of STRINGS
-        """
-        return self.__test_function_objects
-
     def get_skip(self):
         return self.__suite_definition.get("class_skip", False)
 

@@ -29,10 +29,8 @@ class CliAudit:
 
     def aggregate(self):
 
-        def is_relevant(_suite=None, _test=None):
-            if not _suite and not _test:
-                raise Exception("Must pass in either a SuiteObject or a TestObject!")
-            elif _suite and not _test:
+        def is_relevant(_suite, _test=None):
+            if not _test:
                 from test_junkie.rules import Rules
                 if self.args.no_rules and _suite.get_rules().__class__ != Rules:
                     return False

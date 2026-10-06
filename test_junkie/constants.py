@@ -150,5 +150,6 @@ class TestOrder:
 
 
 class Undefined(object):
-    def __init__(self):
-        pass
+    """
+    Sentinel for "not set" where None is a valid value - used as the class itself, never instantiated
+    """

@@ -250,15 +250,10 @@ class ReportTemplate:
                 '</div>'
             )
         parts = []
-        for item in insights:
-            if isinstance(item, dict):
-                text = item.get("text", "")
-                traceback_str = item.get("traceback")
-                test_ids = item.get("test_ids", [])
-            else:
-                text = item
-                traceback_str = None
-                test_ids = []
+        for item in insights:  # dicts from the Analyzer: text, traceback, test_ids
+            text = item.get("text", "")
+            traceback_str = item.get("traceback")
+            test_ids = item.get("test_ids", [])
             tl = text.lower()
             if "stable" in tl or "no time" in tl:
                 cls, icon = "ok", "✓"

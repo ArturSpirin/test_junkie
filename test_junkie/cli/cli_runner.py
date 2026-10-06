@@ -186,9 +186,6 @@ class CliRunner:
 
     def __skip(self, source, directory):
 
-        if source not in directory:
-            return True
-
         for ignored_item in self.tjignore:
             if ignored_item in directory:
                 return True
