@@ -420,9 +420,8 @@ class ResourceMonitor(threading.Thread):
                                                                    sep=os.sep,
                                                                    timestamp=time.time())
 
-        threading.Thread.__init__(self)
-        import multiprocessing  # only needed when monitor_resources is on
-        self.exit = multiprocessing.Event()
+        threading.Thread.__init__(self, daemon=True)
+        self.exit = threading.Event()
 
     def get_file_path(self):
 
@@ -442,8 +441,8 @@ class ResourceMonitor(threading.Thread):
         self.mkdir_p(Config.get_root_dir())
         with open(self.file_path, "w+") as records:
             records.write("")
-        while not self.exit.is_set():
-            time.sleep(1)
+        # wait() instead of sleep(): returns the moment shutdown() is called, and nothing is written after that
+        while not self.exit.wait(1):
             data = "{timestamp}, {cpu}, {memory}\n".format(timestamp=datetime.now(),
                                                            cpu=psutil.cpu_percent(),
                                                            memory=psutil.virtual_memory().percent)
@@ -452,6 +451,9 @@ class ResourceMonitor(threading.Thread):
 
     def shutdown(self):
         self.exit.set()
+        # wait for the thread - it used to keep running and could re-create the temp file after cleanup() removed it
+        if self.is_alive():
+            self.join(timeout=5)
 
     def cleanup(self):
         try:

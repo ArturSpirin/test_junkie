@@ -392,6 +392,19 @@ def analyzer_reports_the_most_shared_traceback_per_test():
     assert common.format(1) in reported and "KeyError: something unrelated" not in reported, reported
 
 
+def resource_monitor_leaves_no_temp_file_after_fast_runs():
+    # shutdown() didn't wait for the monitor thread: after a run shorter than its 1s interval, the thread woke up
+    # and re-created the temp file that cleanup() had just removed (a leftover .resources_* per run)
+    import glob
+    from test_junkie.cli.cli_config import Config
+    pattern = os.path.join(Config.get_root_dir(), ".resources_*")
+    before = set(glob.glob(pattern))
+    for _ in range(3):
+        _run([UntaggedSuite], monitor_resources=True)
+    time.sleep(1.5)  # longer than the monitor's interval
+    assert set(glob.glob(pattern)) == before
+
+
 CHECKS = [prioritized_suite_waits_for_its_restriction, every_thread_error_is_reported,
           run_error_wins_over_a_report_error, bad_parameter_functions_ignore_instead_of_running,
           framework_errors_in_a_test_abort_the_run, bad_group_rules_are_rejected,
@@ -400,4 +413,4 @@ CHECKS = [prioritized_suite_waits_for_its_restriction, every_thread_error_is_rep
           before_class_failure_with_retries_is_counted_once_per_retry, tag_and_component_filters_at_suite_level,
           report_phases_and_components, threading_recommendation_for_even_tests,
           report_for_a_run_where_nothing_ran, small_api_pieces, xml_report_appends_to_an_existing_file,
-          analyzer_reports_the_most_shared_traceback_per_test]
+          analyzer_reports_the_most_shared_traceback_per_test, resource_monitor_leaves_no_temp_file_after_fast_runs]
