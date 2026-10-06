@@ -1,5 +1,4 @@
 import argparse
-import importlib.metadata
 import sys
 import traceback
 
@@ -191,7 +190,8 @@ Use: tj config COMMAND -h to display COMMAND specific help
             exit(120)
 
     def version(self):
-        print("Test Junkie {} (Python{})\n{}".format(importlib.metadata.version("test-junkie"),
+        from test_junkie import __version__
+        print("Test Junkie {} (Python{})\n{}".format(__version__,
                                                      sys.version_info[0],
                                                      DocumentationLinks.DOMAIN))
 

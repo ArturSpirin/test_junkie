@@ -1,11 +1,27 @@
 import copy
+import functools
 import inspect
 import traceback
 from test_junkie.decorators import DecoratorType
-from test_junkie.constants import TestCategory
+from test_junkie.constants import DocumentationLinks, TestCategory
 from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
 
+
+
+@functools.lru_cache(maxsize=None)
+def _cached_arg_names(func):
+    return inspect.getfullargspec(func).args
+
+
+def arg_names(func):
+    """
+    :return: LIST of the function's argument names. Cached - inspect.getfullargspec() was called ~6 times per test
+    """
+    try:
+        return _cached_arg_names(func)
+    except TypeError:  # unhashable callable
+        return inspect.getfullargspec(func).args
 
 class _FuncEval:
 
@@ -16,33 +32,36 @@ class _FuncEval:
         if not isinstance(val, bool):
             if inspect.isfunction(val):
                 try:
-                    val = val(meta=obj.get_meta()) if "meta" in inspect.getfullargspec(val).args else val()
+                    val = val(meta=obj.get_meta()) if "meta" in arg_names(val) else val()
                 except Exception as e:
                     raise TestJunkieExecutionError(
-                        "skip function '{name}' in {mod}.{test} raised an unexpected error: {err}".format(
+                        "skip function '{name}' in {mod}.{test} raised an unexpected error: {err}. "
+                        "See documentation: {link}".format(
                             name=val.__name__, mod=obj.get_function_module(),
-                            test=obj.get_function_name(), err=e)) from e
+                            test=obj.get_function_name(), err=e, link=DocumentationLinks.SKIP)) from e
             elif inspect.ismethod(val):
                 try:
                     val = getattr(val.__self__, val.__name__)(meta=obj.get_meta()) \
-                        if "meta" in inspect.getfullargspec(val).args \
+                        if "meta" in arg_names(val) \
                         else getattr(val.__self__, val.__name__)()
                 except Exception as e:
                     raise TestJunkieExecutionError(
-                        "skip method '{name}' in {mod}.{test} raised an unexpected error: {err}".format(
+                        "skip method '{name}' in {mod}.{test} raised an unexpected error: {err}. "
+                        "See documentation: {link}".format(
                             name=val.__name__, mod=obj.get_function_module(),
-                            test=obj.get_function_name(), err=e)) from e
+                            test=obj.get_function_name(), err=e, link=DocumentationLinks.SKIP)) from e
             else:
                 raise BadParameters(
                     "skip= in {mod}.{test} received {got}, which is not a supported type. "
-                    "Expected: bool, a function, or a bound method.".format(
+                    "Expected: bool, a function, or a bound method. See documentation: {link}".format(
                         mod=obj.get_function_module(), test=obj.get_function_name(),
-                        got=type(val).__name__))
+                        got=type(val).__name__, link=DocumentationLinks.SKIP))
             if not isinstance(val, bool):
                 raise TestJunkieExecutionError(
-                    "skip function for {mod}.{test} must return bool but returned {got}.".format(
+                    "skip function for {mod}.{test} must return bool but returned {got}. "
+                    "See documentation: {link}".format(
                         mod=obj.get_function_module(), test=obj.get_function_name(),
-                        got=type(val).__name__))
+                        got=type(val).__name__, link=DocumentationLinks.SKIP))
         return val
 
     @staticmethod
@@ -55,8 +74,9 @@ class _FuncEval:
                 return getattr(params.__self__, params.__name__)()
         except Exception as e:
             raise TestJunkieExecutionError(
-                "parameters function '{name}' raised an unexpected error: {err}".format(
-                    name=getattr(params, '__name__', repr(params)), err=e)) from e
+                "parameters function '{name}' raised an unexpected error: {err}. See documentation: {link}".format(
+                    name=getattr(params, '__name__', repr(params)), err=e,
+                    link=DocumentationLinks.PARAMETERIZED_TESTS)) from e
         return params
 
 
@@ -143,13 +163,6 @@ class SuiteObject(object):
         :return: LIST of STRINGS
         """
         return self.__test_tags
-
-    def get_test_function_objects(self):
-        """
-        Use to get actual function objects
-        :return: LIST of STRINGS
-        """
-        return self.__test_function_objects
 
     def get_skip(self):
         return self.__suite_definition.get("class_skip", False)
@@ -321,6 +334,20 @@ class TestObject(object):
     def __repr__(self):
         return "<{}.{}>".format(self.suite.get_class_name(), self.get_function_name())
 
+    def __deepcopy__(self, memo):
+        """
+        Copies the test's own definition (tags, meta, parameters, ...). The suite is NOT copied unless it's the one
+        being copied (then the copy points at the suite copy): copying a test used to drag in its suite, every other
+        test and all their metrics, which made each Rules hook call O(suite size) and a run O(N^2).
+        Metrics are shared, same as TestMetrics.__deepcopy__ always did.
+        """
+        clone = TestObject.__new__(TestObject)
+        memo[id(self)] = clone
+        clone.__test_definition = copy.deepcopy(self.__test_definition, memo)
+        clone.suite = memo.get(id(self.suite), self.suite)
+        clone.metrics = self.metrics
+        return clone
+
     def get_test_id(self):
         return self.get_kwargs().get("testjunkie_test_id", 0)
 
@@ -435,16 +462,16 @@ class TestObject(object):
 
     def accepts_test_and_suite_parameters(self):
 
-        return "parameter" in inspect.getfullargspec(self.get_function_object()).args and \
-               "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "parameter" in arg_names(self.get_function_object()) and \
+               "suite_parameter" in arg_names(self.get_function_object())
 
     def accepts_test_parameters(self):
 
-        return "parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "parameter" in arg_names(self.get_function_object())
 
     def accepts_suite_parameters(self):
 
-        return "suite_parameter" in inspect.getfullargspec(self.get_function_object()).args
+        return "suite_parameter" in arg_names(self.get_function_object())
 
     def __not_ran(self, param, class_param):
         """

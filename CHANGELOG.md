@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9a5
+- Fixed a `tag_config` that isn't a dict (e.g. a list) crashing with `AttributeError` instead of the intended `ConfigError`
+- Fixed `tj run`/`tj audit` mixing up suite files that share a file name in different folders (audit merged their suites into one), and a suite file named like an existing module (e.g. `json.py`) replacing that module for the whole run - the HTML report crashed with `module 'json' has no attribute 'dumps'`
+- Fixed a failing run (for example a broken custom listener) exiting without the console summary or the HTML/XML reports - they are now written first, then the error is raised
+- Every run is ~200ms faster: removed a fixed sleep after the suite queue was processed
+- Parallel runs no longer poll every 200ms (1s for prioritized suites) for a free thread or a lifted restriction - waiting suites and tests start as soon as a thread finishes
+- `import test_junkie` is ~2x faster (~85ms → ~35ms): the HTML reporter, the CLI/colorama and multiprocessing load only when needed, and the version comes from `test_junkie.__version__` instead of `importlib.metadata`
+- Smaller install (656 KB → 621 KB): the HTML report's CSS and JS ship as package data instead of Python strings that were installed twice (source + .pyc)
+- XML report is written once at the end of a run instead of being rewritten to disk after every test
+- Faster event dispatch: listener hooks your `Listener` doesn't override are skipped, and function signatures are inspected once instead of several times per test
+- Fixed run time growing quadratically with suite size since 0.9a0 (1,000 tests: ~55s → ~2s): `Rules` hooks no longer deep-copy the whole suite per test, and hooks a `Rules` subclass doesn't override are skipped
+
 ## 0.9a4
 - Fixed HTML report generation crashing with `ZeroDivisionError` for runs without threading that have 3+ near-instant tests
 - Fixed a test whose exception can't be deep-copied (e.g. it holds a lock or socket) disappearing from the HTML report

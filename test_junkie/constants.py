@@ -86,6 +86,8 @@ class DocumentationLinks:
     HTML_REPORT = "{}/documentation/#html_report".format(DOMAIN)
     XML_REPORT = "{}/documentation/#xml_report".format(DOMAIN)
     RETRY = "{}/documentation/#retry".format(DOMAIN)
+    SKIP = "{}/documentation/#skip".format(DOMAIN)
+    CLI_RUN = "{}/documentation/#cli_run".format(DOMAIN)
     FEATURES = "{}/documentation/#features".format(DOMAIN)
     COMPONENTS = "{}/documentation/#components".format(DOMAIN)
     ASSIGNEES = "{}/documentation/#assignees".format(DOMAIN)
@@ -148,5 +150,6 @@ class TestOrder:
 
 
 class Undefined(object):
-    def __init__(self):
-        pass
+    """
+    Sentinel for "not set" where None is a valid value - used as the class itself, never instantiated
+    """

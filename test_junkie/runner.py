@@ -1,5 +1,4 @@
 import copy
-import inspect
 import random
 import threading
 import time
@@ -10,17 +9,34 @@ from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
 from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
-from test_junkie.objects import Limiter
+from test_junkie.objects import Limiter, arg_names
 from test_junkie.parallels import ParallelProcessor
 from test_junkie.builder import Builder
-from test_junkie.reporter.html_reporter import Reporter
 from test_junkie.reporter.xml_reporter import XmlReporter
+from test_junkie.rules import Rules
 from test_junkie.settings import Settings
 
 # shared lock for __process_event() - can't create it inline there, @synchronized() would just
 # get a new Lock() every call
 _EVENT_PROPERTIES_LOCK = threading.Lock()
 
+
+# Event -> name of the Listener hook that handles it
+_EVENT_HANDLERS = {Event.ON_SUCCESS: "on_success", Event.ON_FAILURE: "on_failure", Event.ON_ERROR: "on_error",
+                   Event.ON_SKIP: "on_skip", Event.ON_CANCEL: "on_cancel", Event.ON_IGNORE: "on_ignore",
+                   Event.ON_IN_PROGRESS: "on_in_progress", Event.ON_COMPLETE: "on_complete",
+                   Event.ON_CLASS_CANCEL: "on_class_cancel", Event.ON_CLASS_SKIP: "on_class_skip",
+                   Event.ON_BEFORE_CLASS_ERROR: "on_before_class_error",
+                   Event.ON_BEFORE_CLASS_FAIL: "on_before_class_failure",
+                   Event.ON_CLASS_IGNORE: "on_class_ignore", Event.ON_AFTER_CLASS_ERROR: "on_after_class_error",
+                   Event.ON_AFTER_CLASS_FAIL: "on_after_class_failure",
+                   Event.ON_CLASS_IN_PROGRESS: "on_class_in_progress",
+                   Event.ON_BEFORE_GROUP_FAIL: "on_before_group_failure",
+                   Event.ON_BEFORE_GROUP_ERROR: "on_before_group_error",
+                   Event.ON_AFTER_GROUP_FAIL: "on_after_group_failure",
+                   Event.ON_AFTER_GROUP_ERROR: "on_after_group_error",
+                   Event.ON_CLASS_COMPLETE: "on_class_complete"}
+_NATIVE_LISTENER = Listener()
 
 class Runner:
 
@@ -174,6 +190,7 @@ class Runner:
         self.__settings = Settings(runner_kwargs=self.__kwargs, run_kwargs=kwargs)
         initial_start_time = time.time()
         resource_monitor = None
+        run_error = None
         try:
             if self.__settings.monitor_resources:
                 resource_monitor = ResourceMonitor()
@@ -182,47 +199,49 @@ class Runner:
 
             with suppressed_stdout(self.__settings.quiet):
                 while self.__suites:
+                    generation = ParallelProcessor.generation()
                     for suite in list(self.__suites):
-                        suite_object = Builder.get_execution_roster().get(suite, None)
-                        if suite_object is not None:
-                            if self.__processor.suite_multithreading() and suite_object.is_parallelized():
-                                while True:
-                                    if self.__processor.suite_qualifies(suite_object):
-                                        time.sleep(Limiter.get_suite_throttling())
-                                        self.__executed_suites.append(suite_object)
-                                        ParallelProcessor.run_suite_in_a_thread(
-                                            self.__capture_thread_errors(self.__run_suite), suite_object)
-                                        self.__suites.remove(suite)
-                                        break
-                                    elif suite_object.get_priority() is None:
-                                        break
-                                    else:
-                                        time.sleep(1)
-                            else:
-                                if not suite_object.is_parallelized():
-                                    LogJunkie.debug("Cant run suite: {} in parallel with any other suites. Waiting for "
-                                                    "parallel suites to finish so I can run it by itself."
-                                                    .format(suite_object.get_class_object()))
-                                    ParallelProcessor.wait_currently_active_suites_to_finish()
-                                self.__executed_suites.append(suite_object)
-                                self.__run_suite(suite_object)
-                                self.__suites.remove(suite)
+                        # never missing - Runner() already rejected anything that isn't a registered suite
+                        suite_object = Builder.get_execution_roster()[suite]
+                        if self.__processor.suite_multithreading() and suite_object.is_parallelized():
+                            while True:
+                                suite_generation = ParallelProcessor.generation()
+                                if self.__processor.suite_qualifies(suite_object):
+                                    time.sleep(Limiter.get_suite_throttling())
+                                    self.__executed_suites.append(suite_object)
+                                    ParallelProcessor.run_suite_in_a_thread(
+                                        self.__capture_thread_errors(self.__run_suite), suite_object)
+                                    self.__suites.remove(suite)
+                                    break
+                                elif suite_object.get_priority() is None:
+                                    break
+                                else:  # a prioritized suite holds its place until a running suite finishes
+                                    ParallelProcessor.wait_for_change(suite_generation)
                         else:
-                            LogJunkie.warn("Suite {} was not found in the execution roster and will be skipped. "
-                                           "Ensure the class is decorated with @Suite() and was imported "
-                                           "before Runner was constructed.".format(suite))
+                            if not suite_object.is_parallelized():
+                                LogJunkie.debug("Cant run suite: {} in parallel with any other suites. Waiting for "
+                                                "parallel suites to finish so I can run it by itself."
+                                                .format(suite_object.get_class_object()))
+                                ParallelProcessor.wait_currently_active_suites_to_finish()
+                            self.__executed_suites.append(suite_object)
+                            self.__run_suite(suite_object)
                             self.__suites.remove(suite)
                     LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
-                    time.sleep(0.2)
+                    if self.__suites:  # the rest wait on running suites - used to be a fixed 0.2s sleep every pass
+                        ParallelProcessor.wait_for_change(generation)
 
                 ParallelProcessor.wait_currently_active_suites_to_finish()
-                if self.__thread_errors:
-                    for error in self.__thread_errors[1:]:
-                        LogJunkie.error("Another error in a suite/test thread: {!r}".format(error))
-                    raise self.__thread_errors[0]  # same as when the suite runs on the main thread
+        except Exception as error:
+            # report on what did run before raising - used to exit without the summary or the HTML/XML reports
+            run_error = error
+            ParallelProcessor.wait_currently_active_suites_to_finish()
         finally:
             if resource_monitor is not None:  # is None if ResourceMonitor() itself failed - don't mask that error
                 resource_monitor.shutdown()
+
+        errors = ([run_error] if run_error is not None else []) + self.__thread_errors
+        for error in errors[1:]:
+            LogJunkie.error("Another error in a suite/test thread: {!r}".format(error))
 
         runtime = time.time() - initial_start_time
         print("========== Test Junkie finished in {:0.2f} seconds ==========".format(runtime))
@@ -230,6 +249,7 @@ class Runner:
         try:
             Aggregator.present_console_output(aggregator)
             if self.__settings.html_report:
+                from test_junkie.reporter.html_reporter import Reporter  # only loaded when a report is requested
                 reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
                                     if resource_monitor is not None else None,
                                     runtime=runtime,
@@ -238,11 +258,18 @@ class Runner:
                                     or self.__processor.suite_multithreading())
                 reporter.generate_html_report(self.__settings.html_report)
             XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
+        except Exception:
+            if not errors:
+                raise
+            # the run already failed - that's the error to surface, not a report choking on the partial results
+            LogJunkie.error("Reporting failed after the run failed: {}".format(traceback.format_exc()))
         finally:
             # needs to run even if reporting above throws or the temp file never gets removed
-            if self.__settings.monitor_resources:
+            if resource_monitor is not None:
                 resource_monitor.cleanup()
             self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
+        if errors:
+            raise errors[0]  # same error as before, now raised after the summary and reports were written
         return aggregator
 
     def __capture_thread_errors(self, func):
@@ -373,8 +400,7 @@ class Runner:
                                                                class_param=class_param, error=bad_params)
                                         continue
 
-                                    while not self.__processor.test_qualifies(test):
-                                        time.sleep(0.2)
+                                    ParallelProcessor.wait_while(lambda: not self.__processor.test_qualifies(test))
 
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None and \
@@ -386,8 +412,7 @@ class Runner:
                                                                     and test.parallelized_parameters()
                                                                     and param is not None)):
 
-                                                while self.__processor.test_limit_reached():
-                                                    time.sleep(0.2)
+                                                ParallelProcessor.wait_while(self.__processor.test_limit_reached)
                                                 time.sleep(Limiter.get_test_throttling())
                                                 self.__processor.run_test_in_a_thread(
                                                                                       self.__capture_thread_errors(
@@ -434,11 +459,19 @@ class Runner:
             Runner.__process_event(event=Event.ON_CLASS_SKIP, suite=suite)
 
     @staticmethod
+    def __overrides(rules, hook):
+        """
+        :return: BOOLEAN, True if this Rules subclass overrides the hook - the base hooks are no-ops, so for them we
+                 skip the call and the per-test copy of the test object it would need
+        """
+        return getattr(type(rules), hook) is not getattr(Rules, hook)
+
+    @staticmethod
     def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
 
         def run_before_test():
             try:
-                if not test.skip_before_test_rule():
+                if not test.skip_before_test_rule() and Runner.__overrides(suite.get_rules(), "before_test"):
                     suite.get_rules().before_test(test=copy.deepcopy(test))
                 if not test.skip_before_test():
                     before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
@@ -489,7 +522,7 @@ class Runner:
                     if after_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(after_test_error, pre_processed=True)
                         return False
-                if not test.skip_after_test_rule():
+                if not test.skip_after_test_rule() and Runner.__overrides(suite.get_rules(), "after_test"):
                     suite.get_rules().after_test(test=copy.deepcopy(test))
                 return True
             except Exception as after_test_error:
@@ -637,7 +670,7 @@ class Runner:
             functions_list = suite.get_decorated_definition(decorator_type)
             for func in functions_list:
                 try:
-                    if "suite_parameter" in inspect.getfullargspec(func["decorated_function"]).args:
+                    if "suite_parameter" in arg_names(func["decorated_function"]):
                         func["decorated_function"](suite.get_class_instance(), suite_parameter=class_parameter)
                     else:
                         func["decorated_function"](suite.get_class_instance())
@@ -664,54 +697,13 @@ class Runner:
     @staticmethod
     def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None):
 
-        event_mapping = {Event.ON_SUCCESS: {"custom": suite.get_listener().on_success,
-                                            "native": Listener().on_success},
-                         Event.ON_FAILURE: {"custom": suite.get_listener().on_failure,
-                                            "native": Listener().on_failure},
-                         Event.ON_ERROR: {"custom": suite.get_listener().on_error,
-                                          "native": Listener().on_error},
-                         Event.ON_SKIP: {"custom": suite.get_listener().on_skip,
-                                         "native": Listener().on_skip},
-                         Event.ON_CANCEL: {"custom": suite.get_listener().on_cancel,
-                                           "native": Listener().on_cancel},
-                         Event.ON_IGNORE: {"custom": suite.get_listener().on_ignore,
-                                           "native": Listener().on_ignore},
-                         Event.ON_IN_PROGRESS: {"custom": suite.get_listener().on_in_progress,
-                                                "native": Listener().on_in_progress},
-                         Event.ON_COMPLETE: {"custom": suite.get_listener().on_complete,
-                                             "native": Listener().on_complete},
-                         Event.ON_CLASS_CANCEL: {"custom": suite.get_listener().on_class_cancel,
-                                                 "native": Listener().on_class_cancel},
-                         Event.ON_CLASS_SKIP: {"custom": suite.get_listener().on_class_skip,
-                                               "native": Listener().on_class_skip},
-                         Event.ON_BEFORE_CLASS_ERROR: {"custom": suite.get_listener().on_before_class_error,
-                                                       "native": Listener().on_before_class_error},
-                         Event.ON_BEFORE_CLASS_FAIL: {"custom": suite.get_listener().on_before_class_failure,
-                                                      "native": Listener().on_before_class_failure},
-                         Event.ON_CLASS_IGNORE: {"custom": suite.get_listener().on_class_ignore,
-                                                 "native": Listener().on_class_ignore},
-                         Event.ON_AFTER_CLASS_ERROR: {"custom": suite.get_listener().on_after_class_error,
-                                                      "native": Listener().on_after_class_error},
-                         Event.ON_AFTER_CLASS_FAIL: {"custom": suite.get_listener().on_after_class_failure,
-                                                     "native": Listener().on_after_class_failure},
-                         Event.ON_CLASS_IN_PROGRESS: {"custom": suite.get_listener().on_class_in_progress,
-                                                      "native": Listener().on_class_in_progress},
-                         Event.ON_BEFORE_GROUP_FAIL: {"custom": suite.get_listener().on_before_group_failure,
-                                                      "native": Listener().on_before_group_failure},
-                         Event.ON_BEFORE_GROUP_ERROR: {"custom": suite.get_listener().on_before_group_error,
-                                                       "native": Listener().on_before_group_error},
-                         Event.ON_AFTER_GROUP_FAIL: {"custom": suite.get_listener().on_after_group_failure,
-                                                     "native": Listener().on_after_group_failure},
-                         Event.ON_AFTER_GROUP_ERROR: {"custom": suite.get_listener().on_after_group_error,
-                                                      "native": Listener().on_after_group_error},
-                         Event.ON_CLASS_COMPLETE: {"custom": suite.get_listener().on_class_complete,
-                                                   "native": Listener().on_class_complete}
-                         }
-
-        native_function = event_mapping[event]["native"]
-        custom_function = event_mapping[event]["custom"]
-        custom_function = custom_function \
-            if str(custom_function).split(" at ")[0] != str(native_function).split(" at ")[0] else None
+        name = _EVENT_HANDLERS[event]
+        native_function = getattr(_NATIVE_LISTENER, name)
+        listener = suite.get_listener()
+        # only call the custom listener if it overrides the hook - the base hooks do nothing.
+        # This used to build a 21-entry mapping (and 21 Listener objects) for every single event
+        custom_function = getattr(listener, name) \
+            if getattr(type(listener), name, None) is not getattr(Listener, name) else None
 
         @synchronized(_EVENT_PROPERTIES_LOCK)
         def __create_properties():

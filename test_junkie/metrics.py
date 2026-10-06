@@ -1,6 +1,4 @@
 import errno
-import importlib.metadata
-import multiprocessing
 import os
 import sys
 import threading
@@ -8,8 +6,7 @@ import time
 import traceback
 from datetime import datetime
 
-from test_junkie.cli.cli import CliUtils
-
+from test_junkie import __version__
 from test_junkie.cli.cli_config import Config
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType
@@ -309,6 +306,7 @@ class Aggregator(object):
 
     @staticmethod
     def present_console_output(aggregator):
+        from test_junkie.cli.cli import CliUtils  # imported here: colorama + the CLI aren't needed to run tests
 
         def parse_exception(value):
             if value is not None:
@@ -383,7 +381,7 @@ class Aggregator(object):
                                               status=param_data["statuses"][index].upper()))
         print("\n===========================================================")
         print(". Test Junkie {} (Python{}) {} .".format(
-            importlib.metadata.version("test-junkie"), sys.version_info[0], DocumentationLinks.DOMAIN)
+            __version__, sys.version_info[0], DocumentationLinks.DOMAIN)
         )
         print("===========================================================")
 
@@ -423,6 +421,7 @@ class ResourceMonitor(threading.Thread):
                                                                    timestamp=time.time())
 
         threading.Thread.__init__(self)
+        import multiprocessing  # only needed when monitor_resources is on
         self.exit = multiprocessing.Event()
 
     def get_file_path(self):

@@ -29,10 +29,8 @@ class CliAudit:
 
     def aggregate(self):
 
-        def is_relevant(_suite=None, _test=None):
-            if not _suite and not _test:
-                raise Exception("Must pass in either a SuiteObject or a TestObject!")
-            elif _suite and not _test:
+        def is_relevant(_suite, _test=None):
+            if not _test:
                 from test_junkie.rules import Rules
                 if self.args.no_rules and _suite.get_rules().__class__ != Rules:
                     return False
@@ -96,6 +94,10 @@ class CliAudit:
 
         # the suites that were scanned / asked for with -x - this used to walk every suite registered in the
         # process, so -x was ignored and a long-lived process audited everything it had ever loaded
+        # suites are listed by class name - unless two audited suites share it (same class name in different files),
+        # then by module.ClassName. They used to be merged into one entry
+        names = collections.Counter(suite.__name__ for suite in self.suites)
+
         for suite in self.suites:
             suite_object = self.exe_roster.get(suite, None)
             if suite_object is None or not is_relevant(_suite=suite_object):
@@ -141,7 +143,9 @@ class CliAudit:
                     CliAudit.process_property(context, "owners", test.get_owner())
 
                 self.update_context(suite, test, feature)
-            self.aggregated_data["context_by_suites"].update({suite_object.get_class_name(): suite_context})
+            suite_key = suite_object.get_class_name() if names[suite.__name__] == 1 else \
+                "{}.{}".format(suite_object.get_class_module(), suite_object.get_class_name())
+            self.aggregated_data["context_by_suites"].update({suite_key: suite_context})
 
     @staticmethod
     def process_property(data_context, prop, key):
