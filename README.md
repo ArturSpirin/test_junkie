@@ -81,30 +81,17 @@ Or from the terminal: `tj run -s path/to/tests -T 4 --html_report report.html`
 
 ## Performance
 
-Everything above ships in one package — no plugins to add for parallel runs or parametrization.
+Key takeaways (median of 30 runs; every run verified to have passed all of its tests):
 
-**Package footprint** — installed size, including the plugins each framework needs to match those features:
-
-| Framework | Core (KB) | Parallel | Parametrization | Total (KB) |
-|---|---:|---|---|---:|
-| **test_junkie** | **621** | built-in | built-in | **621** |
-| unittest | 528 | built-in (`ThreadPoolExecutor`) | +139 (`parameterized`) | 667 |
-| pytest | 2,932 | +532 (`pytest-xdist`) | built-in | 3,464 |
-| Robot Framework | 5,980 | +539 (`robotframework-pabot`) | built-in | 6,519 |
-
-**Wall clock** — N tests that each sleep 1 ms, process start to exit (median of 30 runs; every run verified to have passed all N tests):
-
-| Framework | N = 1 | N = 100 | N = 1,000 | N = 1,000 · 10 workers |
-|---|---:|---:|---:|---:|
-| **test_junkie** | 95 ms | 296 ms | **1,972 ms** | 308 ms |
-| unittest | **92 ms** | **289 ms** | 2,028 ms | **268 ms** ¹ |
-| pytest | 296 ms | 573 ms | 2,741 ms | 2,064 ms (`pytest-xdist`) |
-| Robot Framework | 308 ms | 581 ms | 3,395 ms | 85.3 s (`pabot`) ² |
-
-¹ a bare `ThreadPoolExecutor` with no test runner. ² median of 3 runs; pabot starts a process per test.
+- **1.4× faster than pytest, sequentially** (1.97 s vs 2.74 s, 1,000 tests). Fastest of the four runners: 1.7× faster than Robot Framework (3.39 s) and just ahead of plain unittest (2.03 s).
+- **6.7× faster than pytest-xdist in parallel** (0.31 s vs 2.06 s, 1,000 tests, 10 workers). Tests run on threads inside one process, so there's no worker start-up cost, and no plugin to install.
+- **Parallelism that scales:** going from 1 to 10 threads makes a 1,000-test run 6.2× faster. pytest-xdist peaks at ×1.7; pabot is slower than sequential Robot Framework at every setting.
+- **5.6× smaller than pytest + xdist** (621 KB vs 3,464 KB installed). Parallel execution, parametrization, retries, listeners and HTML/XML reports ship in one package. Robot Framework + pabot is 6,519 KB (10.5×).
+- **~1 ms framework overhead per test** at 1,000 tests (+972 ms total), vs +1,028 ms for unittest, +1,741 ms for pytest and +2,395 ms for Robot Framework.
+- **95 ms start-up for a 1-test run**, on par with unittest (92 ms) and about a third of pytest (296 ms) or Robot Framework (308 ms).
 
 Measured with test_junkie 0.9a5, pytest 9.1.1, Robot Framework 7.5 on Python 3.12.5 (Windows 11, Intel Core i9-10980HK).
-Parametrized and parallel results, per-phase timings and the exact commands are in the
+Full results tables, parametrized and parallel runs, per-phase timings and the exact commands are in the
 [full benchmark →](https://www.test-junkie.com/performance/)
 
 ## Getting Started
