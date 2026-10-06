@@ -47,12 +47,12 @@ def has_internal_overlap(label):
 
 
 def max_simultaneous():
-    all_events = sorted(events(), key=lambda e: e[1])
-    best = 0
-    for i, a in enumerate(all_events):
-        active = 1
-        for j, b in enumerate(all_events):
-            if i != j and overlaps(a, b):
-                active += 1
+    # peak number of events running at the same moment. This used to count the events overlapping each event, which
+    # over-counts back-to-back events: A overlapping both B and C doesn't mean B and C ran together. That only showed
+    # once the scheduler stopped polling every 200ms and started the next suite the moment a slot freed up
+    edges = sorted([(start, 1) for _, start, _ in events()] + [(end, -1) for _, _, end in events()])
+    best = active = 0
+    for _, change in edges:  # at equal times the end (-1) sorts first: back-to-back isn't simultaneous
+        active += change
         best = max(best, active)
     return best
