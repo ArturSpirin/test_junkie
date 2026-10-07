@@ -86,7 +86,7 @@ Key takeaways (median of 30 runs; every run verified to have passed all of its t
 - **1.4× faster than pytest, sequentially** (1.97 s vs 2.74 s, 1,000 tests). Fastest of the four runners: 1.7× faster than Robot Framework (3.39 s) and just ahead of plain unittest (2.03 s).
 - **6.7× faster than pytest-xdist in parallel** (0.31 s vs 2.06 s, 1,000 tests, 10 workers). Tests run on threads inside one process, so there's no worker start-up cost, and no plugin to install.
 - **Parallelism that scales:** going from 1 to 10 threads makes a 1,000-test run 6.2× faster. pytest-xdist peaks at ×1.7; pabot is slower than sequential Robot Framework at every setting.
-- **5.6× smaller than pytest + xdist** (621 KB vs 3,464 KB installed). Parallel execution, parametrization, retries, listeners and HTML/XML reports ship in one package. Robot Framework + pabot is 6,519 KB (10.5×).
+- **6.2× smaller than pytest with the plugins for the same features** (3,345 KB vs 20,680 KB installed, every dependency included). Parallel execution, parametrization, retries, listeners, ordering and HTML/XML/JSON reports ship in one package; pytest needs 10 plugins for them, which pull in 18 more packages. Robot Framework with plugins is 8,005 KB (2.4×) and covers 13 of the 19 features. Details: [install size](https://www.test-junkie.com/install-size/).
 - **~1 ms framework overhead per test** at 1,000 tests (+972 ms total), vs +1,028 ms for unittest, +1,741 ms for pytest and +2,395 ms for Robot Framework.
 - **95 ms start-up for a 1-test run**, on par with unittest (92 ms) and about a third of pytest (296 ms) or Robot Framework (308 ms).
 
