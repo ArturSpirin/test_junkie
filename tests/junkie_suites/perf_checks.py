@@ -51,7 +51,9 @@ def _marginal_ms_per_test(low, high, rules=None):
     """
     Extra time per added test between two suite sizes - fixed per-run costs cancel out
     """
-    return (_run_seconds(high, rules) - _run_seconds(low, rules)) * 1000 / (high - low)
+    # median of 3: one slow moment on a busy machine used to skew a single measurement (flaky in full runs)
+    samples = sorted((_run_seconds(high, rules) - _run_seconds(low, rules)) * 1000 / (high - low) for _ in range(3))
+    return samples[1]
 
 
 def copies_are_cheap_and_independent():

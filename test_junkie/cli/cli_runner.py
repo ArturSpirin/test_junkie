@@ -277,6 +277,7 @@ class CliRunner:
                            features=args.features,
                            tag_config=tag_config,
                            quiet=args.quiet,
+                           monitor_resources=args.monitor_resources,  # tj run -m was never passed on
                            per_test=args.per_test,
                            capture=Undefined if args.no_capture is Undefined else not args.no_capture,
                            _cli={"sources": self.sources, "scan_seconds": self.scan_seconds,

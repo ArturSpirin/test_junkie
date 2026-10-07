@@ -14,6 +14,8 @@
 - `tj run` shows when a saved config is used, where it is and which settings it applied
 - `-p` / `--per-test` and `--no-capture` can be saved with `tj config update`
 - Fixed `--guess-root` giving up when the source path is relative (`tj run -s tests --guess-root`)
+- `tj run -m` charts CPU and memory after the summary, with every test as a dot on the same timeline and the suites under it; threaded runs also show how many tests ran at once. Resources are sampled every 0.25s instead of every second
+- Fixed `tj run -m` being ignored: resources were only monitored when `-m` was saved with `tj config update`
 - `tj config` and `tj audit` errors say what to type instead and exit with code 120 (`tj config update`, `tj config show` and `tj audit` with nothing to do used to exit 0); `tj config show` with no options now asks which settings instead of printing the whole file
 
 ## 0.9a5

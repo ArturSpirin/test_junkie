@@ -31,6 +31,7 @@ _COLUMNS = [(TestCategory.SUCCESS, "Pass", 6), (TestCategory.FAIL, "Fail", 6), (
             (TestCategory.IGNORE, "Ignore", 8), (TestCategory.SKIP, "Skip", 6), (TestCategory.CANCEL, "Cancel", 8)]
 
 _CODES = {"pass": "32", "fail": "33", "err": "31", "skip": "34", "ign": "38;5;208", "canc": "90", "warn": "33",
+          "cpu": "36", "mem": "1;35", "run": "34",
           "dim": "2", "bold": "1", "param": "36"}
 _BADGES = {"pass": "30;42", "fail": "30;43", "err": "97;41", "ign": "30;48;5;208", "canc": "97;100", "skip": "97;44"}
 
@@ -52,12 +53,13 @@ def _color_enabled(stream):
 
 # for streams that can't encode the box drawing characters (a pipe on Windows is cp1252)
 _ASCII = {ord("─"): "-", ord("│"): "|", ord("·"): ".", ord("…"): "...", ord("›"): ">", ord("–"): "-", ord("→"): "->",
-          ord("■"): "#"}
+          ord("■"): "#", ord("█"): "#", ord("━"): "=", ord("┤"): "|", ord("┼"): "+", ord("├"): "|", ord("●"): "o",
+          ord("▁"): "_", ord("▂"): "_", ord("▃"): "-", ord("▄"): "-", ord("▅"): "=", ord("▆"): "=", ord("▇"): "#"}
 
 
 def _unicode_ok(stream):
     try:
-        "─│·…›–→".encode(getattr(stream, "encoding", None) or "ascii")
+        "─│·…›–→█━●▆".encode(getattr(stream, "encoding", None) or "ascii")
         return True
     except (UnicodeEncodeError, LookupError):
         return False
@@ -457,6 +459,7 @@ class Console(object):
         self.__all = []
         self.__count_width = 5
         self.__waiting_for = set()
+        self.__timeline = {}  # unit key -> (started or None, finished, status), for the -m chart
 
     # ── styling ──
 
@@ -703,6 +706,8 @@ class Console(object):
             mode += dot + "one line per test"
         if not settings.capture:
             mode += dot + "test output shown live"
+        if settings.monitor_resources:
+            mode += dot + "resource monitoring"
         row("mode", mode)
         reports = []
         if settings.html_report:
@@ -755,10 +760,11 @@ class Console(object):
 
     def unit_done(self, suite, key, status, label=None, runtime=None, runs=None):
         with self.__lock:
-            self.__running.pop(key, None)
+            running = self.__running.pop(key, None)
             progress = self.__progress.get(suite)
             if progress is None or status is None:
                 return
+            self.__timeline[key] = (running[1] if running else None, time.time(), status)
             if progress.started is None:
                 progress.started = time.time()
                 self.__suites.append(progress)
@@ -866,7 +872,7 @@ class Console(object):
             self.__live = False
             self.__write("\n".join(lines) + "\n")
 
-    def finish(self, aggregator, runtime, errors=None):
+    def finish(self, aggregator, runtime, errors=None, resources=None):
         """
         Stops the live block and prints problems, the summary and the verdict
         :return: INT, the exit code the CLI uses
@@ -894,9 +900,22 @@ class Console(object):
                 lines.append("")
         if self.__mode in ("normal", "report"):
             lines.extend(self.__summary(rows, counts, runtime))
+        if resources is not None and self.__mode == "normal":
+            lines.extend(self.__resources(resources))
+            lines.extend(["", self.style("─" * _RULE_WIDTH, "dim"), ""])
         lines.append(self.__verdict(code, counts, runtime, errors))
         self.emit(lines)
         return code
+
+    def __resources(self, samples):
+        settings = self.__settings
+        suites = [(p.suite.get_class_name(), p.started, p.finished) for p in self.__suites]
+        parallel = settings is not None and ((settings.suite_thread_limit or 1) > 1 or
+                                             (settings.test_thread_limit or 1) > 1)
+        width = max(40, min(100, _columns() - 12)) if self.__live else 60
+        return resource_chart(self.style, list(samples), self.__start, time.time(), list(self.__timeline.values()),
+                              suites, test_threads=(settings.test_thread_limit or 1) if settings else 1,
+                              parallel=parallel, width=width)
 
     def exit_code(self, counts, aggregator, errors):
         if errors:
@@ -1203,3 +1222,157 @@ class Console(object):
             joined = self.__mode == "cli-quiet" or (self.__state.cancelled and self.__state.by_user)
             text += (dot if joined else "  ") + self.style("exit code {}".format(code), "dim")
         return text
+
+
+# ── tj run -m: CPU and memory over the run, with the tests on the same timeline ──────────────────────────────────
+
+_PARTIAL = " ▁▂▃▄▅▆▇"
+_RESULT_STYLE = {TestCategory.SUCCESS: "pass", TestCategory.FAIL: "fail", TestCategory.ERROR: "err",
+                 TestCategory.SKIP: "skip", TestCategory.IGNORE: "ign", TestCategory.CANCEL: "canc"}
+
+
+def _seconds(value):
+    if value >= 120:
+        return "{:g}m".format(round(value / 60.0, 1))
+    return "{:g}s".format(round(value, 2))
+
+
+def resource_chart(style, samples, start, end, tests, suites, test_threads=1, parallel=False, width=60):
+    """
+    :param style: callable(text, *style names) -> text, e.g. Console.style
+    :param samples: LIST of (time, cpu %, memory %) from ResourceMonitor
+    :param start: FLOAT, when the run started (time.time())
+    :param end: FLOAT, when it ended
+    :param tests: LIST of (started or None, finished, status) - one per result
+    :param suites: LIST of (name, started, finished)
+    :param test_threads: INT, the test thread limit, for the "running" row
+    :param parallel: BOOLEAN, tests or suites ran in threads: suites get lanes, the "running" row is shown
+    :param width: INT, columns for the timeline
+    :return: LIST of lines, starting with the "Resources" rule
+    """
+    dot = style(" · ", "dim")
+    used = len("Resources") + 1 + len("CPU and memory, whole machine") + 1
+    lines = ["{} {}".format(style("Resources", "bold"),
+                            style("CPU and memory, whole machine " + "─" * (80 - used), "dim")), ""]
+    runtime = max(end - start, 0.001)
+    points = [(t - start, cpu, mem) for t, cpu, mem in samples if start <= t <= end + 0.5]
+    if len(points) < 2:
+        lines.append(style("  The run took {} - too short to sample (one sample every 0.25s).".format(
+            _seconds(runtime)), "dim"))
+        return lines
+    W, H = width, 8
+    col = runtime / W
+
+    def at(column):
+        t0, t1 = column * col, (column + 1) * col
+        inside = [p for p in points if t0 <= p[0] < t1]
+        if not inside:
+            middle = (t0 + t1) / 2
+            inside = [min(points, key=lambda p: abs(p[0] - middle))]
+        return sum(p[1] for p in inside) / len(inside), sum(p[2] for p in inside) / len(inside)
+
+    cpu_avg = sum(p[1] for p in points) / len(points)
+    mem_avg = sum(p[2] for p in points) / len(points)
+    cpu_peak = max(points, key=lambda p: p[1])
+    mem_peak = max(points, key=lambda p: p[2])
+    during = [name for name, s0, s1 in suites if s0 is not None and s0 - start <= cpu_peak[0] <= (s1 or end) - start]
+    lines.append("  {} CPU     avg {:.0f}%{}peak {:.0f}% at {}{}".format(
+        style("█", "cpu"), cpu_avg, dot, cpu_peak[1], _seconds(cpu_peak[0]),
+        (dot + style("during " + ", ".join(during), "dim")) if during else ""))
+    lines.append("  {} Memory  avg {:.0f}%{}peak {:.0f}% at {}".format(
+        style("━", "mem"), mem_avg, dot, mem_peak[2], _seconds(mem_peak[0])))
+    if parallel:
+        lines.append("  {} tests running at once, out of {} test thread{}".format(
+            style("▆", "run"), test_threads, "" if test_threads == 1 else "s"))
+    lines.append("")
+
+    grid = [[(" ", None)] * W for _ in range(H)]
+    for c in range(W):
+        cpu, mem = at(c)
+        units = max(0.0, min(100.0, cpu)) / 12.5
+        full = int(units)
+        for r in range(min(full, H)):
+            grid[H - 1 - r][c] = ("█", "cpu")
+        if full < H and units - full > 0.06:
+            grid[H - 1 - full][c] = (_PARTIAL[min(7, int((units - full) * 8))], "cpu")
+        grid[H - 1 - min(H - 1, int(max(0.0, mem) / 12.5))][c] = ("━", "mem")  # the memory line, over the CPU area
+    axis = {0: "100%", 2: " 75%", 4: " 50%", 6: " 25%"}
+    for r in range(H):
+        cells = "".join(style(ch, cls) if cls else ch for ch, cls in grid[r])
+        lines.append("   " + style(axis.get(r, "    ") + " ┤", "dim") + cells)
+    lines.append("   " + style("  0% ┼" + "─" * W, "dim"))
+
+    if parallel:
+        def running(t):
+            return sum(1 for t0, t1, _ in tests if t0 is not None and t0 - start <= t < t1 - start)
+        bars, peak = [], 0
+        for c in range(W):
+            n = max(running(c * col + col * k / 4.0) for k in range(4))
+            peak = max(peak, n)
+            bars.append(" " if not n else "▁▂▃▄▅▆▇█"[min(7, int(round(n / float(max(test_threads, 1)) * 7)))])
+        lines.append("  " + style("running", "dim") + style("".join(bars), "run") +
+                     style("  peak {} of {}".format(peak, test_threads), "dim"))
+
+    rows = 4 if parallel else 3
+    stacks = [[] for _ in range(W)]
+    for t0, t1, status in sorted(tests, key=lambda item: item[1]):
+        stacks[max(0, min(W - 1, int((t1 - start) / col)))].append(status)
+    for row in range(rows):
+        cells = []
+        for stack in stacks:
+            if row == rows - 1 and len(stack) > rows:
+                cells.append(style("+", "dim"))
+            elif row < len(stack):
+                cells.append(style("●", _RESULT_STYLE.get(stack[row], "dim")))
+            else:
+                cells.append(" ")
+        lines.append("  " + style(" tests " if row == 0 else "       ", "dim") + "".join(cells))
+
+    lanes = []  # a suite takes the first lane that is free when it starts
+    for name, s0, s1 in sorted([s for s in suites if s[1] is not None], key=lambda s: s[1]):
+        s1 = s1 or end
+        for lane in (lanes if parallel else lanes[:1]):
+            if lane[-1][2] <= s0 + col / 2 or not parallel:  # a suite waiting for this lane starts as it frees up
+                lane.append((name, s0, s1))
+                break
+        else:
+            lanes.append([(name, s0, s1)])
+    for index, lane in enumerate(lanes):
+        cells = [" "] * W
+        for position, (name, s0, s1) in enumerate(lane):
+            a = max(0, min(W - 1, int((s0 - start) / col)))
+            b = max(a + 1, min(W, int(-(-(s1 - start) // col))))
+            if position + 1 < len(lane):  # stop where the next suite in this lane starts
+                b = max(a + 1, min(b, int((lane[position + 1][1] - start) / col)))
+            short = name[:-5] if name.endswith("Suite") and len(name) > 5 else name
+            span = b - a
+            if span >= len(short) + 1:
+                text = "├" + short + "─" * (span - len(short) - 1)
+            elif span >= 4:
+                text = "├" + short[:span - 2] + "…"
+            else:
+                text = ("├" + short[0]) if span >= 2 else short[0]
+            for i, ch in enumerate(text[:span]):
+                cells[a + i] = ch
+        lines.append("  " + style(("suites " if index == 0 else "       ") + "".join(cells), "dim"))
+
+    ticks = [" "] * W
+    step = runtime / 5.0
+    magnitude = 10 ** __import__("math").floor(__import__("math").log10(step))
+    step = next(m * magnitude for m in (1, 2, 5, 10) if m * magnitude >= step)
+    end_label = _seconds(runtime)
+    t = 0.0
+    while t < runtime:
+        label, c = _seconds(t), int(t / col)
+        if c + len(label) < W - len(end_label) - 1 and all(ch == " " for ch in ticks[max(0, c - 1):c + len(label) + 1]):
+            for i, ch in enumerate(label):
+                ticks[c + i] = ch
+        t += step
+    for i, ch in enumerate(end_label):
+        ticks[W - len(end_label) + i] = ch
+    lines.append("         " + style("".join(ticks), "dim"))
+    lines.append("")
+    lines.append("  " + "  ".join(style("●", cls) + " " + word for cls, word in (
+        ("pass", "passed"), ("fail", "failed"), ("err", "error"), ("skip", "skipped"), ("ign", "ignored"),
+        ("canc", "cancelled"))))
+    return lines

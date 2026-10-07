@@ -365,6 +365,9 @@ class Aggregator(object):
 
 class ResourceMonitor(threading.Thread):
 
+    # seconds between samples - 1s gave the console chart only a few points for a short run
+    INTERVAL = 0.25
+
     def __init__(self):
 
         self.file_path = "{dir}{sep}.resources_{timestamp}".format(dir=Config.get_root_dir(),
@@ -373,6 +376,7 @@ class ResourceMonitor(threading.Thread):
 
         threading.Thread.__init__(self, daemon=True)
         self.exit = threading.Event()
+        self.samples = []  # (time.time(), cpu %, memory %) - what tj run -m charts after the summary
 
     def get_file_path(self):
 
@@ -392,11 +396,13 @@ class ResourceMonitor(threading.Thread):
         self.mkdir_p(Config.get_root_dir())
         with open(self.file_path, "w+") as records:
             records.write("")
+        psutil.cpu_percent()  # the first call has nothing to compare with and always returns 0.0
         # wait() instead of sleep(): returns the moment shutdown() is called, and nothing is written after that
-        while not self.exit.wait(1):
-            data = "{timestamp}, {cpu}, {memory}\n".format(timestamp=datetime.now(),
-                                                           cpu=psutil.cpu_percent(),
-                                                           memory=psutil.virtual_memory().percent)
+        while not self.exit.wait(ResourceMonitor.INTERVAL):
+            now, cpu, memory = time.time(), psutil.cpu_percent(), psutil.virtual_memory().percent
+            self.samples.append((now, cpu, memory))
+            data = "{timestamp}, {cpu}, {memory}\n".format(timestamp=datetime.fromtimestamp(now), cpu=cpu,
+                                                           memory=memory)
             with open(self.file_path, "a+") as records:
                 records.write(data)
 

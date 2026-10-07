@@ -312,7 +312,8 @@ class Runner:
         aggregator = Aggregator(self.get_executed_suites())
         try:
             try:
-                self.exit_code = console.finish(aggregator, runtime, errors)
+                self.exit_code = console.finish(aggregator, runtime, errors,
+                                                resources=resource_monitor.samples if resource_monitor else None)
             finally:
                 router.uninstall()
                 if previous_handler is not None:
