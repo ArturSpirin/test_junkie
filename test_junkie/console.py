@@ -32,11 +32,15 @@ _COLUMNS = [(TestCategory.SUCCESS, "Pass", 6), (TestCategory.FAIL, "Fail", 6), (
 
 _CODES = {"pass": "32", "fail": "33", "err": "31", "skip": "34", "ign": "38;5;208", "canc": "90", "warn": "33",
           "dim": "2", "bold": "1", "param": "36"}
-_BADGES = {"pass": "30;42", "fail": "30;43", "err": "97;41", "ign": "30;48;5;208", "canc": "97;100"}
+_BADGES = {"pass": "30;42", "fail": "30;43", "err": "97;41", "ign": "30;48;5;208", "canc": "97;100", "skip": "97;44"}
 
 
 def _color_enabled(stream):
     if os.environ.get("NO_COLOR"):
+        return False
+    try:
+        stream.fileno()
+    except Exception:  # an in-memory stream (redirect_stdout, pytest's capture): never colored, even in CI
         return False
     if os.environ.get("FORCE_COLOR") or os.environ.get("GITHUB_ACTIONS"):
         return True
@@ -47,12 +51,13 @@ def _color_enabled(stream):
 
 
 # for streams that can't encode the box drawing characters (a pipe on Windows is cp1252)
-_ASCII = {ord("─"): "-", ord("│"): "|", ord("·"): ".", ord("…"): "...", ord("›"): ">", ord("–"): "-"}
+_ASCII = {ord("─"): "-", ord("│"): "|", ord("·"): ".", ord("…"): "...", ord("›"): ">", ord("–"): "-", ord("→"): "->",
+          ord("■"): "#"}
 
 
 def _unicode_ok(stream):
     try:
-        "─│·…›–".encode(getattr(stream, "encoding", None) or "ascii")
+        "─│·…›–→".encode(getattr(stream, "encoding", None) or "ascii")
         return True
     except (UnicodeEncodeError, LookupError):
         return False
@@ -79,6 +84,14 @@ def _system():
 def _columns():
     import shutil  # only needed for live output
     return shutil.get_terminal_size((100, 24)).columns
+
+
+def _setting_value(value):
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value)
+    return str(value)
 
 
 def _visible(text):
@@ -647,25 +660,39 @@ class Console(object):
             self.__thread = threading.Thread(target=self.__loop, name="TestJunkieConsole", daemon=True)
             self.__thread.start()
 
+    def head(self, rows):
+        """
+        :param rows: LIST of (label, value) printed under the version line, e.g. ("tests", "5 suites, 13 tests")
+        :return: LIST of lines - the header tj run and tj audit start with
+        """
+        dot = self.style(" · ", "dim")
+        lines = ["{} {}{}Python {}{}{}".format(self.style("Test Junkie", "bold"), test_junkie.__version__, dot,
+                                              "{}.{}.{}".format(*sys.version_info[:3]), dot, _system())]
+        lines.extend("  {} {}".format(self.style(label.ljust(8), "dim"), value) for label, value in rows)
+        lines.append("")
+        return lines
+
+    def found(self, sources, suites, tests, seconds=None):
+        """
+        :return: STRING, the header's "tests" value: where, how many suites and tests, how long the scan took
+        """
+        dot = self.style(" · ", "dim")
+        value = ("{}{}".format(", ".join(sources), dot) if sources else "") + "{} suite{}, {} test{}".format(
+            self.style(suites, "bold"), "" if suites == 1 else "s", self.style(tests, "bold"), "" if tests == 1 else "s")
+        if seconds is not None:
+            value += dot + self.style("found in {:0.2f}s".format(seconds), "dim")
+        return value
+
     def __header(self):
         settings = self.__settings
         dot = self.style(" · ", "dim")
-        system = _system()
-        lines = ["{} {}{}Python {}{}{}".format(self.style("Test Junkie", "bold"), test_junkie.__version__, dot,
-                                              "{}.{}.{}".format(*sys.version_info[:3]), dot, system)]
+        rows = []
 
         def row(label, value):
-            lines.append("  {} {}".format(self.style(label.ljust(8), "dim"), value))
+            rows.append((label, value))
 
-        suites = len(self.__all)
-        tests = sum(p.expected for p in self.__all)
-        found = "{} suite{}, {} test{}".format(self.style(suites, "bold"), "" if suites == 1 else "s",
-                                               self.style(tests, "bold"), "" if tests == 1 else "s")
-        sources = self.__cli.get("sources")
-        value = ("{}{}".format(", ".join(sources), dot) if sources else "") + found
-        if self.__cli.get("scan_seconds") is not None:
-            value += dot + self.style("found in {:0.2f}s".format(self.__cli["scan_seconds"]), "dim")
-        row("tests", value)
+        row("tests", self.found(self.__cli.get("sources"), len(self.__all), sum(p.expected for p in self.__all),
+                                self.__cli.get("scan_seconds")))
         suite_threads, test_threads = settings.suite_thread_limit or 1, settings.test_thread_limit or 1
         if suite_threads > 1 or test_threads > 1:
             mode = "parallel{}{} suite thread{}{}{} test thread{}".format(
@@ -695,8 +722,14 @@ class Console(object):
                 filters.append("{} {}".format(key, ", ".join(str(tag) for tag in tags[key])))
         if filters:
             row("filters", dot.join(filters))
-        lines.append("")
-        return lines
+        saved = dict(self.__cli.get("from_config") or {})
+        saved.update(settings.from_config)
+        if saved and settings.config is not None:
+            # a saved config changed this run - say so, where it is, and what it set
+            row("config", self.style(settings.config.path, "dim"))
+            row("", dot.join("{} {}".format(name, self.style(_setting_value(value), "bold"))
+                             for name, value in sorted(saved.items())))
+        return self.head(rows)
 
     def suite_started(self, suite):
         with self.__lock:

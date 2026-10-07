@@ -9,6 +9,11 @@
 - Fixed Ctrl+C being ignored on Windows until the running test threads finished
 - `Runner.cancel()` now also stops retries of a test that is already running
 - A suite that is skipped, ignored or cancelled as a whole counts its tests in the summary. A suite ignored as a whole (e.g. bad suite parameters) now makes `tj run` exit 1
+- New `tj audit` output: a block per suite/owner/feature/component/tag with its share of all tests, missing metadata marked, and a Gaps section. `--by-features` and `--by-components` now work, and filters list the matching tests
+- New `tj config` output: `show --all` groups the settings, `update` shows old and new values and how to undo, `restore` shows what was cleared
+- `tj run` shows when a saved config is used, where it is and which settings it applied
+- `-p` / `--per-test` and `--no-capture` can be saved with `tj config update`
+- `tj config` and `tj audit` errors say what to type instead and exit with code 120 (`tj config update`, `tj config show` and `tj audit` with nothing to do used to exit 0); `tj config show` with no options now asks which settings instead of printing the whole file
 
 ## 0.9a5
 - Fixed `monitor_resources=True` leaving a `.resources_*` temp file behind after short runs: the monitor thread could re-create it after cleanup

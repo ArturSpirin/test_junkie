@@ -130,11 +130,8 @@ usage: tj audit [COMMAND] [OPTIONS]
             args = parser.parse_args(sys.argv[2:])
             command = args.command
             if command not in ["suites", "features", "components", "tags", "owners"]:
-                print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
-                    status=CliUtils.format_color_string(value="ERROR", color="red"),
-                    command=command))
-                parser.print_help()
-                exit(120)
+                CliUtils.error("'{}' is not an audit view. Use one of: suites, features, components, tags, owners"
+                               .format(command), "tj audit -h lists every option.")
             else:
                 if args.verbose:
                     from test_junkie.debugger import LogJunkie
@@ -144,13 +141,13 @@ usage: tj audit [COMMAND] [OPTIONS]
                 tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
                                guess_root=args.guess_root)
                 tj.scan()
-                aggregator = CliAudit(suites=tj.suites, args=args)
+                aggregator = CliAudit(suites=tj.suites, args=args, sources=tj.sources, scan_seconds=tj.scan_seconds)
                 aggregator.aggregate()
                 aggregator.print_results()
                 return
-        else:
-            print("[{status}]\tDude, what do you want to audit?".format(
-                status=CliUtils.format_color_string(value="ERROR", color="red")))
+        elif len(sys.argv) == 2:
+            CliUtils.error("Which view? e.g. tj audit suites, or tj audit owners --no-owners",
+                           "Views: suites, features, components, tags, owners. tj audit -h lists every option.")
         parser.print_help()
 
     def config(self):
@@ -172,15 +169,12 @@ Use: tj config COMMAND -h to display COMMAND specific help
                 if command in ["show", "update", "restore"]:
                     from test_junkie.cli.cli_config import CliConfig
                     return CliConfig(CliConstants.TJ_CONFIG_NAME, command, sys.argv)
-                elif command not in ["-h"]:
-                    print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
-                          status=CliUtils.format_color_string(value="ERROR", color="red"),
-                          command=command))
-                    parser.print_help()
-                    exit(120)
+                elif command not in ["-h", "--help"]:
+                    CliUtils.error("'{}' is not a config command. Use one of: show, update, restore".format(command),
+                                   "tj config -h explains each one.")
             else:
-                print("[{status}]\tDude, what do you want to do with the config?".format(
-                      status=CliUtils.format_color_string(value="ERROR", color="red")))
+                CliUtils.error("Which config command? e.g. tj config show --all, or tj config update -s tests",
+                               "Commands: show, update, restore. tj config -h explains each one.")
             parser.print_help()
         except SystemExit:
             raise  # was swallowed here, so a failed `tj config update` exited 0
@@ -354,7 +348,11 @@ class CliUtils:
                             help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
                             .format(link=DocumentationLinks.TAGS))
         parser.add_argument("-q", "--quiet", action="store_true", default=False,
-                            help="Suppress all standard output from tests")
+                            help="Only print the problems and the result line")
+        parser.add_argument("-p", "--per-test", action="store_true", default=False,
+                            help="Print one line per test instead of a progress bar per suite")
+        parser.add_argument("--no-capture", action="store_true", default=False,
+                            help="Show what tests print and log as it happens")
         parser.add_argument("--code-cov", action="store_true", default=False,
                             help="Measure code coverage")
         parser.add_argument("--cov-rcfile", action="store_true", default=False,
@@ -388,6 +386,16 @@ class CliUtils:
         else:
             print(trace)
         print(Style.RESET_ALL)
+
+    @staticmethod
+    def error(message, hint, code=120):
+        """
+        Prints an ERROR line with what to do instead, the way tj run, audit and config report errors, then exits
+        """
+        from test_junkie.console import Console
+        console = Console(None, mode="report")
+        console.emit(["{}  {}".format(console.badge("ERROR", "err"), message), "         " + console.style(hint, "dim")])
+        exit(code)
 
     @staticmethod
     def format_bold_string(value):

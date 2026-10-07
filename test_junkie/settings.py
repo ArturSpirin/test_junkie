@@ -31,6 +31,7 @@ class Settings:
         self.kwargs.update(run_kwargs)
 
         self.config = None
+        self.from_config = {}  # setting -> value, for the settings this run took from the saved config
         if self.kwargs.get("config", None) is not None:
             self.config = Config(config_name=self.kwargs["config"])
 
@@ -95,6 +96,8 @@ class Settings:
                 if value is not Undefined:
                     value = Config.parse(value)
                     source = "CONFIG @ {}".format(self.config.path)
+                    if value is not None:
+                        self.from_config[key] = value
 
         LogJunkie.debug("Setting: {setting} Source: {source}".format(setting=key, source=source))
         # if value is still __undefined__, will return default value
@@ -210,7 +213,10 @@ class Settings:
         False shows what tests print and log live instead of only for the ones that didn't pass (tj run --no-capture)
         """
         if self.__capture is Undefined:
-            self.__capture = self.__get_value(key="capture", default=Settings.__DEFAULT_CAPTURE)
+            self.__capture = self.__get_value(key="capture", default=Undefined)
+            if self.__capture is Undefined:  # tj config update --no-capture saves it as no_capture
+                no_capture = self.__get_value(key="no_capture", default=None)
+                self.__capture = Settings.__DEFAULT_CAPTURE if no_capture is None else not no_capture
         return self.__capture
 
     @property

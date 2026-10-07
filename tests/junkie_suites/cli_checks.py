@@ -106,7 +106,7 @@ UNRESOLVABLE_IMPORT = """import module_that_does_not_exist_tj
 """ + PASSING_SUITE
 
 
-def run_cli(*argv, home=None, cwd=None, home_files=None):
+def run_cli(*argv, home=None, cwd=None, home_files=None, keep_home=False):
     """
     :param home: TEST_JUNKIE_HOME to use - defaults to a fresh temp dir (may point at a dir that doesn't exist yet)
     :param cwd: run with this working directory
@@ -138,7 +138,8 @@ def run_cli(*argv, home=None, cwd=None, home_files=None):
             del os.environ[CliConstants.HOME_ENV_VAR]
         else:
             os.environ[CliConstants.HOME_ENV_VAR] = previous_home
-        shutil.rmtree(home, ignore_errors=True)
+        if not keep_home:
+            shutil.rmtree(home, ignore_errors=True)
     return code, _ANSI.sub("", out.getvalue())
 
 
@@ -152,7 +153,7 @@ def _write(source, name):
 def _audited_suites(*flags):
     code, out = run_cli("audit", "suites", "-s", _write(AUDIT_SUITES, "audit_suites.py"), *flags)
     assert code is None, out
-    return sorted(set(re.findall(r"Suite: (Audit\w+)", out)))
+    return sorted(set(re.findall(r"^(Audit\w+) +\d+ tests?", out, re.M)))  # block titles
 
 
 def audit_lists_every_suite():
@@ -178,12 +179,15 @@ def audit_only_covers_the_requested_suites():
 
 def audit_by_feature_and_verbose():
     code, out = run_cli("audit", "features", "-v", "-s", _write(AUDIT_SUITES, "audit_suites.py"))
-    assert code is None and "Feature: Billing" in out, out
+    assert code is None and re.search(r"^Billing +1 test ", out, re.M), out
+    assert re.search(r"^no feature +2 tests", out, re.M), out  # the suites without a feature get their own block
 
 
 def audit_unknown_view_is_rejected():
     code, out = run_cli("audit", "nonsense", "-s", _write(AUDIT_SUITES, "audit_suites.py"))
-    assert code == 120 and "is not a test-junkie command" in out, out
+    assert code == 120 and "'nonsense' is not an audit view" in out, out
+    code, out = run_cli("audit")
+    assert code == 120 and "Which view?" in out, out
 
 
 def audit_and_run_without_sources_explain_what_is_missing():
@@ -194,7 +198,7 @@ def audit_and_run_without_sources_explain_what_is_missing():
 
 def audit_reports_when_nothing_matches():
     code, out = run_cli("audit", "suites", "-s", _write(AUDIT_SUITES, "audit_suites.py"), "--features", "Nope")
-    assert code is None and "Nothing matches your search criteria" in out, out
+    assert code is None and "Nothing matches. 3 tests were scanned, none of them matches: features Nope" in out, out
 
 
 def run_exit_codes():
@@ -229,16 +233,76 @@ def run_import_error_and_guess_root():
 
 
 def config_commands():
-    code, out = run_cli("config", "update")
-    assert "What do you want to update?" in out, out
-    code, out = run_cli("config", "restore")
-    assert "What do you want to restore?" in out, out
+    for command, text in ((("config", "update"), "Nothing to update"), (("config", "restore"), "Nothing to restore"),
+                          (("config", "show"), "Which settings?"), (("config",), "Which config command?"),
+                          (("config", "nonsense"), "'nonsense' is not a config command"),
+                          (("config", "update", "-T", "four"), 'needs a whole number, got "four"')):
+        code, out = run_cli(*command)
+        assert code == 120 and "[ERROR]" in out and text in out, (command, out)
     code, out = run_cli("config", "show", "--all")
-    assert "Config is located at:" in out and "[runtime]" in out, out
+    assert code is None and "Config  " in out and "Discovery" in out and "0 of 20 settings saved" in out, out
     code, out = run_cli("config", "show", "--sources")
-    assert "sources=None" in out, out
-    code, out = run_cli("config", "nonsense")
-    assert "is not a test-junkie command" in out or code == 120, out
+    assert code is None and re.search(r"^  sources +\.$", out, re.M), out  # unset: a dot (ASCII for ·)
+
+
+def config_update_show_restore():
+    home = tempfile.mkdtemp()
+    code, out = run_cli("config", "update", "-s", "tests", "-T", "4", home=home, keep_home=True)
+    assert code is None and "[SAVED]  2 settings" in out, out
+    assert re.search(r"^  test_multithreading_limit +\. +-> +4$", out, re.M), out  # was unset
+    assert "Undo: tj config restore -T -s" in out or "Undo: tj config restore -s -T" in out, out
+    code, out = run_cli("config", "update", "-T", "2", home=home, keep_home=True)
+    assert re.search(r"^  test_multithreading_limit +4 +-> +2$", out, re.M), out
+    code, out = run_cli("config", "show", "--all", home=home, keep_home=True)
+    assert "2 of 20 settings saved" in out and re.search(r"^  sources +tests$", out, re.M), out
+    code, out = run_cli("config", "restore", "-T", home=home, keep_home=True)
+    assert "[RESTORED]  1 setting to its default" in out and re.search(
+        r"^  test_multithreading_limit +2 +-> +default 1$", out, re.M), out
+    code, out = run_cli("config", "restore", "--all", home=home, keep_home=True)
+    assert "all 20 settings to their defaults . 1 had values" in out and "sources" in out, out
+    # tj config update --no-capture is read back by tj run
+    code, out = run_cli("config", "update", "--no-capture", home=home, keep_home=True)
+    from test_junkie.settings import Settings
+    previous = os.environ.get(CliConstants.HOME_ENV_VAR)
+    os.environ[CliConstants.HOME_ENV_VAR] = home
+    try:
+        assert Settings({"config": CliConstants.TJ_CONFIG_NAME}, {}).capture is False
+    finally:
+        if previous is None:
+            del os.environ[CliConstants.HOME_ENV_VAR]
+        else:
+            os.environ[CliConstants.HOME_ENV_VAR] = previous
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def run_shows_the_saved_config_it_used():
+    home = tempfile.mkdtemp()
+    directory = _write(PASSING_SUITE, "passing_suite.py")
+    run_cli("config", "update", "-T", "2", "-k", "nothing_has_this_tag", home=home, keep_home=True)
+    code, out = run_cli("run", "-s", directory, home=home, keep_home=True)
+    lines = out.splitlines()
+    config = [index for index, line in enumerate(lines) if line.startswith("  config   ")]
+    assert config and home in lines[config[0]], out
+    assert "run_on_match_any nothing_has_this_tag" in lines[config[0] + 1] and \
+        "test_multithreading_limit 2" in lines[config[0] + 1], out
+    # a setting passed on the command line wins, so it isn't listed as coming from the config
+    code, out = run_cli("run", "-s", directory, "-T", "1", "-k", "x", home=home)
+    assert "  config   " not in out, out
+    code, out = run_cli("run", "-s", directory)  # nothing saved: no config row
+    assert "  config   " not in out, out
+
+
+def audit_views_gaps_and_listing():
+    directory = _write(AUDIT_SUITES, "audit_suites.py")
+    code, out = run_cli("audit", "owners", "-s", directory)
+    assert code is None and re.search(r"^bob +1 test . +33%", out, re.M), out
+    assert re.search(r"^no owner +2 tests", out, re.M), out  # untested-by-anyone gets its own block, last
+    assert "Gaps 4" in out and "tj audit owners --no-owners" in out, out
+    assert "3 tests . 3 suites . 1 feature . 1 owner . 1 component . 1 tag" in out, out
+    code, out = run_cli("audit", "suites", "-s", directory, "--no-owners")
+    assert "filters  no owner" in out and re.search(r"^  tests +plain$", out, re.M), out  # filters list the tests
+    code, out = run_cli("audit", "components", "-s", directory, "--by-features")
+    assert re.search(r"^  feature +Billing 1$", out, re.M) and "audit    components . by features" in out, out
 
 
 def unknown_command_and_version():
@@ -310,7 +374,7 @@ def same_named_files_and_stdlib_names():
         html = doc.read()
     assert "from_a" in html and "from_b" in html
     code, out = run_cli("audit", "suites", "-s", directory, cwd=directory)
-    audited = re.findall(r"Suite: (\S*SameNameSuite)", out)
+    audited = re.findall(r"^(\S*SameNameSuite) +\d+ test", out, re.M)
     assert code is None and len(set(audited)) == 2, out  # listed separately, as module.SameNameSuite
     shutil.rmtree(directory, ignore_errors=True)
 
@@ -353,14 +417,14 @@ def config_update_that_cannot_be_saved_exits_120():
 def config_dir_is_created_on_first_use():
     home = os.path.join(tempfile.mkdtemp(), "not", "created", "yet")
     code, out = run_cli("config", "show", "--all", home=home)
-    assert code is None and "Config is located at:" in out, out
+    assert code is None and "Config  " in out and "Discovery" in out, out
 
 
 def config_values_with_percent_signs():
     # "%" used to be treated as configparser interpolation - saving a report path like this failed
     home = tempfile.mkdtemp()
     code, out = run_cli("config", "update", "--html_report", "reports/100%/r.html", home=home)
-    assert code is None and "[OK]\thtml_report=reports/100%/r.html" in out, out
+    assert code is None and re.search(r"^  html_report +\. +-> +reports/100%/r.html$", out, re.M), out
 
 
 def broken_config_fails_cleanly():
@@ -392,7 +456,7 @@ def config_helpers():
     assert "custom trace text" in out.getvalue()
 
 
-CHECKS = [audit_lists_every_suite, audit_no_flags_filter_out_suites_that_have_them,
+CHECKS = [audit_lists_every_suite, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
           audit_no_test_meta_checks_the_tests_meta, audit_only_covers_the_requested_suites, audit_by_feature_and_verbose, audit_unknown_view_is_rejected,
           audit_and_run_without_sources_explain_what_is_missing, audit_reports_when_nothing_matches,
           run_exit_codes, run_with_missing_config_file, run_import_error_and_guess_root, config_commands,

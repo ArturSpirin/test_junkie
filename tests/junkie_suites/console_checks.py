@@ -246,7 +246,7 @@ _INTERRUPTED = textwrap.dedent("""
 
 def _interrupted(times, threads):
     script = _INTERRUPTED.format(root=ROOT, times=times, threads=threads)
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", TJ_NO_LIVE="1")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", TJ_NO_LIVE="1", NO_COLOR="1")  # CI turns colors on
     process = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, encoding="utf-8",
                              env=env, timeout=60)
     return process.returncode, process.stdout + process.stderr

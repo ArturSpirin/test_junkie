@@ -138,6 +138,8 @@ quiet=None
 code_cov=None
 cov_rcfile=None
 guess_root=None
+per_test=None
+no_capture=None
 """
 
 

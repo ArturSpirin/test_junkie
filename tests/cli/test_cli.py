@@ -1,5 +1,6 @@
 import os
 import pprint
+import re
 
 from test_junkie.constants import CliConstants
 from test_junkie.runner import Runner
@@ -67,6 +68,13 @@ def test_incomplete_inputs():
                 "Command: {} produced exception. {}".format(cmd, output)
 
 
+def _plain(output):
+    """
+    Cmd.run() lines are the repr of the raw bytes: strip color codes (on in CI, where GITHUB_ACTIONS is set)
+    """
+    return [re.sub(r"\\x1b\[[0-9;]*m", "", line) for line in output]
+
+
 def test_config_update():
 
     commands = [['python3', EXE, 'config', 'update', '--test_multithreading_limit', '10'],
@@ -83,15 +91,15 @@ def test_config_update():
                 ['python3', EXE, 'config', 'update', '--skip_on_match_any', '4000'],
                 ]
     for cmd in commands:
-        output = Cmd.run(cmd)
-
+        output = _plain(Cmd.run(cmd))
         prop = cmd[4].replace("--", "")
-        value = cmd[5] if len(cmd) == 6 else "True"
-        assert "Traceback (most recent call last)" not in output[-2], \
-            "Command: {} produced exception. {}".format(cmd, output)
-        assert "OK" in output[-2]
-        assert prop in output[-2], "Command: {} did not update property: {}".format(cmd, prop)
-        assert value in output[-2], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
+        value = cmd[5] if len(cmd) == 6 else "on"
+        for line in output:
+            assert "Traceback (most recent call last)" not in line, \
+                "Command: {} produced exception. {}".format(cmd, output)
+        assert "SAVED" in output[0], output
+        assert any(prop in line and line.rstrip("'").endswith(value) for line in output), \
+            "Command: {} did not update property: {} to value: {}. {}".format(cmd, prop, value, output)
 
 
 def test_config_restore():
@@ -110,126 +118,81 @@ def test_config_restore():
                 ['python3', EXE, 'config', 'restore', '--skip_on_match_any'],
                 ]
     for cmd in commands:
-        output = Cmd.run(cmd)
+        output = _plain(Cmd.run(cmd))
         prop = cmd[4].replace("--", "")
-        value = "None"
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-        assert "OK" in output[0]
-        assert prop in output[0], "Command: {} did not update property: {}".format(cmd, prop)
-        assert value in output[0], "Command: {} did not update property: {} to value: {}".format(cmd, prop, value)
+        assert "RESTORED" in output[0] and "1 setting to its default" in output[0], output
+        assert any(prop in line for line in output[1:]), "Command: {} did not restore: {}".format(cmd, prop)
+
+
+def _blocks(output):
+    """
+    :return: DICT of block title -> number of tests, for a tj audit view
+    """
+    blocks = {}
+    for line in output:
+        match = re.match(r"^(?:b')?(\S.*?) {2,}(\d+) tests? ", line)
+        if match and not match.group(1).startswith("Test Junkie"):
+            blocks[match.group(1)] = int(match.group(2))
+    return blocks
+
+
+def _audit(cmd):
+    output = _plain(Cmd.run(cmd))
+    for line in output:
+        assert "Traceback (most recent call last)" not in line, "Command: {} produced exception. {}".format(cmd, output)
+        assert "ERROR" not in line, output
+    return output, _blocks(output)
 
 
 def test_audit_by_owner():
 
     Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
-    commands = [['python3', EXE, 'audit', 'owners', '-s', TESTS],
-                ['python3', EXE, 'audit', 'owners', '-s', TESTS, '-o', 'Mike']]
-    for cmd in commands:
-        output = Cmd.run(cmd)
-        assert_not_in = ["Tag:", "Component:", "Owners:", "Feature:", "Suite:"]
-        if "Mike" in cmd:
-            assert_not_in.append("Owner: George")
-            assert_not_in.append("Owner: Victor")
-            assert_not_in.append("None")
-        not_validated = ["Owner:", "Tests:", "Components:", "Tags:", "Features:", "Suites:"]
-        for line in output:
-            assert "Traceback (most recent call last)" not in line, \
-                "Command: {} produced exception. {}".format(cmd, output)
-            assert "ERROR" not in line
-            for item in assert_not_in:
-                assert item not in line
-            for validate in list(not_validated):
-                if validate in line:
-                    not_validated.remove(validate)
-        assert len(not_validated) == 0
+    output, blocks = _audit(['python3', EXE, 'audit', 'owners', '-s', TESTS])
+    assert blocks.get("Victor") == 4 and blocks.get("Mike") == 7 and blocks.get("George") == 5, (blocks, output)
+    for row in ("suites", "features", "components", "tags"):
+        assert any(line.startswith("  " + row + " ") for line in output), (row, output)
+    output, blocks = _audit(['python3', EXE, 'audit', 'owners', '-s', TESTS, '-o', 'Mike'])
+    assert list(blocks) == ["Mike"], (blocks, output)
+    assert any("filters  owners Mike" in line for line in output), output
+    assert any(line.startswith("  tests ") for line in output), output  # a filter lists the tests
 
 
 def test_audit_by_suite():
 
     Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
-    commands = [['python3', EXE, 'audit', 'suites', '-s', TESTS],
-                ['python3', EXE, 'audit', 'suites', '-s', TESTS, '-o', 'Mike']]
-    for cmd in commands:
-        output = Cmd.run(cmd)
-        assert_not_in = ["Tag:", "Owner:", "Component:", "Suites:"]
-        if "Mike" in cmd:
-            assert_not_in.append("Victor")
-            assert_not_in.append("George")
-            assert_not_in.append("None")
-            assert_not_in.append("Suites:")
-        not_validated = ["Mike", "Owners:", "Feature:", "Components:", "Tags:", "Suite:"]
-        for line in output:
-            assert "Traceback (most recent call last)" not in line, \
-                "Command: {} produced exception. {}".format(cmd, output)
-            assert "ERROR" not in line
-            for item in assert_not_in:
-                assert item not in line
-            for validate in list(not_validated):
-                if validate in line:
-                    not_validated.remove(validate)
-        assert len(not_validated) == 0
+    output, blocks = _audit(['python3', EXE, 'audit', 'suites', '-s', TESTS])
+    assert blocks == {"AuthApiSuite": 6, "ShoppingCartSuite": 5, "NewProductsSuite": 5}, (blocks, output)
+    output, blocks = _audit(['python3', EXE, 'audit', 'suites', '-s', TESTS, '-o', 'Mike'])
+    assert "Victor" not in " ".join(output) and "George" not in " ".join(output), output
+    assert any(line.startswith("  owners ") and "Mike" in line for line in output), output
 
 
 def test_audit_by_tags():
     Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
-    commands = [['python3', EXE, 'audit', 'tags', '-s', TESTS],
-                ['python3', EXE, 'audit', 'tags', '-s', TESTS, '-l', 'sso']]
-    for cmd in commands:
-        output = Cmd.run(cmd)
-        assert_not_in = ["Tags:", "Owner:", "Component:", "Suite:", "Feature:"]
-        not_validated = ["Tag:", "Mike", "Owners:", "Features:", "Suites:", "Components:", "API (2)", "2 of 16"]
-        for line in output:
-            assert "Traceback (most recent call last)" not in line, \
-                "Command: {} produced exception. {}".format(cmd, output)
-            assert "ERROR" not in line
-            for item in assert_not_in:
-                assert item not in line
-            for validate in list(not_validated):
-                if validate in line:
-                    not_validated.remove(validate)
-        assert len(not_validated) == 0
+    output, blocks = _audit(['python3', EXE, 'audit', 'tags', '-s', TESTS])
+    assert blocks.get("api") == 6 and blocks.get("sso") == 2, (blocks, output)
+    output, blocks = _audit(['python3', EXE, 'audit', 'tags', '-s', TESTS, '-l', 'sso'])
+    assert blocks.get("sso") == 2 and any("2 tests" in line and "sso" in line for line in output), (blocks, output)
 
 
 def test_audit_by_features():
     Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
-    commands = [['python3', EXE, 'audit', 'features', '-s', TESTS],
-                ['python3', EXE, 'audit', 'features', '-s', TESTS, '-f', 'Store']]
-    for cmd in commands:
-        output = Cmd.run(cmd)
-        assert_not_in = ["Tag:", "Owner:", "Component:", "Suite:", "Features:"]
-        not_validated = ["Feature:", "Mike (5)", "George (5)", "Owners:", "Tags:", "Suites:", "Components:"]
-        for line in output:
-            assert "Traceback (most recent call last)" not in line, \
-                "Command: {} produced exception. {}".format(cmd, output)
-            assert "ERROR" not in line
-            for item in assert_not_in:
-                assert item not in line
-            for validate in list(not_validated):
-                if validate in line:
-                    not_validated.remove(validate)
-        assert len(not_validated) == 0
+    output, blocks = _audit(['python3', EXE, 'audit', 'features', '-s', TESTS])
+    assert any(line.startswith("  owners ") and "Mike 5" in line for line in output), output
+    output, blocks = _audit(['python3', EXE, 'audit', 'features', '-s', TESTS, '-f', 'Store'])
+    assert list(blocks) == ["Store"], (blocks, output)
+    assert any("Mike 5" in line for line in output) and any("George 5" in line for line in output), output
 
 
 def test_audit_by_components():
     Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
-    commands = [['python3', EXE, 'audit', 'components', '-s', TESTS],
-                ['python3', EXE, 'audit', 'components', '-s', TESTS, '-c', 'Admin']]
-    for cmd in commands:
-        output = Cmd.run(cmd)
-        assert_not_in = ["Tag:", "Owner:", "Components:", "Suite:", "Feature:"]
-        not_validated = ["Component:", "Mike (5)", "Owners:", "Tags:", "Suites:", "Features:"]
-        for line in output:
-            assert "Traceback (most recent call last)" not in line, \
-                "Command: {} produced exception. {}".format(cmd, output)
-            assert "ERROR" not in line
-            for item in assert_not_in:
-                assert item not in line
-            for validate in list(not_validated):
-                if validate in line:
-                    not_validated.remove(validate)
-        assert len(not_validated) == 0
+    output, blocks = _audit(['python3', EXE, 'audit', 'components', '-s', TESTS])
+    assert blocks.get("Auth") == 6 and blocks.get("Admin") == 5, (blocks, output)
+    output, blocks = _audit(['python3', EXE, 'audit', 'components', '-s', TESTS, '-c', 'Admin'])
+    assert list(blocks) == ["Admin"], (blocks, output)
 
 
 def test_bad_inputs():
@@ -257,7 +220,7 @@ def test_config_restore_all():
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-        assert "Config restored to default settings!" in output[-1], "Wrong message: {}".format(output[-1])
+        assert "RESTORED" in output[0] and "all 20 settings to their defaults" in output[0], output
 
 
 def test_config_show_all():
@@ -286,6 +249,7 @@ def validate_results(passed, total, output, cmd):
     Checks the summary's Total row and test count, or with -q the verdict line
     """
     quiet = "-q" in cmd
+    output = _plain(output)
     if quiet:
         ok = any("{} passed".format(passed) in line for line in output)
     else:

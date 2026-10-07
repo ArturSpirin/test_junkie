@@ -8,7 +8,7 @@ class CliAudit:
 
     __SECTIONS = ["owners", "features", "suites", "components", "tags"]
 
-    def __init__(self, suites, args):
+    def __init__(self, suites, args, sources=None, scan_seconds=None):
 
         self.aggregated_data = {
                 "absolute_test_count": 0,  # parameterized tests will be treated as 1 test
@@ -26,6 +26,10 @@ class CliAudit:
         self.suites = suites
         self.exe_roster = Builder.get_execution_roster()
         self.args = args
+        self.sources = sources
+        self.scan_seconds = scan_seconds
+        self.records = []  # one per audited test: what print_results() builds every view from
+        self.scanned_tests = 0
 
     def aggregate(self):
 
@@ -100,6 +104,8 @@ class CliAudit:
 
         for suite in self.suites:
             suite_object = self.exe_roster.get(suite, None)
+            if suite_object is not None:
+                self.scanned_tests += len(suite_object.get_test_objects())
             if suite_object is None or not is_relevant(_suite=suite_object):
                 continue
 
@@ -146,6 +152,10 @@ class CliAudit:
             suite_key = suite_object.get_class_name() if names[suite.__name__] == 1 else \
                 "{}.{}".format(suite_object.get_class_module(), suite_object.get_class_name())
             self.aggregated_data["context_by_suites"].update({suite_key: suite_context})
+            for test in tests:
+                self.records.append({"suites": suite_key, "features": feature, "owners": test.get_owner(),
+                                     "components": test.get_component(), "tags": list(test.get_tags()),
+                                     "test": test.get_function_name()})
 
     @staticmethod
     def process_property(data_context, prop, key):
@@ -200,69 +210,137 @@ class CliAudit:
                 value = test.get_component() if context == "components" else test.get_owner()
                 update_context_template(value, context)
 
+    # what each view's blocks list under the block's name
+    __ROWS = {"suites": ["features", "owners", "components", "tags"],
+              "owners": ["suites", "features", "components", "tags"],
+              "features": ["suites", "owners", "components", "tags"],
+              "components": ["suites", "features", "owners", "tags"],
+              "tags": ["suites", "features", "owners", "components"]}
+    __SINGULAR = {"suites": "suite", "features": "feature", "owners": "owner", "components": "component", "tags": "tag"}
+    __FLAGS = {"owners": "--no-owners", "features": "--no-features", "components": "--no-components",
+               "tags": "--no-tags"}
+
+    def __filters(self):
+        """
+        :return: LIST of the filters this audit ran with, as the header shows them
+        """
+        args, filters = self.args, []
+        for flag, label in (("no_owners", "no owner"), ("no_features", "no feature"), ("no_components", "no component"),
+                            ("no_tags", "no tags"), ("no_rules", "no rules"), ("no_listeners", "no listener"),
+                            ("no_suite_retries", "no suite retries"), ("no_test_retries", "no test retries"),
+                            ("no_suite_meta", "no suite meta"), ("no_test_meta", "no test meta")):
+            if getattr(args, flag, False):
+                filters.append(label)
+        for name in ("owners", "features", "components", "tags"):
+            value = getattr(args, name, Undefined)
+            if value not in (Undefined, None):
+                filters.append("{} {}".format(name, ", ".join(str(item) for item in value)))
+        if getattr(args, "suites", None):
+            filters.append("suites {}".format(", ".join(args.suites)))
+        return filters
+
     def print_results(self):
 
-        from test_junkie.cli.cli import CliUtils
-        match_found = False
-        output = []
-        for data_context in CliAudit.__SECTIONS:
-            if data_context == self.args.command:
-                data = self.aggregated_data["context_by_{context}".format(context=data_context)]
-                if data:
-                    section = []
-                    _sorted_data = sorted(data.items(), key=lambda x: x[1]["total_tests"])
-                    _sorted_data.reverse()
-                    _sorted_data = collections.OrderedDict(_sorted_data)
-                    for primary_key, context in _sorted_data.items():
-                        details = []
-                        if data_context == "suites":
-                            details.append("\nSuite: {value} Feature: {feature}"
-                                           .format(value=CliUtils.format_bold_string(primary_key),
-                                                   feature=CliUtils.format_bold_string(context["feature"])))
-                        else:
-                            parent = "".join(list(data_context)[:-1]).capitalize()  # exp: features > Feature
-                            if primary_key is None:
-                                primary_key = CliUtils.format_color_string(primary_key, "red")
-                            else:
-                                primary_key = CliUtils.format_bold_string(primary_key)
-                            details.append("\n{parent}: {value}".format(parent=parent, value=primary_key))
+        from test_junkie.console import Console
+        console = Console(None, mode="report")
+        style = console.style
+        dot = style(" · ", "dim")
+        view = self.args.command
+        records = self.records
+        total = len(records)
+        filters = self.__filters()
+        rows = [("tests", console.found(self.sources, len(set(r["suites"] for r in records)) if records else
+                                        len(self.suites), total if records else self.scanned_tests,
+                                        self.scan_seconds)),
+                ("audit", view + (dot + "by features" if self.args.by_features else "") +
+                 (dot + "by components" if self.args.by_components else ""))]
+        if filters:
+            rows.append(("filters", dot.join(filters)))
+        lines = console.head(rows)
 
-                        from test_junkie.metrics import Aggregator
-                        details.append("\t- Tests:\t{total} of {absolute} total tests ({percentage}%)"
-                                       .format(total=context["total_tests"],
-                                               absolute=self.aggregated_data["absolute_test_count"],
-                                               percentage=Aggregator.percentage(
-                                                   self.aggregated_data["absolute_test_count"],
-                                                   context["total_tests"])))
+        if not records:
+            lines.append("{} {}".format(style("Nothing matches.", "skip"), "{} test{} scanned{}.".format(
+                self.scanned_tests, " was" if self.scanned_tests == 1 else "s were",
+                ", none of them matches: " + ", ".join(filters) if filters else "")))
+            console.emit(lines)
+            return
 
-                        for i in CliAudit.__SECTIONS:
-                            if i in context:
-                                msg = "\t"
-                                counter = 0
-                                _sorted_context = sorted(context[i].items(), key=lambda x: x[1])
-                                _sorted_context.reverse()
-                                _sorted_context = collections.OrderedDict(_sorted_context)
-                                for key, count in _sorted_context.items():
-                                    if counter > 0:
-                                        msg += "\n\t\t\t"
-                                    if key is None:
-                                        key = CliUtils.format_color_string(key, "red")
-                                    msg += "{} ({})".format(key, count)
-                                    counter += 1
-                                if len(msg) > 0:
-                                    details.append("\t- {i}: {msg}".format(i=i.capitalize(), msg=msg))
-                        if len(details) >= 5:
-                            section += details
-                    if len(section) > 1:
-                        output.append(section)
-                    break
+        def values(record, kind):
+            value = record[kind]
+            if kind == "tags":
+                return value or [None]
+            return [value]
 
-        for section in output:
-            if len(section) >= 5:
-                match_found = True
-                for msg in section:
-                    print(msg)
+        def counted(items, kind):
+            counts = collections.Counter(value for record in items for value in values(record, kind))
+            ordered = sorted(counts.items(), key=lambda item: (item[0] is None, -item[1], str(item[0])))
+            return dot.join("{} {}".format(style("none", "ign") if key is None else key, n) for key, n in ordered)
 
-        if not match_found:
-            print("[{status}] Nothing matches your search criteria!"
-                  .format(status=CliUtils.format_color_string("INFO", "blue")))
+        def bar(n, missing):
+            width = 16
+            filled = int(round(width * n / float(total)))
+            return "[{}{}]".format(style("|" * filled, "ign" if missing else "pass") if filled else "",
+                                   style("·" * (width - filled), "dim"))
+
+        blocks = collections.OrderedDict()
+        for record in records:
+            for key in values(record, view):
+                blocks.setdefault(key, []).append(record)
+        ordered = sorted(blocks.items(), key=lambda item: (item[0] is None, -len(item[1]), str(item[0])))
+        listing = bool(filters)  # with a filter the point is finding the tests, so list them
+        for key, items in ordered:
+            name = "no {}".format(self.__SINGULAR[view] if view != "tags" else "tags") if key is None else str(key)
+            title = style(name, "ign" if key is None else "bold")
+            share = "{}%".format(int(round(100.0 * len(items) / total)))
+            lines.append("{}{}{} test{}{}{}  {}".format(title, " " * max(2, 34 - len(name)), str(len(items)).rjust(3),
+                                                       "" if len(items) == 1 else "s", dot, share.rjust(4),
+                                                       bar(len(items), key is None)))
+            for kind in self.__ROWS[view]:
+                if (kind == "features" and self.args.by_features) or (kind == "components" and self.args.by_components):
+                    continue  # the breakdown below lists them
+                if view == "suites" and kind == "features":
+                    feature = items[0]["features"]
+                    lines.append("  {} {}".format(style("feature".ljust(12), "dim"),
+                                                  style("none", "ign") if feature is None else feature))
+                    continue
+                lines.append("  {} {}".format(style(kind.ljust(12), "dim"), counted(items, kind)))
+            for by, enabled in (("features", self.args.by_features), ("components", self.args.by_components)):
+                if not enabled or by == view:
+                    continue
+                groups = collections.OrderedDict()
+                for record in items:
+                    for value in values(record, by):
+                        groups.setdefault(value, []).append(record)
+                for value, group in sorted(groups.items(), key=lambda item: (item[0] is None, -len(item[1]))):
+                    label = style("none", "ign") if value is None else value
+                    lines.append("  {} {} {}".format(style(self.__SINGULAR[by].ljust(12), "dim"), label, len(group)))
+                    extra = [kind for kind in ("owners", "tags") if kind != view]
+                    lines.append("  {} {}".format(" " * 12, "   ".join(
+                        "{} {}".format(style(kind, "dim"), counted(group, kind)) for kind in extra)))
+            if listing:
+                names = ["{}.{}".format(r["suites"], r["test"]) if view != "suites" else r["test"] for r in items]
+                shown = dot.join(names[:10]) + (style(" … and {} more".format(len(names) - 10), "dim")
+                                                 if len(names) > 10 else "")
+                lines.append("  {} {}".format(style("tests".ljust(12), "dim"), shown))
+            lines.append("")
+
+        gaps = []
+        for kind in ("owners", "components", "tags", "features"):
+            missing = sum(1 for record in records if None in values(record, kind))
+            if missing and not getattr(self.args, "no_" + kind, False):
+                what = {"owners": "no owner", "components": "no component", "tags": "no tags",
+                        "features": "no feature"}[kind]
+                gaps.append("  {} {} {}{}".format(
+                    style("{} test{}".format(missing, "" if missing == 1 else "s").ljust(8), "ign"),
+                    ("has" if missing == 1 else "have").ljust(4), what.ljust(17),
+                    style("tj audit {} {}".format(view, self.__FLAGS[kind]), "dim")))
+        if gaps:
+            lines.extend([console.rule("Gaps", str(len(gaps))), ""] + gaps + [""])
+        lines.append(style("─" * 80, "dim"))
+        lines.append("")
+        summary = ["{} test{}".format(total, "" if total == 1 else "s")]
+        for kind in ("suites", "features", "owners", "components", "tags"):
+            distinct = set(value for record in records for value in values(record, kind) if value is not None)
+            summary.append("{} {}".format(len(distinct), kind if len(distinct) != 1 else self.__SINGULAR[kind]))
+        lines.append(dot.join(summary))
+        console.emit(lines)
