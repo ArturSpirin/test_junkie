@@ -232,6 +232,30 @@ def run_import_error_and_guess_root():
     sys.modules.pop("proj_helpers_tj", None)
 
 
+def guess_root_with_a_relative_source():
+    # with a relative -s (tj run -s suites --guess-root) the first guess was "suites" itself, and walking up from a
+    # relative path stopped there - so it gave up instead of trying the project root above it
+    project = tempfile.mkdtemp()
+    os.makedirs(os.path.join(project, "proj_rel_helpers_tj"))
+    with open(os.path.join(project, "proj_rel_helpers_tj", "__init__.py"), "w") as doc:
+        doc.write("VALUE = 1\n")
+    os.makedirs(os.path.join(project, "suites"))
+    with open(os.path.join(project, "suites", "needs_rel_root.py"), "w") as doc:
+        doc.write("from proj_rel_helpers_tj import VALUE\n" +
+                  PASSING_SUITE.replace("CliPassingSuite", "NeedsRelRootSuite"))
+    saved = list(sys.path)
+    # python -m pytest / python -m test_junkie put the working directory on sys.path, which would hide the bug
+    sys.path[:] = [entry for entry in sys.path if entry not in ("", ".")]
+    try:
+        code, out = run_cli("run", "-s", "suites", cwd=project)
+        assert code == 120 and "There is an import error" in out, out
+        code, out = run_cli("run", "-s", "suites", "--guess-root", cwd=project)
+        assert code is None and "1 suite, 1 test" in out and "PASSED" in out, out
+    finally:
+        sys.path[:] = saved
+        sys.modules.pop("proj_rel_helpers_tj", None)
+
+
 def config_commands():
     for command, text in ((("config", "update"), "Nothing to update"), (("config", "restore"), "Nothing to restore"),
                           (("config", "show"), "Which settings?"), (("config",), "Which config command?"),
@@ -456,7 +480,7 @@ def config_helpers():
     assert "custom trace text" in out.getvalue()
 
 
-CHECKS = [audit_lists_every_suite, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
+CHECKS = [audit_lists_every_suite, guess_root_with_a_relative_source, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
           audit_no_test_meta_checks_the_tests_meta, audit_only_covers_the_requested_suites, audit_by_feature_and_verbose, audit_unknown_view_is_rejected,
           audit_and_run_without_sources_explain_what_is_missing, audit_reports_when_nothing_matches,
           run_exit_codes, run_with_missing_config_file, run_import_error_and_guess_root, config_commands,

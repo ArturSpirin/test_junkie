@@ -13,6 +13,7 @@
 - New `tj config` output: `show --all` groups the settings, `update` shows old and new values and how to undo, `restore` shows what was cleared
 - `tj run` shows when a saved config is used, where it is and which settings it applied
 - `-p` / `--per-test` and `--no-capture` can be saved with `tj config update`
+- Fixed `--guess-root` giving up when the source path is relative (`tj run -s tests --guess-root`)
 - `tj config` and `tj audit` errors say what to type instead and exit with code 120 (`tj config update`, `tj config show` and `tj audit` with nothing to do used to exit 0); `tj config show` with no options now asks which settings instead of printing the whole file
 
 ## 0.9a5

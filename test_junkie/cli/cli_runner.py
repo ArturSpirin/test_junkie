@@ -162,7 +162,8 @@ class CliRunner:
             print("[{status}] Import error: {error}"
                   .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
                           error=error))
-            possibility = "{}".format(os.sep).join(path.split(os.sep)[:-1])
+            # absolute: walking up a relative path (-s suites) stopped at "suites" and never reached the project root
+            possibility = os.path.dirname(os.path.abspath(path))
             print("[{status}] Trying again with assumption that this is your project root: {assumed_root}"
                   .format(status=CliUtils.format_color_string(value="WARNING", color="yellow"),
                           assumed_root=CliUtils.format_color_string(value=possibility, color="yellow")))
