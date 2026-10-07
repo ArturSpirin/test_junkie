@@ -30,7 +30,7 @@ def test_help():
 
 def test_module_entry_point():
 
-    output = Cmd.run(['python3', '-m', 'test_junkie', 'version'])
+    output = _plain(Cmd.run(['python3', '-m', 'test_junkie', 'version']))  # colored in CI
     assert any("Test Junkie " in line for line in output), \
         "python -m test_junkie produced no output: {}".format(output)
 
