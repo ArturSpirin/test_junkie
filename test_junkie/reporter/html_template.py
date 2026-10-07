@@ -1,53 +1,22 @@
 # -*- coding: utf-8 -*-
 import io
+import json
 import math
 import os
+import re
 
 from test_junkie.constants import TestCategory
 
-
-_STATUS_COLORS = {
-    TestCategory.SUCCESS: "#12d479",
-    TestCategory.FAIL:    "#fcd75f",
-    TestCategory.ERROR:   "#ff7651",
-    TestCategory.SKIP:    "#34bff5",
-    TestCategory.IGNORE:  "#cce4eb",
-    TestCategory.CANCEL:  "#f19def",
-}
-
-_STATUS_LABELS = {
-    TestCategory.SUCCESS: "Success",
-    TestCategory.FAIL:    "Fail",
-    TestCategory.ERROR:   "Error",
-    TestCategory.SKIP:    "Skip",
-    TestCategory.IGNORE:  "Ignore",
-    TestCategory.CANCEL:  "Cancel",
-}
-
 _ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
-_FONTS = '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">\n'
 
 
 def _asset(name):
     """
-    The report's CSS and JS ship as package data (reporter/assets) - as Python strings they were installed twice
-    (source + compiled .pyc), ~150KB of a ~650KB install
+    The report's page, CSS and JS ship as package data (reporter/assets). As Python strings they were installed
+    twice (source + compiled .pyc)
     """
     with io.open(os.path.join(_ASSETS, name), encoding="utf-8") as doc:
         return doc.read()
-
-_BRAND_SVG = """\
-<svg class="brand-icon" viewBox="0 0 28 28" fill="none">
-  <circle cx="14" cy="14" r="11" stroke="#f37814" stroke-width="1.4" stroke-dasharray="5 3" opacity=".6"/>
-  <path d="M 25,14 A 11,11 0 0,0 14,3" stroke="#f37814" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="14" cy="14" r="6" stroke="#f37814" stroke-width="2"/>
-  <line x1="3" y1="14" x2="8" y2="14" stroke="#f37814" stroke-width="1.6"/>
-  <line x1="20" y1="14" x2="25" y2="14" stroke="#f37814" stroke-width="1.6"/>
-  <line x1="14" y1="3" x2="14" y2="8" stroke="#f37814" stroke-width="1.6"/>
-  <line x1="14" y1="20" x2="14" y2="25" stroke="#f37814" stroke-width="1.6"/>
-  <polygon points="14,10 17,14 14,18 11,14" fill="#f37814"/>
-  <circle cx="14" cy="14" r="1.5" fill="white" opacity=".9"/>
-</svg>"""
 
 
 class ReportTemplate:
@@ -55,26 +24,15 @@ class ReportTemplate:
     @staticmethod
     def render(data):
         ctx = ReportTemplate._build_context(data)
-        return (
-            '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
-            '<meta charset="UTF-8">\n'
-            '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-            '<title>Test Junkie — Run Report</title>\n'
-            + _FONTS + '<style>\n' + _asset("report.css") + '\n</style>\n</head>\n<body>\n'
-            + ReportTemplate._header(ctx)
-            + '<div class="container">\n'
-            + ReportTemplate._stats(ctx)
-            + ReportTemplate._charts_row(ctx)
-            + ReportTemplate._breakdown(ctx)
-            + ReportTemplate._results_section()
-            + '</div>\n'
-            + ReportTemplate._detail_panel()
-            + ReportTemplate._threading_dialog()
-            + ReportTemplate._support_fab()
-            + ReportTemplate._support_modal()
-            + ReportTemplate._scripts(ctx)
-            + '</body>\n</html>\n'
-        )
+        values = dict((key, value) for key, value in ctx.items() if isinstance(value, str))
+        values.update({"css": _asset("report.css"), "js": _asset("report.js"),
+                       "tests_json": ctx["tests_json"].replace("</", "<\\/"),
+                       "details_json": ctx["details_json"].replace("</", "<\\/"),
+                       "bar_data_json": ctx["bar_data_json"].replace("</", "<\\/"),
+                       "threading_json": json.dumps(ctx.get("threading_data")).replace("</", "<\\/"),
+                       "resources_enabled": "true" if ctx["res_enabled_style"] == "" else "false"})
+        # one pass, so a value that happens to contain {{...}} is never substituted again
+        return re.sub(r"\{\{(\w+)\}\}", lambda match: values[match.group(1)], _asset("report.html"))
 
     # ── Context builder ───────────────────────────────────────────────────────
 
@@ -286,286 +244,3 @@ class ReportTemplate:
                 f'<div>{safe}{chip_html}</div></div>'
             )
         return "\n".join(parts)
-
-    # ── Header ────────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _header(ctx):
-        return (
-            '<header>\n<div class="container header-inner">\n'
-            f'<a class="brand" href="https://www.test-junkie.com" target="_blank" rel="noopener" style="text-decoration:none">'
-            f'{_BRAND_SVG}'
-            f'<span class="brand-name">TEST<span>JUNKIE</span></span>'
-            f'</a>\n'
-            f'<div class="header-meta">'
-            f'<span>{ctx["run_date"]} &middot; {ctx["run_time"]}</span>'
-            f'<span>{ctx["runtime"]} total</span>'
-            f'{ctx["issue_badge"]}'
-            f'<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode">'
-            f'<svg id="theme-icon-dark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-            f'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/>'
-            f'<line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>'
-            f'<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>'
-            f'<line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>'
-            f'<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>'
-            f'<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
-            f'<svg id="theme-icon-light" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">'
-            f'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
-            f'</button>'
-            f'</div>\n'
-            f'</div>\n</header>\n'
-        )
-
-    # ── Stat cards ────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _stats(ctx):
-        def card(label, value, sub, brand=False):
-            cls = 'stat-value brand' if brand else 'stat-value'
-            return (
-                f'<div class="stat-card">'
-                f'<div class="stat-label">{label}</div>'
-                f'<div class="{cls}">{value}</div>'
-                f'<div class="stat-sub">{sub}</div>'
-                f'</div>'
-            )
-        return (
-            '<div class="stats-row">\n'
-            + card("Tests Executed", ctx["stat_total"], ctx["stat_suite_count"])
-            + card("Passing Rate", ctx["stat_passing_rate"], ctx["stat_passing_sub"], brand=True)
-            + card("Total Runtime", ctx["stat_runtime"], "wall-clock time")
-            + card("Avg Test Runtime", ctx["stat_avg_runtime"], "@test only")
-            + card("Avg CPU", ctx["stat_cpu_avg"], ctx["stat_cpu_sub"])
-            + card("Avg Memory", ctx["stat_mem_avg"], ctx["stat_mem_sub"])
-            + '\n</div>\n'
-        )
-
-    # ── Charts row ────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _charts_row(ctx):
-        resource_body = (
-            f'<div id="res-enabled" class="resource-chart-wrap" style="{ctx["res_enabled_style"]}">'
-            + ctx["resource_svg"]
-            + '</div>\n'
-            '<div id="res-disabled" class="resource-disabled"'
-            f' style="{ctx["res_disabled_style"]}">'
-            '<div class="resource-disabled-icon">&#x1F4CA;</div>'
-            '<div class="resource-disabled-msg">'
-            'Resource monitoring was not enabled for this run.<br>'
-            'To track CPU and memory usage, pass<br>'
-            '<code>monitor_resources=True</code> to your runner.'
-            '</div></div>\n'
-        )
-        return (
-            '<div class="charts-row">\n'
-            '<div class="chart-card" style="display:flex;flex-direction:column;">\n'
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'
-            '<div class="card-title" style="margin-bottom:0">Resource Monitoring</div>'
-            '<div style="display:flex;align-items:center;gap:14px;">'
-            f'<div id="res-legend" style="display:flex;align-items:center;gap:14px;{ctx["res_legend_style"]}">'
-            '<span style="display:flex;align-items:center;gap:6px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;color:var(--ink-muted)">'
-            '<span style="display:inline-block;width:18px;height:2px;background:var(--brand);border-radius:1px;vertical-align:middle"></span>CPU</span>'
-            '<span style="display:flex;align-items:center;gap:6px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;color:var(--ink-muted)">'
-            '<span style="display:inline-block;width:18px;height:2px;background:#34bff5;border-radius:1px;vertical-align:middle"></span>Memory</span>'
-            '</div>'
-            f'<button class="resource-toggle-btn" id="res-toggle-btn" onclick="toggleResources()">{ctx["res_toggle_text"]}</button>'
-            '</div></div>\n'
-            + resource_body
-            + '</div>\n'
-            '<div class="chart-card">\n'
-            '<div class="card-title">Insights</div>'
-            '<div class="insights-list">'
-            + ctx["insights_html"]
-            + '</div></div>\n'
-            '</div>\n'
-        )
-
-    # ── Breakdown tabs ────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _breakdown(ctx):
-        return (
-            '<div class="breakdown-section">\n'
-            '<div class="breakdown-card">\n'
-            '<div class="tab-bar">'
-            '<button class="tab-btn" data-tab="results">Results</button>'
-            '<button class="tab-btn active" data-tab="features">Features</button>'
-            '<button class="tab-btn" data-tab="components">Components</button>'
-            '<button class="tab-btn" data-tab="owners">Owners</button>'
-            '<button class="tab-btn" data-tab="suites">Suites</button>'
-            '<button class="tab-btn" data-tab="tags">Tags</button>'
-            '</div>\n'
-            f'<div class="tab-content" id="tab-results">{ctx["donut_html"]}</div>\n'
-            '<div class="tab-content active" id="tab-features"><div id="chart-features"></div></div>\n'
-            '<div class="tab-content" id="tab-components"><div id="chart-components"></div></div>\n'
-            '<div class="tab-content" id="tab-owners"><div id="chart-owners"></div></div>\n'
-            '<div class="tab-content" id="tab-suites"><div id="chart-suites"></div></div>\n'
-            '<div class="tab-content" id="tab-tags"><div id="chart-tags"></div></div>\n'
-            '</div>\n</div>\n'
-        )
-
-    # ── Results table section ─────────────────────────────────────────────────
-
-    @staticmethod
-    def _results_section():
-        return (
-            '<div class="results-section">\n'
-            '<div class="results-card">\n'
-            '<div class="results-header">'
-            '<div class="results-title">Test Results'
-            '<span class="results-count" id="visible-count">— tests</span>'
-            '</div>'
-            '<div class="search-global">'
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-            '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-            '<input type="text" id="global-search" placeholder="Search all columns…">'
-            '</div></div>\n'
-            '<div class="filter-bar" id="filter-bar">'
-            '<span class="filter-label">Filters</span>'
-            '<button class="filter-clear-all" id="clear-all-btn">Clear all \xd7</button>'
-            '<div class="tb-filter-strip" id="tb-filter-strip">'
-            'Traceback group active'
-            '<button class="tb-filter-clear" onclick="clearTracebackFilter()" title="Clear traceback filter">\xd7</button>'
-            '</div>'
-            '</div>\n'
-            '<div class="table-wrap">'
-            '<table id="results-table">'
-            '<thead><tr id="table-head"></tr></thead>'
-            '<tbody id="table-body"></tbody>'
-            '</table></div>\n'
-            '</div>\n</div>\n'
-        )
-
-    # ── Threading analysis dialog ─────────────────────────────────────────────
-
-    @staticmethod
-    def _threading_dialog():
-        return (
-            '<div id="thread-backdrop" onclick="closeThreadingDialog()"></div>\n'
-            '<div id="thread-dialog" role="dialog" aria-modal="true" aria-labelledby="td-title">\n'
-            '<div class="td-header">'
-            '<div class="td-title" id="td-title">&#x26A1; Multi-threading Analysis</div>'
-            '<button class="td-close" onclick="closeThreadingDialog()" aria-label="Close">&#x2715;</button>'
-            '</div>\n'
-            '<div class="td-summary" id="td-summary"></div>\n'
-            '<div class="td-section-label">Enable in your runner</div>\n'
-            '<div class="td-code-wrap" id="td-code"></div>\n'
-            '<div class="td-section-label" style="margin-top:20px">Slowest tests &#x2014; bottleneck candidates</div>\n'
-            '<table class="td-table"><thead><tr>'
-            '<th>Test</th><th>Suite</th><th style="text-align:right">Duration</th>'
-            '</tr></thead><tbody id="td-tbody"></tbody></table>\n'
-            '<div class="td-note" id="td-note"></div>\n'
-            '</div>\n'
-        )
-
-    # ── Detail panel ──────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _detail_panel():
-        return (
-            '<div id="overlay"></div>\n'
-            '<div id="detail-panel">\n'
-            '<div class="panel-header">'
-            '<div style="flex:1;min-width:0">'
-            '<div class="panel-test-name" id="panel-test-name">—</div>'
-            '<div class="panel-suite-path" id="panel-suite-path">—</div>'
-            '<div class="panel-tags" id="panel-tags"></div>'
-            '</div>'
-            '<button class="panel-close" id="panel-close">✕</button>'
-            '</div>\n'
-            '<div class="panel-body" id="panel-body"></div>\n'
-            '</div>\n'
-        )
-
-    # ── Support FAB ───────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _support_fab():
-        return (
-            '<button id="support-fab" title="Support this project" aria-label="Support this project">'
-            '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-            '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 '
-            '7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>'
-            '</svg></button>\n'
-        )
-
-    # ── Support modal ─────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _support_modal():
-        logo = _BRAND_SVG.replace('class="brand-icon"', 'width="32" height="32"')
-        return (
-            '<div id="support-backdrop"></div>\n'
-            '<div id="support-modal" role="dialog" aria-modal="true" aria-labelledby="support-title">\n'
-            '<button class="support-close" id="support-close" aria-label="Close">✕</button>\n'
-            f'<div class="support-logo">{logo}</div>\n'
-            '<h2 class="support-title" id="support-title">Support Test Junkie</h2>\n'
-            '<p class="support-message">Test Junkie is a solo open-source project. If it has saved you '
-            'time writing runners, fighting flaky tests, or debugging parallel execution — '
-            'a star or a coffee goes a long way and helps keep it maintained.</p>\n'
-            '<div class="support-options">\n'
-            '<a class="support-option" href="https://github.com/ArturSpirin/test_junkie" target="_blank" rel="noopener">'
-            '<div class="support-option-icon">'
-            '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">'
-            '<path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 '
-            '0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 '
-            '1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 '
-            '0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 '
-            '1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 '
-            '1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 '
-            '0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>'
-            '</svg></div>'
-            '<div class="support-option-text">'
-            '<div class="support-option-label">Star on GitHub</div>'
-            '<div class="support-option-sub">Show you use it \xb7 costs nothing</div>'
-            '</div>'
-            '<svg class="support-option-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-            '<polyline points="9 18 15 12 9 6"/></svg></a>\n'
-            '<a class="support-option" href="https://www.patreon.com/join/arturspirin" target="_blank" rel="noopener">'
-            '<div class="support-option-icon" style="color:#ff424d">'
-            '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">'
-            '<path d="M22.957 7.21c-.004-3.064-2.391-5.576-5.191-6.482-3.478-1.125-8.064-.962-11.384.604C2.357 3.231 '
-            '1.093 7.391 1.046 11.54c-.039 3.411.302 12.396 5.369 12.46 3.765.047 4.326-4.804 6.068-7.141 '
-            '1.24-1.662 2.836-2.132 4.801-2.618 3.376-.836 5.678-3.501 5.673-7.031Z"/>'
-            '</svg></div>'
-            '<div class="support-option-text">'
-            '<div class="support-option-label">Support on Patreon</div>'
-            '<div class="support-option-sub">Monthly support \xb7 keeps the lights on</div>'
-            '</div>'
-            '<svg class="support-option-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-            '<polyline points="9 18 15 12 9 6"/></svg></a>\n'
-            '<a class="support-option" href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&amp;business=FJPYWX5B776YS&amp;currency_code=USD&amp;source=url" target="_blank" rel="noopener">'
-            '<div class="support-option-icon" style="color:#009cde">'
-            '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">'
-            '<path d="M7.016 19.198h-4.2a.562.562 0 0 1-.555-.65L5.093.584A.692.692 0 0 1 5.776 0h7.222c3.417 '
-            '0 5.904 2.488 5.846 5.5-.006.25-.027.5-.066.747A6.794 6.794 0 0 1 12.071 12H8.743a.69.69 0 0 '
-            '0-.682.583l-.325 2.056-.013.083-.692 4.39-.015.087zM19.79 6.142c-.01.087-.01.175-.023.261a7.76 '
-            '7.76 0 0 1-7.695 6.598H9.007l-.283 1.795-.013.083-.692 4.39-.134.843-.014.088H6.86l-.497 3.15a.562.562 '
-            '0 0 0 .555.65h3.612c.34 0 .63-.249.683-.585l.952-6.031a.692.692 0 0 1 .683-.584h2.126a6.793 6.793 '
-            '0 0 0 6.707-5.752c.306-1.95-.466-3.744-1.89-4.906z"/>'
-            '</svg></div>'
-            '<div class="support-option-text">'
-            '<div class="support-option-label">Donate via PayPal</div>'
-            '<div class="support-option-sub">One-time \xb7 any amount appreciated</div>'
-            '</div>'
-            '<svg class="support-option-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-            '<polyline points="9 18 15 12 9 6"/></svg></a>\n'
-            '</div>\n</div>\n'
-        )
-
-    # ── Scripts ───────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _scripts(ctx):
-        import json as _json
-        tests_json = ctx["tests_json"].replace("</", "<\\/")
-        details_json = ctx["details_json"].replace("</", "<\\/")
-        bar_data_json = ctx["bar_data_json"].replace("</", "<\\/")
-        threading_json = _json.dumps(ctx.get("threading_data")).replace("</", "<\\/")
-
-        resources_enabled = "true" if ctx.get("res_enabled_style", "display:none") == "" else "false"
-        return ("<script>\nconst TESTS = " + tests_json + ";\nconst DETAILS = " + details_json
-                + ";\nconst BAR_DATA = " + bar_data_json + ";\nconst THREADING_DATA = " + threading_json
-                + ";\nconst RESOURCES_ENABLED = " + resources_enabled + ";\n" + _asset("report.js") + "</script>\n")

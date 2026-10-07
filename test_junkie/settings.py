@@ -1,3 +1,5 @@
+import os
+
 from test_junkie.constants import DocumentationLinks, Undefined
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters, ConfigError
@@ -48,6 +50,8 @@ class Settings:
         self.__quiet = Undefined
         self.__per_test = Undefined
         self.__capture = Undefined
+        self.__json_report = Undefined
+        self.__retry = Undefined
 
         self.__print_settings()
 
@@ -219,24 +223,51 @@ class Settings:
                 self.__capture = Settings.__DEFAULT_CAPTURE if no_capture is None else not no_capture
         return self.__capture
 
+    def __report(self, key, extension, link):
+        """
+        A report path: a file with the right extension, or a folder (then report.<extension> in it)
+        """
+        path = self.__get_value(key=key, default=None)
+        if not path:
+            return None
+        path = str(path)
+        if os.path.isdir(path) or path.endswith(("/", "\\")):
+            return os.path.join(path, "report" + extension)
+        if not path.endswith(extension):
+            raise BadParameters("\"{key}\" needs a {ext} file or a folder, for example: reports/run{ext} or reports/. "
+                                "Got: {path}. For more info, see documentation: {link}"
+                                .format(key=key, ext=extension, path=path, link=link))
+        return path
+
     @property
     def html_report(self):
         if self.__html_report is Undefined:
-            self.__html_report = self.__get_value(key="html_report",
-                                                  default=Settings.__DEFAULT_HTML)
-        if self.__html_report and not self.__html_report.endswith(".html"):
-            raise BadParameters("\"html_report\" parameter requires full path with a file name and .html extension "
-                                "for example: /var/www/html/my_report.html. For more info, see documentation: {link}"
-                                .format(link=DocumentationLinks.HTML_REPORT))
+            self.__html_report = self.__report("html_report", ".html", DocumentationLinks.HTML_REPORT)
         return self.__html_report
+
+    @property
+    def json_report(self):
+        if self.__json_report is Undefined:
+            self.__json_report = self.__report("json_report", ".json", DocumentationLinks.DOMAIN)
+        return self.__json_report
+
+    @property
+    def retry(self):
+        """
+        :return: INT, how many times a test may run (tj run --retry N, 1 for --no-retry), or None to keep each test's
+        """
+        if self.__retry is Undefined:
+            if self.__get_value(key="no_retry", default=None):
+                self.__retry = 1
+            else:
+                value = self.__get_value(key="retry", default=None)
+                if value is not None and (not isinstance(value, int) or value < 1):
+                    raise BadParameters("\"retry\" needs a whole number of 1 or more, got: {!r}".format(value))
+                self.__retry = value
+        return self.__retry
 
     @property
     def xml_report(self):
         if self.__xml_report is Undefined:
-            self.__xml_report = self.__get_value(key="xml_report",
-                                                 default=Settings.__DEFAULT_XML)
-        if self.__xml_report and not self.__xml_report.endswith(".xml"):
-            raise BadParameters("\"xml_report\" parameter requires full path with a file name and .xml extension "
-                                "for example: /var/www/html/my_report.xml. For more info, see documentation: {link}"
-                                .format(link=DocumentationLinks.XML_REPORT))
+            self.__xml_report = self.__report("xml_report", ".xml", DocumentationLinks.XML_REPORT)
         return self.__xml_report

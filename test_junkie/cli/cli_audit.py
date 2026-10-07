@@ -6,23 +6,8 @@ from test_junkie.constants import Undefined
 
 class CliAudit:
 
-    __SECTIONS = ["owners", "features", "suites", "components", "tags"]
-
     def __init__(self, suites, args, sources=None, scan_seconds=None):
 
-        self.aggregated_data = {
-                "absolute_test_count": 0,  # parameterized tests will be treated as 1 test
-                "absolute_suite_count": 0,
-
-                "context_by_features": {},
-                "context_by_owners": {},
-                "context_by_suites": {},
-                "context_by_tags": {},
-                "context_by_components": {},
-
-                "parameterized_test_count": 0,
-                "parameterized_suite_count": 0,
-                }
         self.suites = suites
         self.exe_roster = Builder.get_execution_roster()
         self.args = args
@@ -31,184 +16,67 @@ class CliAudit:
         self.records = []  # one per audited test: what print_results() builds every view from
         self.scanned_tests = 0
 
+    def __arg(self, name):
+        value = getattr(self.args, name, Undefined)
+        return None if value in (Undefined, None) else value
+
     def aggregate(self):
 
-        def is_relevant(_suite, _test=None):
-            if not _test:
-                from test_junkie.rules import Rules
-                if self.args.no_rules and _suite.get_rules().__class__ != Rules:
-                    return False
+        def suite_relevant(_suite):
+            from test_junkie.rules import Rules
+            from test_junkie.listener import Listener
+            args = self.args
+            if (args.no_rules and _suite.get_rules().__class__ != Rules) or \
+                    (args.no_listeners and _suite.get_listener().__class__ != Listener) or \
+                    (args.no_suite_retries and _suite.get_retry_limit() > 1) or \
+                    (args.no_suite_meta and _suite.get_meta()) or \
+                    (args.no_owners and _suite.get_owner()) or (args.no_features and _suite.get_feature()):
+                return False
+            features = self.__arg("features")
+            return features is None or _suite.get_feature() in features
 
-                from test_junkie.listener import Listener
-                if self.args.no_listeners and _suite.get_listener().__class__ != Listener:
+        def test_relevant(_test):
+            args = self.args
+            if args.no_test_retries and _test.get_retry_limit() > 1:
+                return False
+            if args.no_test_meta:
+                # the test's declared meta - get_meta() isn't used because it builds the per-parameter structure
+                declared = _test.get_kwargs().get("meta") or {}
+                if declared.get("original", declared):
                     return False
+            if (args.no_owners and _test.get_owner()) or (args.no_components and _test.get_component()) or \
+                    (args.no_tags and _test.get_tags()):
+                return False
+            owners, components = self.__arg("owners"), self.__arg("components")
+            if owners is not None and _test.get_owner() not in owners:
+                return False
+            if components is not None and _test.get_component() not in components:
+                return False
+            tags = set(_test.get_tags())
+            any_of, all_of = self.__arg("run_on_match_any"), self.__arg("run_on_match_all")
+            if any_of is not None and not tags.intersection(any_of):
+                return False
+            return all_of is None or set(all_of).issubset(tags)
 
-                if self.args.no_suite_retries and _suite.get_retry_limit() > 1:
-                    return False
-
-                if self.args.no_suite_meta and _suite.get_meta():
-                    return False
-
-                if self.args.no_owners and _suite.get_owner():
-                    return False
-
-                if self.args.no_features and _suite.get_feature():
-                    return False
-
-                if self.args.features != Undefined:
-                    if _suite.get_feature() in self.args.features:
-                        return True
-                    return False
-            else:
-                if self.args.no_test_retries and _test.get_retry_limit() > 1:
-                    return False
-
-                if self.args.no_test_meta:
-                    # the test's declared meta - this used to check the *suite's* meta. get_meta() isn't used
-                    # because it builds the per-parameter structure as a side effect
-                    declared = _test.get_kwargs().get("meta") or {}
-                    if declared.get("original", declared):
-                        return False
-
-                if self.args.no_owners and _test.get_owner():
-                    return False
-
-                if self.args.no_components and _test.get_component():
-                    return False
-
-                if self.args.no_tags and _test.get_tags():
-                    return False
-
-                if self.args.owners != Undefined:
-                    if _test.get_owner() in self.args.owners:
-                        return True
-                    return False
-
-                if self.args.components != Undefined:
-                    if _test.get_component() in self.args.components:
-                        return True
-                    return False
-
-                if self.args.tags != Undefined:
-                    for tag in self.args.tags:
-                        if tag in _test.get_tags():
-                            return True
-                    return False
-            return True
-
-        # the suites that were scanned / asked for with -x - this used to walk every suite registered in the
-        # process, so -x was ignored and a long-lived process audited everything it had ever loaded
         # suites are listed by class name - unless two audited suites share it (same class name in different files),
         # then by module.ClassName. They used to be merged into one entry
         names = collections.Counter(suite.__name__ for suite in self.suites)
-
         for suite in self.suites:
             suite_object = self.exe_roster.get(suite, None)
-            if suite_object is not None:
-                self.scanned_tests += len(suite_object.get_test_objects())
-            if suite_object is None or not is_relevant(_suite=suite_object):
+            if suite_object is None:
                 continue
-
-            all_tests = suite_object.get_test_objects()
-            self.aggregated_data["absolute_test_count"] += len(all_tests)
-            tests = []
-            for test in all_tests:
-                if test.get_owner() is None:
-                    test.get_kwargs().update({"owner": suite_object.get_owner()})
-                # test-level filters apply *before* counting - filtered-out tests used to still be counted
-                if is_relevant(_suite=suite_object, _test=test):
-                    tests.append(test)
-            if not tests:
+            self.scanned_tests += len(suite_object.get_test_objects())
+            if not suite_relevant(suite_object):
                 continue
-            self.aggregated_data["absolute_suite_count"] += 1
-            if suite_object.get_parameters() != [None]:
-                self.aggregated_data["parameterized_suite_count"] += 1
-
-            feature = suite_object.get_feature()
-            if feature not in self.aggregated_data["context_by_features"]:
-                self.aggregated_data["context_by_features"].update({
-                    feature: {"tags": {}, "owners": {}, "components": {}, "suites": {}, "total_tests": 0}})
-            feature_context = self.aggregated_data["context_by_features"][feature]
-            feature_context["total_tests"] += len(tests)
-            feature_context["suites"].update({"{}.{}".format(suite_object.get_class_module(),
-                                                             suite_object.get_class_name()): len(tests)})
-
-            suite_context = {"total_tests": len(tests),
-                             "tags": {},
-                             "owners": {},
-                             "components": {},
-                             "feature": feature}
-
-            for test in tests:
-                if test.accepts_suite_parameters() or test.accepts_test_parameters():
-                    self.aggregated_data["parameterized_test_count"] += 1
-
-                for context in [feature_context, suite_context]:
-                    CliAudit.process_tags(context, test)
-                    CliAudit.process_property(context, "components", test.get_component())
-                    CliAudit.process_property(context, "owners", test.get_owner())
-
-                self.update_context(suite, test, feature)
             suite_key = suite_object.get_class_name() if names[suite.__name__] == 1 else \
                 "{}.{}".format(suite_object.get_class_module(), suite_object.get_class_name())
-            self.aggregated_data["context_by_suites"].update({suite_key: suite_context})
-            for test in tests:
-                self.records.append({"suites": suite_key, "features": feature, "owners": test.get_owner(),
-                                     "components": test.get_component(), "tags": list(test.get_tags()),
-                                     "test": test.get_function_name()})
-
-    @staticmethod
-    def process_property(data_context, prop, key):
-        if key not in data_context[prop]:
-            data_context[prop].update({key: 1})
-        else:
-            data_context[prop][key] += 1
-
-    @staticmethod
-    def process_tags(data_context, test):
-        for tag in test.get_tags():
-            if tag not in data_context["tags"]:
-                data_context["tags"].update({tag: 1})
-            else:
-                data_context["tags"][tag] += 1
-
-    def update_context(self, suite, test, feature):
-
-        def process_data_context(_data_context, _context):
-
-            if _context != "tags":
-                CliAudit.process_tags(_data_context, test)
-            if _context != "components":
-                CliAudit.process_property(_data_context, "components", test.get_component())
-            if _context != "owners":
-                CliAudit.process_property(_data_context, "owners", test.get_owner())
-
-            CliAudit.process_property(_data_context, "features", feature)
-            CliAudit.process_property(_data_context, "suites", "{}.{}".format(suite.__module__, suite.__name__))
-
-        def get_template(_context):
-            template = {"total_tests": 0}
-            for attribute in CliAudit.__SECTIONS:
-                if attribute != _context:
-                    template.update({attribute: {}})
-            return template
-
-        def update_context_template(_value, _context):
-
-            if _value not in self.aggregated_data["context_by_{context}".format(context=context)]:
-                self.aggregated_data["context_by_{context}".format(context=context)].update(
-                    {_value: get_template(_context)})
-            data_context = self.aggregated_data["context_by_{context}".format(context=context)][_value]
-            data_context["total_tests"] += 1
-            process_data_context(data_context, _context)
-
-        for context in ["tags", "components", "owners"]:
-            if context == "tags":
-                for tag in test.get_tags():
-                    update_context_template(tag, context)
-            else:
-                value = test.get_component() if context == "components" else test.get_owner()
-                update_context_template(value, context)
+            for test in suite_object.get_test_objects():
+                if test.get_owner() is None:
+                    test.get_kwargs().update({"owner": suite_object.get_owner()})
+                if test_relevant(test):
+                    self.records.append({"suites": suite_key, "features": suite_object.get_feature(),
+                                         "owners": test.get_owner(), "components": test.get_component(),
+                                         "tags": list(test.get_tags()), "test": test.get_function_name()})
 
     # what each view's blocks list under the block's name
     __ROWS = {"suites": ["features", "owners", "components", "tags"],
@@ -231,15 +99,72 @@ class CliAudit:
                             ("no_suite_meta", "no suite meta"), ("no_test_meta", "no test meta")):
             if getattr(args, flag, False):
                 filters.append(label)
-        for name in ("owners", "features", "components", "tags"):
-            value = getattr(args, name, Undefined)
-            if value not in (Undefined, None):
-                filters.append("{} {}".format(name, ", ".join(str(item) for item in value)))
+        for name, label in (("owners", "owners"), ("features", "features"), ("components", "components"),
+                            ("run_on_match_any", "tags any"), ("run_on_match_all", "tags all")):
+            value = self.__arg(name)
+            if value is not None:
+                filters.append("{} {}".format(label, ", ".join(str(item) for item in value)))
         if getattr(args, "suites", None):
             filters.append("suites {}".format(", ".join(args.suites)))
         return filters
 
+    def __values(self, record, kind):
+        value = record[kind]
+        if kind == "tags":
+            return value or [None]
+        return [value]
+
+    def __gaps(self):
+        return dict((kind, sum(1 for record in self.records if None in self.__values(record, kind)))
+                    for kind in ("owners", "components", "tags", "features"))
+
+    def __json(self):
+        import json
+        view, total = self.args.command, len(self.records)
+        blocks = collections.OrderedDict()
+        for record in self.records:
+            for key in self.__values(record, view):
+                blocks.setdefault(key, []).append(record)
+        out = {"view": view, "tests": total, "scanned_tests": self.scanned_tests, "filters": self.__filters(),
+               "gaps": self.__gaps(), "blocks": []}
+        for key, items in sorted(blocks.items(), key=lambda item: (item[0] is None, -len(item[1]), str(item[0]))):
+            block = {"name": key, "tests": len(items), "share": round(100.0 * len(items) / total, 1) if total else 0}
+            for kind in self.__ROWS[view]:
+                block[kind] = dict(collections.Counter(
+                    "none" if value is None else value for record in items for value in self.__values(record, kind)))
+            block["test_names"] = ["{}.{}".format(r["suites"], r["test"]) for r in items]
+            out["blocks"].append(block)
+        print(json.dumps(out, indent=1))
+
+    def __fail_on_gaps(self):
+        wanted = getattr(self.args, "fail_on_gaps", None)
+        if not wanted:
+            return
+        kinds = [kind.strip() for kind in wanted.split(",") if kind.strip()]
+        unknown = [kind for kind in kinds if kind not in ("owners", "components", "tags", "features")]
+        if unknown:
+            from test_junkie.cli.cli import CliUtils
+            CliUtils.error("--fail-on-gaps takes owners, features, components or tags, got: {}".format(
+                ", ".join(unknown)), "e.g. tj audit suites --fail-on-gaps owners,tags")
+        gaps = self.__gaps()
+        found = ["{} test{} without {}".format(gaps[kind], "" if gaps[kind] == 1 else "s", kind[:-1] if
+                 kind != "tags" else "tags") for kind in kinds if gaps[kind]]
+        if found:
+            if not self.args.json:
+                from test_junkie.console import Console
+                console = Console(None, mode="report")
+                console.emit(["{}  {}".format(console.badge("FAILED", "err"), ", ".join(found)) +
+                              console.style("  exit code 1", "dim")])
+            exit(1)
+
     def print_results(self):
+        if self.args.json:
+            self.__json()
+        else:
+            self.__print()
+        self.__fail_on_gaps()
+
+    def __print(self):
 
         from test_junkie.console import Console
         console = Console(None, mode="report")

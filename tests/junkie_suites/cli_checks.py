@@ -264,7 +264,7 @@ def config_commands():
         code, out = run_cli(*command)
         assert code == 120 and "[ERROR]" in out and text in out, (command, out)
     code, out = run_cli("config", "show", "--all")
-    assert code is None and "Config  " in out and "Discovery" in out and "0 of 20 settings saved" in out, out
+    assert code is None and "Config  " in out and "Discovery" in out and "0 of 23 settings saved" in out, out
     code, out = run_cli("config", "show", "--sources")
     assert code is None and re.search(r"^  sources +\.$", out, re.M), out  # unset: a dot (ASCII for ·)
 
@@ -278,12 +278,12 @@ def config_update_show_restore():
     code, out = run_cli("config", "update", "-T", "2", home=home, keep_home=True)
     assert re.search(r"^  test_multithreading_limit +4 +-> +2$", out, re.M), out
     code, out = run_cli("config", "show", "--all", home=home, keep_home=True)
-    assert "2 of 20 settings saved" in out and re.search(r"^  sources +tests$", out, re.M), out
+    assert "2 of 23 settings saved" in out and re.search(r"^  sources +tests$", out, re.M), out
     code, out = run_cli("config", "restore", "-T", home=home, keep_home=True)
     assert "[RESTORED]  1 setting to its default" in out and re.search(
         r"^  test_multithreading_limit +2 +-> +default 1$", out, re.M), out
     code, out = run_cli("config", "restore", "--all", home=home, keep_home=True)
-    assert "all 20 settings to their defaults . 1 had values" in out and "sources" in out, out
+    assert "all 23 settings to their defaults . 1 had values" in out and "sources" in out, out
     # tj config update --no-capture is read back by tj run
     code, out = run_cli("config", "update", "--no-capture", home=home, keep_home=True)
     from test_junkie.settings import Settings
@@ -331,7 +331,7 @@ def audit_views_gaps_and_listing():
 
 def unknown_command_and_version():
     code, out = run_cli("nonsense")
-    assert code == 1 and "is not a test-junkie command" in out, out
+    assert code == 120 and "is not a test-junkie command" in out, out
     code, out = run_cli("version")
     assert code is None and out.startswith("Test Junkie "), out
 
@@ -480,7 +480,201 @@ def config_helpers():
     assert "custom trace text" in out.getvalue()
 
 
-CHECKS = [audit_lists_every_suite, guess_root_with_a_relative_source, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
+# ── 0.9a6 CLI consistency and improvements (roadmap I1, I2) ─────────────────────────────────────────────────────
+
+RANDOM_SUITE = """
+from test_junkie.constants import TestOrder
+from test_junkie.decorators import Suite, test
+
+ORDER = []
+
+
+@Suite(order=TestOrder.RANDOM)
+class ShuffledSuite:
+""" + "".join("""
+    @test()
+    def test_{0}(self):
+        ORDER.append({0})
+""".format(i) for i in range(8))
+
+FLAKY_SUITE = """
+from test_junkie.decorators import Suite, test
+
+
+@Suite()
+class FlakySuite:
+
+    @test(retry=3)
+    def always_fails(self):
+        assert False, "nope"
+
+    @test(tags=["smoke"])
+    def login_works(self):
+        pass
+
+    @test(tags=["smoke", "slow"])
+    def login_remembers(self):
+        pass
+"""
+
+
+def _json(path):
+    import json
+    with io.open(path, encoding="utf-8") as doc:
+        return json.load(doc)
+
+
+def bare_and_unknown_commands():
+    previous = sys.argv
+    code, out = run_cli()
+    assert code == 120 and "Which command?" in out, out
+    code, out = run_cli("nope")
+    assert code == 120 and "'nope' is not a test-junkie command" in out, out
+
+
+def version_shows_where_things_are():
+    code, out = run_cli("version")
+    lines = out.splitlines()
+    assert code is None and lines[0].startswith("Test Junkie ") and "Python " in lines[0], out
+    assert lines[1].split()[0] == "package" and lines[2].split()[0] == "config" and "(user config)" in out, out
+
+
+def old_option_spellings_still_work_but_help_shows_the_new_ones():
+    directory = _write(FLAKY_SUITE, "flaky_suite.py")
+    old = run_cli("run", "-s", directory, "--run_on_match_any", "smoke", "--test_multithreading_limit", "2")
+    new = run_cli("run", "-s", directory, "--tags-any", "smoke", "--test-multithreading-limit", "2")
+    for code, out in (old, new):
+        assert code is None and re.search(r"^  Total +2 ", out, re.M) and "2 test threads" in out, out
+        assert "filters  tags any smoke" in out, out
+    code, out = run_cli("run", "-h")
+    assert "--tags-any" in out and "--test-multithreading-limit" in out and "--seed" in out, out
+    assert "--run_on_match_any" not in out and "--test_multithreading_limit" not in out, out  # aliases stay hidden
+
+
+def audit_tag_flags_match_tj_run():
+    # -l was --run_on_match_all in tj run but --tags (any) in tj audit
+    directory = _write(FLAKY_SUITE, "flaky_suite.py")
+    for flags, expected in ((("-k", "smoke"), 2), (("--tags", "smoke"), 2), (("-l", "smoke", "slow"), 1),
+                            (("--tags-all", "smoke", "slow"), 1)):
+        code, out = run_cli("audit", "suites", "-s", directory, *flags)
+        assert code is None and re.search(r"^FlakySuite +{} tests? ".format(expected), out, re.M), (flags, out)
+
+
+def tests_and_suites_take_patterns():
+    directory = _write(FLAKY_SUITE, "flaky_suite.py")
+    code, out = run_cli("run", "-s", directory, "-t", "login_*")
+    assert code is None and re.search(r"^  Total +2 ", out, re.M), out
+    code, out = run_cli("run", "-s", directory, "-t", "FlakySuite.login_works")
+    assert code is None and re.search(r"^  Total +1 ", out, re.M), out
+    code, out = run_cli("run", "-s", directory, "-x", "Flaky*", "-t", "login_works")
+    assert code is None and "1 suite" in out, out
+    code, out = run_cli("run", "-s", directory, "-x", "Nope*")
+    assert code == 1 and "No test suites found" in out, out
+
+
+def seed_repeats_a_random_order():
+    directory = _write(RANDOM_SUITE, "random_suite.py")
+    orders = []
+    for _ in range(2):
+        code, out = run_cli("run", "-s", directory, "--seed", "4242")
+        assert code is None and "seed 4242" in out and "repeat this order with --seed 4242" in out, out
+        orders.append(list(sys.modules["random_suite"].ORDER))
+        del sys.modules["random_suite"].ORDER[:]
+    assert orders[0] == orders[1] and sorted(orders[0]) == list(range(8)), orders
+    assert orders[0] != list(range(8)), orders  # actually shuffled
+    code, out = run_cli("run", "-s", directory)
+    assert re.search(r"seed \d+", out), out  # a seed is always printed for a random order
+
+
+def retry_overrides():
+    directory = _write(FLAKY_SUITE, "flaky_suite.py")
+    report = os.path.join(tempfile.mkdtemp(), "out")
+    for flags, runs in ((("--no-retry",), 1), (("--retry", "2"), 2), ((), 3)):
+        code, out = run_cli("run", "-s", directory, "-t", "always_fails", "--json-report", report + os.sep, *flags)
+        test = _json(os.path.join(report, "report.json"))["suites"][0]["tests"][0]
+        assert code == 1 and len(test["runs"]) == runs, (flags, test)
+        if flags:
+            assert ("no retries" if runs == 1 else "up to {} runs per test".format(runs)) in out, out
+    code, out = run_cli("run", "-s", directory, "--retry", "0")
+    assert code == 120, out
+
+
+def report_folders_and_json_report():
+    directory = _write(FLAKY_SUITE, "flaky_suite.py")
+    folder = tempfile.mkdtemp() + os.sep
+    code, out = run_cli("run", "-s", directory, "--html-report", folder, "--xml-report", folder, "--json-report",
+                        folder, "--no-retry")
+    assert code == 1 and all(os.path.isfile(os.path.join(folder, "report." + ext)) for ext in ("html", "xml", "json"))
+    report = _json(os.path.join(folder, "report.json"))
+    assert report["totals"]["total"] == 3 and report["totals"]["fail"] == 1 and report["totals"]["success"] == 2, report
+    failed = [t for t in report["suites"][0]["tests"] if t["status"] == "fail"][0]
+    assert failed["runs"][0]["error"] == "AssertionError: nope", failed
+    code, out = run_cli("run", "-s", directory, "--json-report", "report.txt")
+    assert code == 120 and "needs a .json file or a folder" in out, out
+
+
+def audit_json_and_fail_on_gaps():
+    import json
+    directory = _write(AUDIT_SUITES, "audit_suites.py")
+    code, out = run_cli("audit", "owners", "-s", directory, "--json")
+    data = json.loads(out)
+    assert code is None and data["view"] == "owners" and data["tests"] == 3 and data["gaps"]["owners"] == 2, data
+    assert data["blocks"][0]["name"] == "bob" and data["blocks"][-1]["name"] is None, data
+    code, out = run_cli("audit", "suites", "-s", directory, "--fail-on-gaps", "owners")
+    assert code == 1 and "2 tests without owner" in out, out
+    code, out = run_cli("audit", "suites", "-s", directory, "-x", "AuditFull", "--fail-on-gaps")
+    assert code is None, out  # AuditFull has everything
+    code, out = run_cli("audit", "suites", "-s", directory, "--fail-on-gaps", "nope")
+    assert code == 120, out
+
+
+def project_config_is_found_and_used():
+    project = tempfile.mkdtemp()
+    os.makedirs(os.path.join(project, "suites"))
+    os.makedirs(os.path.join(project, "proj_cfg_helpers_tj"))
+    with open(os.path.join(project, "proj_cfg_helpers_tj", "__init__.py"), "w") as doc:
+        doc.write("VALUE = 1\n")
+    with open(os.path.join(project, "suites", "uses_helpers.py"), "w") as doc:
+        doc.write("from proj_cfg_helpers_tj import VALUE\n" + PASSING_SUITE.replace("CliPassingSuite", "UsesHelpers"))
+    saved = list(sys.path)
+    sys.path[:] = [entry for entry in sys.path if entry not in ("", ".")]  # like the tj command, not python -m
+    try:
+        code, out = run_cli("config", "update", "-s", "suites", "-T", "2", "--config", "./tj.cfg", cwd=project)
+        assert code is None and "[SAVED]  2 settings" in out, out
+        # no -s: sources come from the project's tj.cfg, and its folder is used as the root for the import
+        code, out = run_cli("run", cwd=project)
+        assert code is None and "[PASSED]" in out and os.path.join(project, "tj.cfg") in out, out
+        assert "test_multithreading_limit 2" in out, out
+        code, out = run_cli("config", "show", "-T", cwd=project)  # tj config edits the project file now
+        assert re.search(r"^  test_multithreading_limit +2$", out, re.M), out
+        code, out = run_cli("audit", "suites", cwd=project)
+        assert code is None and "UsesHelpers" in out, out
+        code, out = run_cli("version", cwd=project)
+        assert "(user config)" not in out and "tj.cfg" in out, out
+    finally:
+        sys.path[:] = saved
+        sys.modules.pop("proj_cfg_helpers_tj", None)
+
+
+def pyproject_table_is_read_only():
+    try:
+        import tomllib  # noqa: F401
+    except ImportError:
+        try:
+            import tomli  # noqa: F401
+        except ImportError:
+            return  # Python 3.9/3.10 without tomli: pyproject.toml isn't read, nothing to check
+    project = _write(PASSING_SUITE, "passing_suite.py")
+    with open(os.path.join(project, "pyproject.toml"), "w") as doc:
+        doc.write('[tool.test_junkie]\nsources = ["."]\ntest-multithreading-limit = 3\n')
+    code, out = run_cli("run", cwd=project)
+    assert code is None and "pyproject.toml" in out and "test_multithreading_limit 3" in out, out
+    code, out = run_cli("config", "update", "-T", "4", cwd=project)
+    assert code == 120 and "read-only for tj config" in out, out
+
+
+CHECKS = [bare_and_unknown_commands, version_shows_where_things_are, old_option_spellings_still_work_but_help_shows_the_new_ones, audit_tag_flags_match_tj_run, tests_and_suites_take_patterns, seed_repeats_a_random_order, retry_overrides, report_folders_and_json_report, audit_json_and_fail_on_gaps, project_config_is_found_and_used, pyproject_table_is_read_only,
+          audit_lists_every_suite, guess_root_with_a_relative_source, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
           audit_no_test_meta_checks_the_tests_meta, audit_only_covers_the_requested_suites, audit_by_feature_and_verbose, audit_unknown_view_is_rejected,
           audit_and_run_without_sources_explain_what_is_missing, audit_reports_when_nothing_matches,
           run_exit_codes, run_with_missing_config_file, run_import_error_and_guess_root, config_commands,

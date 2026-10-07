@@ -140,6 +140,9 @@ cov_rcfile=None
 guess_root=None
 per_test=None
 no_capture=None
+json_report=None
+retry=None
+no_retry=None
 """
 
 

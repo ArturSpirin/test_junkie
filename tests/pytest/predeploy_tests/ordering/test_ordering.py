@@ -113,10 +113,10 @@ def test_random_no_duplicates():
 
 def test_random_invokes_shuffle():
     random_order.clear()
-    with patch("test_junkie.runner.random") as mock_random:
-        mock_random.shuffle.side_effect = lambda lst: None  # no-op; keeps declaration order
+    with patch("random.Random.shuffle") as mock_shuffle:  # the runner shuffles with random.Random(seed)
+        mock_shuffle.side_effect = lambda lst: None  # no-op; keeps declaration order
         Runner([RandomSuite]).run()
-    mock_random.shuffle.assert_called_once()
+    mock_shuffle.assert_called_once()
 
 
 def test_random_respects_shuffle_result():
@@ -133,8 +133,8 @@ def test_random_respects_shuffle_result():
         captured.extend(lst)
         lst.reverse()
 
-    with patch("test_junkie.runner.random") as mock_random:
-        mock_random.shuffle.side_effect = capture_and_reverse
+    with patch("random.Random.shuffle") as mock_shuffle:  # the runner shuffles with random.Random(seed)
+        mock_shuffle.side_effect = capture_and_reverse
         Runner([RandomSuite]).run()
 
     expected = [t.get_function_name() for t in reversed(captured)]

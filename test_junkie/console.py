@@ -5,6 +5,7 @@ Also captures what tests print and log while they run, so it's only shown for te
 import inspect
 import io
 import logging
+import math
 import os
 import re
 import sys
@@ -12,7 +13,7 @@ import threading
 import time
 
 import test_junkie
-from test_junkie.constants import TestCategory, SuiteCategory
+from test_junkie.constants import TestCategory, SuiteCategory, TestOrder
 
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(test_junkie.__file__))
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -27,6 +28,10 @@ _REDRAW_INTERVAL = 0.2
 _STYLE_OF = {TestCategory.SUCCESS: "pass", TestCategory.FAIL: "fail", TestCategory.ERROR: "err",
              TestCategory.SKIP: "skip", TestCategory.IGNORE: "ign", TestCategory.CANCEL: "canc"}
 _SEVERITY = [TestCategory.ERROR, TestCategory.FAIL, TestCategory.IGNORE]
+
+
+def _worst(statuses, order=_SEVERITY, default=TestCategory.SUCCESS):
+    return next((status for status in order if status in statuses), default)
 _COLUMNS = [(TestCategory.SUCCESS, "Pass", 6), (TestCategory.FAIL, "Fail", 6), (TestCategory.ERROR, "Error", 7),
             (TestCategory.IGNORE, "Ignore", 8), (TestCategory.SKIP, "Skip", 6), (TestCategory.CANCEL, "Cancel", 8)]
 
@@ -385,11 +390,7 @@ class _SuiteProgress(object):
         return sum(1 for status in self.done.values() if status == TestCategory.CANCEL)
 
     def worst(self):
-        statuses = set(self.done.values())
-        for status in _SEVERITY:
-            if status in statuses:
-                return status
-        return TestCategory.SUCCESS
+        return _worst(set(self.done.values()))
 
 
 def expected_units(suite):
@@ -593,13 +594,9 @@ class Console(object):
         done = sum(p.processed() for p in self.__suites)
         total = sum(p.total() for p in self.__suites) + sum(p.expected for p in self.__pending())
         total = max(total, done, 1)
-        worst = TestCategory.SUCCESS
         statuses = set(status for p in self.__suites for status in p.done.values())
         statuses.update(TestCategory.IGNORE for p in self.__suites if p.suite_status() == SuiteCategory.IGNORE)
-        for status in _SEVERITY:
-            if status in statuses:
-                worst = status
-                break
+        worst = _worst(statuses)
         cancelled = sum(p.cancelled() for p in self.__suites)
         if final and self.__state.cancelled:
             cancelled = total - done
@@ -708,7 +705,13 @@ class Console(object):
             mode += dot + "test output shown live"
         if settings.monitor_resources:
             mode += dot + "resource monitoring"
+        if settings.retry is not None:
+            mode += dot + ("no retries" if settings.retry == 1 else "up to {} runs per test".format(settings.retry))
         row("mode", mode)
+        if any(p.suite.get_order() == TestOrder.RANDOM for p in self.__all):
+            seed = settings.kwargs.get("seed")
+            row("order", "random{}seed {}{}".format(dot, self.style(seed, "bold"), self.style(
+                "  repeat this order with --seed {}".format(seed), "dim")))
         reports = []
         if settings.html_report:
             reports.append("html {}".format(settings.html_report))
@@ -722,9 +725,10 @@ class Console(object):
             if value:
                 filters.append("{} {}".format(label, ", ".join(str(getattr(item, "__name__", item)) for item in value)))
         tags = settings.tags or {}
-        for key in ("run_on_match_all", "run_on_match_any", "skip_on_match_all", "skip_on_match_any"):
+        for key, label in (("run_on_match_all", "tags all"), ("run_on_match_any", "tags any"),
+                           ("skip_on_match_all", "skip tags all"), ("skip_on_match_any", "skip tags any")):
             if tags.get(key):
-                filters.append("{} {}".format(key, ", ".join(str(tag) for tag in tags[key])))
+                filters.append("{} {}".format(label, ", ".join(str(tag) for tag in tags[key])))
         if filters:
             row("filters", dot.join(filters))
         saved = dict(self.__cli.get("from_config") or {})
@@ -905,6 +909,9 @@ class Console(object):
             lines.extend(["", self.style("─" * _RULE_WIDTH, "dim"), ""])
         lines.append(self.__verdict(code, counts, runtime, errors))
         self.emit(lines)
+        if self.__cli and os.environ.get("GITHUB_ACTIONS"):
+            # GitHub turns these into annotations on the files that failed
+            self.__write("".join(line + "\n" for line in github_annotations(aggregator)))
         return code
 
     def __resources(self, samples):
@@ -1003,10 +1010,11 @@ class Console(object):
         dot = self.style(" · ", "dim")
         for suite in aggregator.executed_suites:
             suite_metrics = suite.metrics.get_metrics()
+            whole_suite = "{} {}  {}".format(self.badge("IGNORED", "ign"), self.style(suite.get_class_name(), "bold"),
+                                             self.style("whole suite", "dim"))
             if suite_metrics.get("status") == SuiteCategory.IGNORE:
                 reason = suite_metrics.get("initiation_error")
-                entry = ["{} {}  {}".format(self.badge("IGNORED", "ign"), self.style(suite.get_class_name(), "bold"),
-                                            self.style("whole suite", "dim")),
+                entry = [whole_suite,
                          "          " + self.style("{}{}{} tests not run".format(
                              self.__path(suite) or suite.get_class_module(), dot, expected_units(suite)), "dim"),
                          ""]
@@ -1033,8 +1041,7 @@ class Console(object):
                             continue
                         entries.append(self.__unit_entry(suite, test, data))
             for trace, tests in suite_wide.items():
-                entry = ["{} {}  {}".format(self.badge("IGNORED", "ign"), self.style(suite.get_class_name(), "bold"),
-                                            self.style("whole suite", "dim")),
+                entry = [whole_suite,
                          "          " + self.style("{}{}@beforeClass failed{}{} test{} not run".format(
                              self.__location(trace) or self.__path(suite), dot, dot, len(tests),
                              "" if len(tests) == 1 else "s"), "dim"),
@@ -1164,22 +1171,15 @@ class Console(object):
                 text += " " * (w - len(cell)) + styled
             return text
 
+        def worst(row):
+            return _STYLE_OF[_worst([status for status in row if row[status]], _SEVERITY + [TestCategory.CANCEL])]
+
         for (suite, row), label in zip(rows, labels):
-            worst = "pass"
-            for status in _SEVERITY + [TestCategory.CANCEL]:
-                if row[status]:
-                    worst = _STYLE_OF[status]
-                    break
-            lines.append("  {}{}{}".format(self.style(label, worst, "bold"), " " * (width - len(label)),
+            lines.append("  {}{}{}".format(self.style(label, worst(row), "bold"), " " * (width - len(label)),
                                            cells(row) + "{:0.2f}s".format(suite.get_runtime() or 0).rjust(9)))
         table_width = width + sum(w for _, _, w in _COLUMNS) + 9
         lines.append("  " + self.style("─" * table_width, "dim"))
-        worst = "pass"
-        for status in _SEVERITY + [TestCategory.CANCEL]:
-            if counts[status]:
-                worst = _STYLE_OF[status]
-                break
-        lines.append("  {}{}{}{}".format(self.style("Total", worst, "bold"), " " * (width - 5), cells(counts, True),
+        lines.append("  {}{}{}{}".format(self.style("Total", worst(counts), "bold"), " " * (width - 5), cells(counts, True),
                                          self.style("{:0.2f}s".format(runtime).rjust(9), "bold")))
         total = sum(counts.values())
         percents = "".join(("{}%".format(int(round(100.0 * counts[status] / total))) if counts[status] and total else "")
@@ -1203,19 +1203,14 @@ class Console(object):
         else:
             text = self.badge("PASSED", "pass")
         if self.__mode == "cli-quiet":
-            parts = []
-            for status, word in ((TestCategory.FAIL, "failed"), (TestCategory.ERROR, "error"),
-                                 (TestCategory.IGNORE, "ignored")):
-                if counts[status]:
-                    parts.append(self.style("{} {}".format(counts[status], word), _STYLE_OF[status]))
-            good = []
-            for status, word in ((TestCategory.SUCCESS, "passed"), (TestCategory.SKIP, "skipped"),
-                                 (TestCategory.CANCEL, "cancelled")):
-                if counts[status]:
-                    good.append(self.style("{} {}".format(counts[status], word), _STYLE_OF[status]))
-            groups = [", ".join(parts)] if parts else []
-            if good:
-                groups.append(", ".join(good))
+            groups = []
+            for words in (((TestCategory.FAIL, "failed"), (TestCategory.ERROR, "error"), (TestCategory.IGNORE, "ignored")),
+                          ((TestCategory.SUCCESS, "passed"), (TestCategory.SKIP, "skipped"),
+                           (TestCategory.CANCEL, "cancelled"))):
+                parts = [self.style("{} {}".format(counts[status], word), _STYLE_OF[status])
+                         for status, word in words if counts[status]]
+                if parts:
+                    groups.append(", ".join(parts))
             groups.append("{:0.2f}s".format(runtime))
             text += "  " + dot.join(groups)
         if cli:
@@ -1227,8 +1222,6 @@ class Console(object):
 # ── tj run -m: CPU and memory over the run, with the tests on the same timeline ──────────────────────────────────
 
 _PARTIAL = " ▁▂▃▄▅▆▇"
-_RESULT_STYLE = {TestCategory.SUCCESS: "pass", TestCategory.FAIL: "fail", TestCategory.ERROR: "err",
-                 TestCategory.SKIP: "skip", TestCategory.IGNORE: "ign", TestCategory.CANCEL: "canc"}
 
 
 def _seconds(value):
@@ -1323,7 +1316,7 @@ def resource_chart(style, samples, start, end, tests, suites, test_threads=1, pa
             if row == rows - 1 and len(stack) > rows:
                 cells.append(style("+", "dim"))
             elif row < len(stack):
-                cells.append(style("●", _RESULT_STYLE.get(stack[row], "dim")))
+                cells.append(style("●", _STYLE_OF.get(stack[row], "dim")))
             else:
                 cells.append(" ")
         lines.append("  " + style(" tests " if row == 0 else "       ", "dim") + "".join(cells))
@@ -1358,7 +1351,7 @@ def resource_chart(style, samples, start, end, tests, suites, test_threads=1, pa
 
     ticks = [" "] * W
     step = runtime / 5.0
-    magnitude = 10 ** __import__("math").floor(__import__("math").log10(step))
+    magnitude = 10 ** math.floor(math.log10(step))
     step = next(m * magnitude for m in (1, 2, 5, 10) if m * magnitude >= step)
     end_label = _seconds(runtime)
     t = 0.0
@@ -1375,4 +1368,38 @@ def resource_chart(style, samples, start, end, tests, suites, test_threads=1, pa
     lines.append("  " + "  ".join(style("●", cls) + " " + word for cls, word in (
         ("pass", "passed"), ("fail", "failed"), ("err", "error"), ("skip", "skipped"), ("ign", "ignored"),
         ("canc", "cancelled"))))
+    return lines
+
+
+def _escape(value, properties=False):
+    value = str(value).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return value.replace(":", "%3A").replace(",", "%2C") if properties else value
+
+
+def github_annotations(aggregator):
+    """
+    :return: LIST of GitHub Actions ::error lines, one per test that failed, errored or was ignored
+    """
+    lines = []
+    for suite in aggregator.executed_suites:
+        for test in suite.get_test_objects():
+            for by_param in test.metrics.get_metrics().values():
+                for data in by_param.values():
+                    if data.get("status") not in TestCategory.ALL_UN_SUCCESSFUL:
+                        continue
+                    traces = [trace for trace in data.get("tracebacks") or [] if trace]
+                    exceptions = [exception for exception in data.get("exceptions") or [] if exception is not None]
+                    frames, _ = parse_traceback(traces[-1] if traces else None)
+                    own = [frame for frame in frames if frame[2] == test.get_function_name()] or frames
+                    where = ""
+                    if own:
+                        where = "file={},line={},".format(_escape(own[-1][0].replace(os.sep, "/"), True),
+                                                          own[-1][1])
+                    title = "{}.{}".format(suite.get_class_name(), test.get_function_name())
+                    if data.get("param") is not None:
+                        title += "[{}]".format(_short(data["param"], 40))
+                    message = _exception_summary(traces[-1] if traces else None,
+                                                 exceptions[-1] if exceptions else None)
+                    lines.append("::error {}title={}::{}{}".format(
+                        where, _escape(title, True), _escape(str(data["status"]).upper() + ": "), _escape(message)))
     return lines

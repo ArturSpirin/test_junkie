@@ -21,22 +21,73 @@ CliUtils = _CliUtils()
 
 class Config:
 
-    def __init__(self, config_name):
+    PROJECT_FILE = "tj.cfg"  # a project's own settings, in the directory tj runs from
+    PYPROJECT_TABLE = "test_junkie"  # [tool.test_junkie] in pyproject.toml
 
+    def __init__(self, config_name, create=False):
+
+        self.read_only = False
         if config_name not in [CliConstants.TJ_CONFIG_NAME]:
-            if not os.path.exists(config_name):
+            if not os.path.exists(config_name) and not create:
                 print("[{status}]\tWasn't able to find config @ {path}. Please check that the file exists."
                       .format(status=CliUtils.format_color_string(value="ERROR", color="red"),
                               path=CliUtils.format_color_string(value=config_name, color="red")))
                 exit(120)
             self.path = config_name
+            if os.path.basename(config_name) == "pyproject.toml":
+                self.read_only = True  # tj config never rewrites pyproject.toml
+                self.config = Config.__from_pyproject(config_name)
+                return
         else:
             self.path = "{root}{sep}{file}".format(root=Config.get_root_dir(), file=config_name, sep=os.sep)
-        if not os.path.exists(Config.get_root_dir()):
-            os.makedirs(Config.get_root_dir())
+            if not os.path.exists(Config.get_root_dir()):
+                os.makedirs(Config.get_root_dir())
         if not os.path.exists(self.path):
             self.restore()
         self.config = self.__get_parser()
+
+    @staticmethod
+    def __toml():
+        try:
+            import tomllib  # Python 3.11+
+            return tomllib
+        except ImportError:
+            try:
+                import tomli
+                return tomli
+            except ImportError:
+                return None
+
+    @staticmethod
+    def project_path(directory=None):
+        """
+        :return: STRING, the project's settings file in `directory` (default: the working directory): tj.cfg, or
+                 pyproject.toml when it has a [tool.test_junkie] table and it can be read. None if there's neither
+        """
+        directory = directory or os.getcwd()
+        path = os.path.join(directory, Config.PROJECT_FILE)
+        if os.path.isfile(path):
+            return path
+        path = os.path.join(directory, "pyproject.toml")
+        if os.path.isfile(path) and Config.__toml() is not None:
+            try:
+                with open(path, "rb") as doc:
+                    if Config.PYPROJECT_TABLE in Config.__toml().load(doc).get("tool", {}):
+                        return path
+            except Exception:
+                return None
+        return None
+
+    @staticmethod
+    def __from_pyproject(path):
+        import configparser
+        with open(path, "rb") as doc:
+            table = Config.__toml().load(doc).get("tool", {}).get(Config.PYPROJECT_TABLE, {})
+        config = configparser.ConfigParser(interpolation=None)
+        config.read_string(CliConstants.DEFAULTS)
+        for key, value in table.items():
+            config.set("runtime", key.replace("-", "_"), repr(value))  # saved the way tj config saves values
+        return config
 
     def remove(self):
         """
@@ -73,6 +124,9 @@ class Config:
 
     def set_value(self, option, value):
 
+        if self.read_only:
+            raise ValueError("{} is read-only for tj config: edit its [tool.{}] table yourself"
+                             .format(self.path, Config.PYPROJECT_TABLE))
         self.config.set('runtime', option, repr(value))
         with open(self.path, 'w+') as doc:
             self.config.write(doc)
@@ -123,11 +177,13 @@ class Config:
 # what tj config show groups settings by, and the value each one has when it isn't saved (None: no default)
 _GROUPS = [
     ("Discovery", [("sources", None), ("guess_root", "off")]),
-    ("Parallel", [("test_multithreading_limit", "1"), ("suite_multithreading_limit", "1")]),
+    ("Parallel and retries", [("test_multithreading_limit", "1"), ("suite_multithreading_limit", "1"),
+                              ("retry", None), ("no_retry", "off")]),
     ("Filters", [("tests", None), ("features", None), ("components", None), ("owners", None),
                  ("run_on_match_any", None), ("run_on_match_all", None), ("skip_on_match_any", None),
                  ("skip_on_match_all", None)]),
-    ("Reports and output", [("html_report", None), ("xml_report", None), ("monitor_resources", "off"),
+    ("Reports and output", [("html_report", None), ("xml_report", None), ("json_report", None),
+                            ("monitor_resources", "off"),
                             ("code_cov", "off"), ("cov_rcfile", None), ("quiet", "off"), ("per_test", "off"),
                             ("no_capture", "off")]),
 ]
@@ -157,10 +213,10 @@ class CliConfig:
     only use for cli, do not use for parsing the config when running tests
     """
 
-    def __init__(self, config_name, command, args):
+    def __init__(self, config_name, command, args, create=False):
 
         self.args = args
-        self.config = Config(config_name=config_name)
+        self.config = Config(config_name=config_name, create=create)
         self.__console = CliConfig.console()
         getattr(self, command)()
 
@@ -213,7 +269,14 @@ class CliConfig:
         """
         :return: DICT of option -> the shortest flag for it, e.g. test_multithreading_limit -> -T
         """
-        return {action.dest: min(action.option_strings, key=len) for action in parser._actions if action.option_strings}
+        return {action.dest: min(action.option_strings, key=len) for action in parser._actions
+                if action.option_strings and action.help != argparse.SUPPRESS}
+
+    def __writable(self):
+        if self.config.read_only:
+            self.__error("{} is read-only for tj config. Edit its [tool.{}] table yourself.".format(
+                self.config.path, Config.PYPROJECT_TABLE),
+                "Or keep the settings in a tj.cfg instead: tj config update ... --config ./tj.cfg")
 
     def update(self):
 
@@ -224,6 +287,7 @@ class CliConfig:
             self.__error("Nothing to update. Pass the settings to save, e.g. {}".format(
                 self.__console.style("tj config update -s tests -T 4", "bold")), "tj config update -h lists every setting.")
         args = parser.parse_args(self.args[3:])
+        self.__writable()
         flags = CliConfig.__flags(parser)
         changes = []
         for option, value in args.__dict__.items():
@@ -289,6 +353,7 @@ class CliConfig:
                                                                        style("tj config restore --all", "bold")),
                          "tj config restore -h lists every setting.")
         args = parser.parse_args(self.args[3:])
+        self.__writable()
         console, style = self.__console, self.__console.style
         dot = style(" · ", "dim")
         options = [option for _, items in _GROUPS for option, _ in items]

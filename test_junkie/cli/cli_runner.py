@@ -1,3 +1,4 @@
+import fnmatch
 import glob
 import hashlib
 import importlib.util
@@ -68,7 +69,12 @@ class CliRunner:
         self.__code_cov = kwargs.get("code_cov", Undefined)
         self.__cov_rcfile = kwargs.get("cov_rcfile", Undefined)
         self.__guess_root = kwargs.get("guess_root", False)
+        self.__quiet_scan = kwargs.get("quiet_scan", False)  # tj audit --json: nothing but the JSON on stdout
+        # --config, else the project's tj.cfg / pyproject.toml in the working directory, else the user config
         self.__execution_config = kwargs.get("config", Undefined)
+        self.project_config = Config.project_path() if self.__execution_config in (Undefined, None) else None
+        if self.__execution_config in (Undefined, None):
+            self.__execution_config = self.project_config or Undefined
 
         self.tjignore = ignore
         self.detected_suites = {}
@@ -153,7 +159,8 @@ class CliRunner:
                   .format(status=CliUtils.format_color_string(value="ERROR", color="red"), error=error))
             print("[{status}] 1. Make sure you have installed all of the packages required for your project "
                   "to work".format(status=CliUtils.format_color_string(value="ERROR", color="red")))
-            print("[{status}] 2. Make sure the root of your project is in the PYTHONPATH"
+            print("[{status}] 2. Make sure the root of your project is in the PYTHONPATH, run python -m test_junkie "
+                  "from the project root, or add --guess-root"
                   .format(status=CliUtils.format_color_string(value="ERROR", color="red")))
             raise
 
@@ -183,15 +190,27 @@ class CliRunner:
             with suppressed_stdout(suppress=True):
                 module = _load_source(module_name, _file_path)
         except ImportError as error:
-            if self.guess_root:
-                module = guess_project_root(_file_path, module_name, error)
-            else:
-                raise_import_error(error)
+            root = os.path.dirname(os.path.abspath(self.project_config)) if self.project_config else None
+            if root and root not in sys.path:
+                # the folder with the project's tj.cfg / pyproject.toml is the project root: try it first
+                sys.path.insert(0, root)
+                try:
+                    with suppressed_stdout(suppress=True):
+                        module = _load_source(module_name, _file_path)
+                    error = None
+                except ImportError as retry_error:
+                    error = retry_error
+            if error is not None:
+                if self.guess_root:
+                    module = guess_project_root(_file_path, module_name, error)
+                else:
+                    raise_import_error(error)
         roster = Builder.get_execution_roster()
         for name, data in list(vars(module).items()):  # definition order, same order the suites will run in
             # only suites defined in this file - a suite imported from elsewhere is picked up from its own file
             if inspect.isclass(data) and data in roster and data.__module__ == module.__name__:
-                if not self.requested_suites or name in self.requested_suites:
+                if not self.requested_suites or any(fnmatch.fnmatchcase(name, pattern)
+                                                    for pattern in self.requested_suites):
                     self.suites.append(data)
 
     def __skip(self, source, directory):
@@ -216,7 +235,7 @@ class CliRunner:
                 self.__find_and_register_suite(_file)
 
         try:
-            interactive = sys.stdout.isatty()
+            interactive = sys.stdout.isatty() and not self.__quiet_scan
             if interactive:  # replaced by the run's header once the scan is done
                 sys.stdout.write("scanning {} …".format(", ".join(self.sources)))
                 sys.stdout.flush()
@@ -237,7 +256,7 @@ class CliRunner:
             if interactive:
                 sys.stdout.write("\r\x1b[2K")
                 sys.stdout.flush()
-            if not self.suites:
+            if not self.suites and not self.__quiet_scan:
                 print("[{status}] No test suites found in {location} ({time:0.2f}s).".format(
                     status=CliUtils.format_color_string(value="ERROR", color="red"),
                     location=", ".join(self.sources), time=self.scan_seconds))
@@ -268,6 +287,8 @@ class CliRunner:
                 runner = Runner(suites=self.suites,
                                 html_report=args.html_report,
                                 xml_report=args.xml_report,
+                                json_report=args.json_report,
+                                seed=args.seed,
                                 config=self.execution_config)
                 runner.run(test_multithreading_limit=args.test_multithreading_limit,
                            suite_multithreading_limit=args.suite_multithreading_limit,
@@ -279,6 +300,8 @@ class CliRunner:
                            quiet=args.quiet,
                            monitor_resources=args.monitor_resources,  # tj run -m was never passed on
                            per_test=args.per_test,
+                           retry=args.retry,
+                           no_retry=args.no_retry,
                            capture=Undefined if args.no_capture is Undefined else not args.no_capture,
                            _cli={"sources": self.sources, "scan_seconds": self.scan_seconds,
                                  "from_config": dict(self.from_config)})

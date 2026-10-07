@@ -17,6 +17,17 @@
 - `tj run -m` charts CPU and memory after the summary, with every test as a dot on the same timeline and the suites under it; threaded runs also show how many tests ran at once. Resources are sampled every 0.25s instead of every second
 - Fixed `tj run -m` being ignored: resources were only monitored when `-m` was saved with `tj config update`
 - `tj config` and `tj audit` errors say what to type instead and exit with code 120 (`tj config update`, `tj config show` and `tj audit` with nothing to do used to exit 0); `tj config show` with no options now asks which settings instead of printing the whole file
+- CLI options use dashes, the same in every command: `--tags-any`/`-k`, `--tags-all`/`-l`, `--skip-tags-any`/`-g`, `--skip-tags-all`/`-j`, `--test-multithreading-limit`, `--html-report` etc. The old names (`--run_on_match_any`, `--test_multithreading_limit`, ...) still work but are no longer listed in `-h`
+- `tj audit` tag filters now match `tj run`: `-l` means tests with *all* the tags (it was "any" in `tj audit`), `-k` any of them; `--tags` still works as "any"
+- A project config: `tj.cfg` (created with `tj config update ... --config ./tj.cfg`) or a `[tool.test_junkie]` table in `pyproject.toml` (read-only, Python 3.11+ or with `tomli`) is found from the current folder up and used instead of the user config. `tj run` with no `-s` in a project uses its saved sources, and the project folder is put on the import path if a suite import fails
+- `-t` / `--tests` takes `Suite.test` names and patterns like `login_*`; `-x` takes patterns like `Legacy*`
+- `--seed N` repeats a `TestOrder.RANDOM` order; the header always prints the seed that was used
+- `--retry N` and `--no-retry` override every test's `retry=` for one run
+- `--json-report FILE`: results as JSON, every run of every test with its error. `--html-report`, `--xml-report` and `--json-report` also take a folder
+- In GitHub Actions, `tj run` prints an `::error` annotation per failed test, pointing at the failing line
+- `tj audit --json` for scripts, and `tj audit --fail-on-gaps [owners,tags,...]` exits 1 when tests are missing that metadata (for CI)
+- `tj version` shows the installed package, the config in use and the docs link. `tj` with no command, or an unknown one, exits 120 with the commands to use
+- Smaller install despite the above (849 KB → 844 KB): the HTML report's page ships as package data, the CLI options are defined once
 
 ## 0.9a5
 - Fixed `monitor_resources=True` leaving a `.resources_*` temp file behind after short runs: the monitor thread could re-create it after cleanup

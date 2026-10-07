@@ -385,6 +385,16 @@ def tj_run_dash_m_reaches_the_run():
     assert code is None and "resource monitoring" in out and "Resources CPU and memory" in out, out
 
 
+def github_annotations_point_at_the_failing_line():
+    from test_junkie.console import github_annotations
+    aggregator, _ = _run([ConsoleMixedSuite])
+    lines = github_annotations(aggregator)
+    assert len(lines) == 1, lines
+    assert lines[0].startswith("::error file=tests/junkie_suites/console_checks.py,line=") or \
+        "console_checks.py,line=" in lines[0], lines
+    assert "title=ConsoleMixedSuite.fails_differently_first::FAIL: AssertionError" in lines[0], lines
+
+
 CHECKS = [tracebacks_print_as_lines, retried_test_lists_every_run_and_groups_tracebacks,
           output_is_shown_only_for_tests_that_did_not_pass, no_capture_prints_output_live, quiet_run_prints_nothing,
           summary_table_and_verdict, failed_before_class_is_one_entry, per_test_prints_a_line_per_test,
@@ -392,4 +402,5 @@ CHECKS = [tracebacks_print_as_lines, retried_test_lists_every_run_and_groups_tra
           live_bars_redraw_in_place, ctrl_c_cancels_a_threaded_run, ctrl_c_interrupts_a_sequential_test,
           second_ctrl_c_stops_immediately, resource_chart_sequential_layout,
           resource_chart_threaded_lanes_and_running_row, resource_chart_too_short_to_sample,
-          run_with_monitor_resources_prints_the_chart, tj_run_dash_m_reaches_the_run]
+          run_with_monitor_resources_prints_the_chart, tj_run_dash_m_reaches_the_run,
+          github_annotations_point_at_the_failing_line]

@@ -32,7 +32,7 @@ Use it from Python with `Runner` or from the terminal with the `tj` command.
 - Retries: `retry=N` on a suite or a test — only the failing parameter variants re-run; `retry_on=[ConnectionError]` retries just infrastructure noise, `no_retry_on=[AssertionError]` makes real bugs surface immediately
 - Multi-layer parametrization: `@Suite(parameters=[...])` × `@test(parameters=[...])` = every combination, each variant tracked and retried on its own; parameters can be a function that builds the list at run time
 - `Rules` for shared setup/teardown — define `before_class` / `before_test` / … once, attach with `@Suite(rules=...)` to as many suites as you like
-- First-class `owner`, `feature`, `component`, `tags` and `priority` — filter with `tj run --owners`, `--features`, `--components`, `--run_on_match_any` / `--run_on_match_all` (tags), or `owners=` / `features=` / `components=` / `tag_config=` in `Runner.run()`
+- First-class `owner`, `feature`, `component`, `tags` and `priority` — filter with `tj run --owners`, `--features`, `--components`, `--tags-any` / `--tags-all` (tags), or `owners=` / `features=` / `components=` / `tag_config=` in `Runner.run()`
 - Execution order per suite: `@Suite(order=TestOrder.RANDOM)` (or `ALPHABETICAL`, `PRIORITY_ASC`, `PRIORITY_DESC`) — e.g. shuffle one suite to surface order dependencies
 - Skipping: `skip=True` or a function deciding at run time on any suite or test, and `shortcuts.skip("reason")` from inside a running test
 - Live event listeners: subclass `Listener`, override any of its 21 events (`on_failure`, `on_success`, `on_class_skip`, …) and attach it with `@Suite(listener=...)`
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     Runner([LoginSuite], html_report="report.html").run(test_multithreading_limit=4)
 ```
 
-Or from the terminal: `tj run -s path/to/tests -T 4 --html_report report.html`
+Or from the terminal: `tj run -s path/to/tests -T 4 --html-report report.html`
 
 > **Python 2.7:** the last release with Python 2.7 support is [`0.8a.8`](https://pypi.org/project/test-junkie/0.8a.8/). All versions from `0.9a0` onwards require Python 3.
 

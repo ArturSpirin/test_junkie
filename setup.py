@@ -18,7 +18,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://www.test-junkie.com/",
     packages=setuptools.find_packages(exclude=["tests", "tests.*"]),
-    package_data={"test_junkie.reporter": ["assets/*.css", "assets/*.js"]},
+    package_data={"test_junkie.reporter": ["assets/*.css", "assets/*.js", "assets/*.html"]},
     python_requires=">=3.9",
     classifiers=[
         "Development Status :: 3 - Alpha",

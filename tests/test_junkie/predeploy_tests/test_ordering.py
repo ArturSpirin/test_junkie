@@ -97,10 +97,10 @@ class OrderingTestSuite:
     @test()
     def random_invokes_shuffle(self):
         random_order.clear()
-        with patch("test_junkie.runner.random") as mock_random:
-            mock_random.shuffle.side_effect = lambda lst: None
+        with patch("random.Random.shuffle") as mock_shuffle:  # the runner shuffles with random.Random(seed)
+            mock_shuffle.side_effect = lambda lst: None
             Runner([RandomSuite]).run()
-        mock_random.shuffle.assert_called_once()
+        mock_shuffle.assert_called_once()
 
     @test()
     def random_respects_shuffle_result(self):
@@ -111,8 +111,8 @@ class OrderingTestSuite:
             captured.extend(lst)
             lst.reverse()
 
-        with patch("test_junkie.runner.random") as mock_random:
-            mock_random.shuffle.side_effect = capture_and_reverse
+        with patch("random.Random.shuffle") as mock_shuffle:  # the runner shuffles with random.Random(seed)
+            mock_shuffle.side_effect = capture_and_reverse
             Runner([RandomSuite]).run()
 
         expected = [t.get_function_name() for t in reversed(captured)]

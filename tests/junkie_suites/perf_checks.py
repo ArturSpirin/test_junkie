@@ -133,7 +133,7 @@ def runner_import_stays_lean():
     loaded = subprocess.run([sys.executable, "-c", probe], cwd=root, capture_output=True, text=True, check=True)
     assert loaded.stdout.strip() == "[]", loaded.stdout + loaded.stderr
     version = subprocess.run([sys.executable, "-m", "test_junkie", "version"], cwd=root, capture_output=True,
-                             text=True)
+                             text=True, env=dict(os.environ, NO_COLOR="1"))  # colored under GITHUB_ACTIONS
     assert version.stdout.startswith("Test Junkie {} ".format(test_junkie.__version__)), version.stdout
 
 

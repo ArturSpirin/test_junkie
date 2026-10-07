@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import traceback
 
@@ -6,49 +7,103 @@ from test_junkie.cli.cli_audit import CliAudit
 from test_junkie.constants import DocumentationLinks, CliConstants, Undefined
 from colorama import Fore, Style
 
+# Every option the commands share, defined once: (setting, short flag, documented long flag, old spellings that
+# still work, kind, help, where). kind: "list" (one or more values), "int", "str" or "flag". where: "run" for tj run
+# and tj config update/show/restore, "audit" for tj audit too, "once" for tj run only (not saved to the config)
+_OPTIONS = [
+    ("sources", "-s", "--sources", (), "list",
+     "Directories or files with your tests. Test Junkie scans them for suites", "audit"),
+    ("test_multithreading_limit", "-T", "--test-multithreading-limit", ("--test_multithreading_limit",), "int",
+     "How many tests run at the same time", "run"),
+    ("suite_multithreading_limit", "-S", "--suite-multithreading-limit", ("--suite_multithreading_limit",), "int",
+     "How many suites run at the same time", "run"),
+    ("tests", "-t", "--tests", (), "list",
+     "Only these tests: names, Suite.test names or patterns like login_*", "run"),
+    ("features", "-f", "--features", (), "list",
+     "Only suites with these features. See " + DocumentationLinks.FEATURES, "audit"),
+    ("components", "-c", "--components", (), "list",
+     "Only tests with these components. See " + DocumentationLinks.COMPONENTS, "audit"),
+    ("owners", "-o", "--owners", (), "list",
+     "Only tests with these owners. See " + DocumentationLinks.ASSIGNEES, "audit"),
+    ("run_on_match_all", "-l", "--tags-all", ("--run-on-match-all", "--run_on_match_all"), "list",
+     "Only tests that have ALL of these tags. See " + DocumentationLinks.TAGS, "audit"),
+    ("run_on_match_any", "-k", "--tags-any", ("--run-on-match-any", "--run_on_match_any"), "list",
+     "Only tests that have ANY of these tags", "audit"),
+    ("skip_on_match_all", "-j", "--skip-tags-all", ("--skip-on-match-all", "--skip_on_match_all"), "list",
+     "Skip tests that have ALL of these tags", "run"),
+    ("skip_on_match_any", "-g", "--skip-tags-any", ("--skip-on-match-any", "--skip_on_match_any"), "list",
+     "Skip tests that have ANY of these tags", "run"),
+    ("retry", None, "--retry", (), "int",
+     "Run each failing test up to this many times, whatever its @test(retry=) says", "run"),
+    ("no_retry", None, "--no-retry", ("--no_retry",), "flag", "Run every test and suite once, no retries", "run"),
+    ("seed", None, "--seed", (), "int",
+     "Seed for TestOrder.RANDOM, to repeat an order (the header prints the one used)", "once"),
+    ("monitor_resources", "-m", "--monitor-resources", ("--monitor_resources",), "flag",
+     "Track CPU and memory, and chart them after the summary", "run"),
+    ("html_report", None, "--html-report", ("--html_report",), "str",
+     "Write an HTML report to this file, or to report.html in this folder", "run"),
+    ("xml_report", None, "--xml-report", ("--xml_report",), "str",
+     "Write a JUnit XML report to this file, or to report.xml in this folder", "run"),
+    ("json_report", None, "--json-report", ("--json_report",), "str",
+     "Write a JSON report to this file, or to report.json in this folder", "run"),
+    ("quiet", "-q", "--quiet", (), "flag", "Only print the problems and the result line", "run"),
+    ("per_test", "-p", "--per-test", ("--per_test",), "flag",
+     "Print one line per test instead of a progress bar per suite", "run"),
+    ("no_capture", None, "--no-capture", ("--no_capture",), "flag",
+     "Show what tests print and log as it happens. Needed for breakpoint() / pdb", "run"),
+    ("code_cov", None, "--code-cov", ("--code_cov",), "flag", "Measure code coverage", "run"),
+    ("cov_rcfile", None, "--cov-rcfile", ("--cov_rcfile",), "str",
+     "Configuration file for coverage.py. See " + DocumentationLinks.COVERAGE_CONFIG_FILE, "run"),
+    ("guess_root", None, "--guess-root", ("--guess_root",), "flag",
+     "If an import fails, look for your project's root in the folders above the test files", "audit"),
+]
+_KINDS = {"list": {"nargs": "+"}, "int": {"type": int}, "str": {"type": str}, "flag": {"action": "store_true"}}
+_METAVARS = {"sources": "PATH", "tests": "TEST", "features": "FEATURE", "components": "COMPONENT", "owners": "OWNER",
+             "run_on_match_all": "TAG", "run_on_match_any": "TAG", "skip_on_match_all": "TAG",
+             "skip_on_match_any": "TAG", "html_report": "FILE", "xml_report": "FILE", "json_report": "FILE",
+             "cov_rcfile": "FILE"}
+_AUDIT_VIEWS = ["suites", "features", "components", "tags", "owners"]
+
+
+def _add(parser, dest, short, long_flag, aliases, extra, help_text):
+    parser.add_argument(*([short, long_flag] if short else [long_flag]), dest=dest, help=help_text, **extra)
+    if aliases:  # old spellings keep working without crowding -h
+        parser.add_argument(*aliases, dest=dest, help=argparse.SUPPRESS,
+                            **dict(extra, default=argparse.SUPPRESS))
+
 
 class Cli(object):
 
     def __init__(self):
-        parser = argparse.ArgumentParser(
-            description="",
-            usage="""tj COMMAND
-
-Modern Testing Framework
+        parser = argparse.ArgumentParser(prog="tj", usage="""tj COMMAND
 
 Commands:
-run\t Run tests in any directory (recursive) 
-audit\t Audit your tests in any directory (recursive) 
-config\t Configure Test Junkie
-version\t Display current version
+run\t Run tests from a directory or file
+audit\t Report on your tests' owners, features, components and tags without running them
+config\t Save settings for tj run and tj audit
+version\t Show the version, Python, install and config locations
 
 Use: tj COMMAND -h to display COMMAND specific help
 """)
         parser.add_argument('command', help='command to run')
+        if len(sys.argv) < 2:
+            CliUtils.error("Which command? e.g. tj run -s tests, or tj audit suites -s tests",
+                           "Commands: run, audit, config, version. tj -h explains each one.")
         args = parser.parse_args(sys.argv[1:2])
-        if not hasattr(self, args.command):
-            print("[{status}]\t\'{command}\' is not a test-junkie command\n".format(
-                status=CliUtils.format_color_string(value="ERROR", color="red"), command=args.command))
-            parser.print_help()
-            exit(1)
-        if args.command:
-            getattr(self, args.command)()
+        if args.command.startswith("_") or not hasattr(self, args.command):
+            CliUtils.error("'{}' is not a test-junkie command. Use one of: run, audit, config, version"
+                           .format(args.command), "tj -h explains each one.")
+        getattr(self, args.command)()
 
     def run(self):
-        parser = argparse.ArgumentParser(description='Run tests from command line',
-                                         usage="tj run [OPTIONS]")
-
+        parser = argparse.ArgumentParser(description='Run tests from command line', usage="tj run [OPTIONS]")
         parser.add_argument("-x", "--suites", nargs="+", default=None,
-                            help="Test Junkie will only run suites provided, "
-                                 "given that they are found in the SOURCE")
-
+                            help="Only these suites: names or patterns like Login*")
         parser.add_argument("-v", "--verbose", action="store_true", default=False,
                             help="Enables Test Junkie's logs for debugging purposes")
-
         parser.add_argument("--config", type=str, default=Undefined,
-                            help="Provide your own config FILE with settings for test execution.")
-
-        CliUtils.add_standard_tj_args(parser)
+                            help="Settings file to use instead of the project's tj.cfg or your user config")
+        CliUtils.add_options(parser, "run")
 
         args = parser.parse_args(sys.argv[2:])
 
@@ -66,109 +121,92 @@ Use: tj COMMAND -h to display COMMAND specific help
 
     def audit(self):
         parser = argparse.ArgumentParser(description='Scan and display aggregated and/or filtered test information',
-                                         usage="""tj audit [COMMAND] [OPTIONS]
+                                         usage="""tj audit VIEW [OPTIONS]
 
-Aggregate, pivot, and display data about your tests.
-
-Commands:
-suites\t\t Pivot test information from suite's perspective
-features\t Pivot test information from feature's perspective
-components\t Pivot test information from component's perspective
-tags\t\t Pivot test information from tag's perspective
-owners\t\t Pivot test information from owner's perspective
-
-usage: tj audit [COMMAND] [OPTIONS]
+Report on your tests without running them. Views:
+suites\t\t one block per suite
+features\t one block per feature
+components\t one block per component
+tags\t\t one block per tag
+owners\t\t one block per owner
 """)
-        parser.add_argument('command', help='command to run')
-
-        parser.add_argument("--by-components", action="store_true", default=False,
-                            help="Present aggregated data broken down by components")
-
-        parser.add_argument("--by-features", action="store_true", default=False,
-                            help="Present aggregated data broken down by features")
-
-        parser.add_argument("--no-rules", action="store_true", default=False,
-                            help="Aggregate data only for suites that do not have any rules set")
-
-        parser.add_argument("--no-listeners", action="store_true", default=False,
-                            help="Aggregate data only for suites that do not have any event listeners set")
-
-        parser.add_argument("--no-suite-retries", action="store_true", default=False,
-                            help="Aggregate data only for suites that do not have retries set")
-
-        parser.add_argument("--no-test-retries", action="store_true", default=False,
-                            help="Aggregate data only for tests that do not have retries set")
-
-        parser.add_argument("--no-suite-meta", action="store_true", default=False,
-                            help="Aggregate data only for suites that do not have any meta information set")
-
-        parser.add_argument("--no-test-meta", action="store_true", default=False,
-                            help="Aggregate data only for tests that do not have any meta information set")
-
-        parser.add_argument("--no-owners", action="store_true", default=False,
-                            help="Aggregate data only for tests that do not have any owners defined")
-
-        parser.add_argument("--no-features", action="store_true", default=False,
-                            help="Aggregate data only for suites that do not have features defined")
-
-        parser.add_argument("--no-components", action="store_true", default=False,
-                            help="Aggregate data only for tests that do not have any components defined")
-
-        parser.add_argument("--no-tags", action="store_true", default=False,
-                            help="Aggregate data only for tests that do not have tags defined")
-
+        parser.add_argument('command', help='the view: suites, features, components, tags or owners')
+        for flag, text in (("--by-components", "Split every block by component"),
+                           ("--by-features", "Split every block by feature"),
+                           ("--no-rules", "Only suites without custom rules"),
+                           ("--no-listeners", "Only suites without custom event listeners"),
+                           ("--no-suite-retries", "Only suites without retries"),
+                           ("--no-test-retries", "Only tests without retries"),
+                           ("--no-suite-meta", "Only suites without meta"),
+                           ("--no-test-meta", "Only tests without meta"),
+                           ("--no-owners", "Only tests without an owner"),
+                           ("--no-features", "Only suites without a feature"),
+                           ("--no-components", "Only tests without a component"),
+                           ("--no-tags", "Only tests without tags")):
+            parser.add_argument(flag, action="store_true", default=False, help=text)
+        parser.add_argument("--json", action="store_true", default=False,
+                            help="Print the result as JSON, for scripts and CI")
+        parser.add_argument("--fail-on-gaps", nargs="?", const="owners,features,components,tags", default=None,
+                            metavar="KINDS", help="Exit 1 if any test has no owner, feature, component or tag "
+                                                  "(or just the kinds listed, e.g. owners,tags)")
         parser.add_argument("-x", "--suites", nargs="+", default=None,
-                            help="Test Junkie will only run suites provided, "
-                                 "given that they are found in the SOURCE")
-
+                            help="Only these suites: names or patterns like Login*")
         parser.add_argument("-v", "--verbose", action="store_true", default=False,
                             help="Enables Test Junkie's logs for debugging purposes")
+        parser.add_argument("--config", type=str, default=Undefined,
+                            help="Settings file to use instead of the project's tj.cfg or your user config")
+        CliUtils.add_options(parser, "audit")
+        # tj audit --tags was the only tag filter (any of the tags); it's tj run's --tags-any now
+        parser.add_argument("--tags", nargs="+", dest="run_on_match_any", help=argparse.SUPPRESS,
+                            default=argparse.SUPPRESS)
 
-        CliUtils.add_standard_tj_args(parser, audit=True)
-
-        if len(sys.argv) >= 3:
-            args = parser.parse_args(sys.argv[2:])
-            command = args.command
-            if command not in ["suites", "features", "components", "tags", "owners"]:
-                CliUtils.error("'{}' is not an audit view. Use one of: suites, features, components, tags, owners"
-                               .format(command), "tj audit -h lists every option.")
-            else:
-                if args.verbose:
-                    from test_junkie.debugger import LogJunkie
-                    LogJunkie.enable_logging(10)
-
-                from test_junkie.cli.cli_runner import CliRunner
-                tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites,
-                               guess_root=args.guess_root)
-                tj.scan()
-                aggregator = CliAudit(suites=tj.suites, args=args, sources=tj.sources, scan_seconds=tj.scan_seconds)
-                aggregator.aggregate()
-                aggregator.print_results()
-                return
-        elif len(sys.argv) == 2:
+        if len(sys.argv) < 3:
             CliUtils.error("Which view? e.g. tj audit suites, or tj audit owners --no-owners",
                            "Views: suites, features, components, tags, owners. tj audit -h lists every option.")
-        parser.print_help()
+        args = parser.parse_args(sys.argv[2:])
+        if args.command not in _AUDIT_VIEWS:
+            CliUtils.error("'{}' is not an audit view. Use one of: suites, features, components, tags, owners"
+                           .format(args.command), "tj audit -h lists every option.")
+        if args.verbose:
+            from test_junkie.debugger import LogJunkie
+            LogJunkie.enable_logging(10)
+
+        from test_junkie.cli.cli_runner import CliRunner
+        tj = CliRunner(sources=args.sources, ignore=[".git"], suites=args.suites, guess_root=args.guess_root,
+                       config=args.config, quiet_scan=args.json)
+        tj.scan()
+        aggregator = CliAudit(suites=tj.suites, args=args, sources=tj.sources, scan_seconds=tj.scan_seconds)
+        aggregator.aggregate()
+        aggregator.print_results()
 
     def config(self):
-        parser = argparse.ArgumentParser(usage="""tj config COMMAND
+        parser = argparse.ArgumentParser(usage="""tj config COMMAND [--config FILE]
 
-Allows to configure Test Junkie the way you want it
+Save settings for tj run and tj audit. Without --config it uses the project's tj.cfg (in the working directory)
+if there is one, otherwise your user config.
 
 Commands:
-show\t Display current configuration for Test-Junkie
-update\t Update configuration settings for individual properties via cli 
-restore\t Will restore config to it\'s original values
-
-Use: tj config COMMAND -h to display COMMAND specific help
+show\t Show settings (--all for every one)
+update\t Save settings, e.g. tj config update -s tests -T 4
+restore\t Clear settings back to their defaults (--all for every one)
 """)
         parser.add_argument('command', default=None, help="command to run")
+        argv = list(sys.argv)
+        config = None
+        if "--config" in argv:
+            index = argv.index("--config")
+            if index + 1 >= len(argv):
+                CliUtils.error("--config needs a file, e.g. tj config show --all --config ./tj.cfg",
+                               "Nothing was changed.")
+            config = argv[index + 1]
+            del argv[index:index + 2]
         try:
-            if len(sys.argv) >= 3:
-                command = str(sys.argv[2:3][0])
+            if len(argv) >= 3:
+                command = str(argv[2])
                 if command in ["show", "update", "restore"]:
-                    from test_junkie.cli.cli_config import CliConfig
-                    return CliConfig(CliConstants.TJ_CONFIG_NAME, command, sys.argv)
+                    from test_junkie.cli.cli_config import CliConfig, Config
+                    return CliConfig(config or Config.project_path() or CliConstants.TJ_CONFIG_NAME, command, argv,
+                                     create=config is not None and command == "update")
                 elif command not in ["-h", "--help"]:
                     CliUtils.error("'{}' is not a config command. Use one of: show, update, restore".format(command),
                                    "tj config -h explains each one.")
@@ -184,10 +222,16 @@ Use: tj config COMMAND -h to display COMMAND specific help
             exit(120)
 
     def version(self):
-        from test_junkie import __version__
-        print("Test Junkie {} (Python{})\n{}".format(__version__,
-                                                     sys.version_info[0],
-                                                     DocumentationLinks.DOMAIN))
+        import test_junkie
+        from test_junkie.console import Console
+        from test_junkie.cli.cli_config import Config
+        console = Console(None, mode="report")
+        project = Config.project_path()
+        config = project or Config.get_config_path(CliConstants.TJ_CONFIG_NAME)
+        rows = [("package", os.path.dirname(os.path.abspath(test_junkie.__file__))),
+                ("config", config + ("" if project else console.style("  (user config)", "dim"))),
+                ("docs", DocumentationLinks.DOMAIN)]
+        console.emit(console.head(rows)[:-1])
 
 
 class CliUtils:
@@ -199,169 +243,33 @@ class CliUtils:
     END = '\033[0m'
 
     @staticmethod
+    def add_options(parser, command):
+        """
+        :param command: "run" (tj run, tj config update), "audit" (tj audit) or "toggle" (tj config show/restore:
+                        every saved setting as an on/off switch)
+        """
+        for dest, short, long_flag, aliases, kind, help_text, where in _OPTIONS:
+            if command == "audit" and where != "audit":
+                continue
+            if command == "toggle":
+                if where == "once":
+                    continue
+                extra = {"action": "store_true", "default": False}
+            else:
+                if command == "update" and where == "once":
+                    continue
+                extra = dict(_KINDS[kind], default=Undefined)
+                if kind != "flag":
+                    extra["metavar"] = _METAVARS.get(dest, "N")
+            _add(parser, dest, short, long_flag, aliases, extra, help_text)
+
+    @staticmethod
     def add_standard_tj_args(parser, audit=False):
-        """
-        Generic parser args used to configure execution or set config settings
-        """
-        if not audit:
-            parser.add_argument("-T", "--test_multithreading_limit", type=int, default=Undefined,
-                                help="Test level multi threading allows to run multiple tests concurrently.")
-
-            parser.add_argument("-S", "--suite_multithreading_limit", type=int, default=Undefined,
-                                help="Suite level multi threading allows to run multiple suites concurrently.")
-
-            parser.add_argument("-t", "--tests", nargs="+", default=Undefined,
-                                help="Test Junkie can run specific tests. "
-                                     "Provide the names of the tests that you want to execute/audit.")
-
-        parser.add_argument("-f", "--features", nargs="+", default=Undefined,
-                            help="Test suites can be defined with a feature that they are testing. "
-                                 "Use features to narrow down execution/audit of test suites only to those that "
-                                 "match this filter. Learn more @ {link}".format(link=DocumentationLinks.FEATURES))
-
-        parser.add_argument("-c", "--components", nargs="+", default=Undefined,
-                            help="Tests can be defined with a component that they are testing. "
-                                 "Use components to narrow down execution/audit of tests only to those that "
-                                 "match this filter. Learn more @ {link}".format(link=DocumentationLinks.COMPONENTS))
-
-        parser.add_argument("-o", "--owners", nargs="+", default=Undefined,
-                            help="Tests & test suites can be defined with an assignee. "
-                                 "Use owners to narrow down execution/audit of tests only to those that "
-                                 "match this filter. Learn more @ {link}".format(link=DocumentationLinks.ASSIGNEES))
-
-        if not audit:
-            parser.add_argument("-m", "--monitor_resources", action="store_true", default=Undefined,
-                                help="Test Junkie can track resource usage for CPU & Memory as it runs tests")
-
-            parser.add_argument("--html_report", type=str, default=Undefined,
-                                help="Path to FILE. This will enable HTML report generation and when ready, "
-                                     "the report will be saved to the specified file")
-
-            parser.add_argument("--xml_report", type=str, default=Undefined,
-                                help="Path to FILE. This will enable XML report generation and when ready, "
-                                     "the report will be saved to the specified file")
-
-            parser.add_argument("-l", "--run_on_match_all", nargs="+", default=Undefined,
-                                help="Test Junkie will RUN tests that match ALL of the tags. Read more about it: {link}"
-                                .format(link=DocumentationLinks.TAGS))
-
-            parser.add_argument("-k", "--run_on_match_any", nargs="+", default=Undefined,
-                                help="Test Junkie will RUN tests that match ANY of the tags. Read more about it: {link}"
-                                .format(link=DocumentationLinks.TAGS))
-
-            parser.add_argument("-j", "--skip_on_match_all", nargs="+", default=Undefined,
-                                help="Test Junkie will SKIP tests that match ALL of the tags. Read more about it: {link}"
-                                .format(link=DocumentationLinks.TAGS))
-
-            parser.add_argument("-g", "--skip_on_match_any", nargs="+", default=Undefined,
-                                help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
-                                .format(link=DocumentationLinks.TAGS))
-
-            parser.add_argument("-q", "--quiet", action="store_true", default=Undefined,
-                                help="Only print the problems and the result line")
-
-            parser.add_argument("-p", "--per-test", action="store_true", default=Undefined,
-                                help="Print one line per test instead of a progress bar per suite")
-
-            parser.add_argument("--no-capture", action="store_true", default=Undefined,
-                                help="Show what tests print and log as it happens, instead of only for tests that "
-                                     "didn't pass. Needed for breakpoint() / pdb")
-
-            parser.add_argument("--code-cov", action="store_true", default=Undefined,
-                                help="Measure code coverage")
-
-            parser.add_argument("--cov-rcfile", type=str, default=Undefined,
-                                help="Path to configuration FILE for coverage.py "
-                                     "See {link}".format(link=DocumentationLinks.COVERAGE_CONFIG_FILE))
-        else:
-            parser.add_argument("-l", "--tags", nargs="+", default=Undefined,
-                                help="Test Junkie will audit tests that match those tags.")
-
-        parser.add_argument("-s", "--sources", nargs="+", default=Undefined,
-                            help="Paths to DIRECTORY or FILE where you have your tests. "
-                                 "Test Junkie will traverse this source(s) looking for test suites")
-
-        parser.add_argument("--guess-root", action="store_true", default=Undefined,
-                            help="If your project is not part of the PYTHONPATH, you will get an error when running "
-                                 "it via command line. If this flag is used, TJ will try to guess the root directory "
-                                 "and temporary add it to the path. Usually not recommended.")
+        CliUtils.add_options(parser, "audit" if audit else "update")
 
     @staticmethod
     def add_standard_boolean_tj_args(parser):
-        """
-        Generic parser args used to show and restore config settings
-        """
-
-        parser.add_argument("-s", "--sources", action="store_true", default=False,
-                            help="Paths to DIRECTORY or FILE where you have your tests. "
-                                 "Test Junkie will traverse this source(s) looking for test suites")
-
-        parser.add_argument("-T", "--test_multithreading_limit", action="store_true", default=False,
-                            help="Test level multi threading allows to run multiple tests concurrently.")
-
-        parser.add_argument("-S", "--suite_multithreading_limit", action="store_true", default=False,
-                            help="Suite level multi threading allows to run multiple suites concurrently.")
-
-        parser.add_argument("-t", "--tests", nargs="+", default=Undefined,
-                            help="Test Junkie can run specific tests. "
-                                 "Provide the names of the tests that you want to run.")
-
-        parser.add_argument("-f", "--features", action="store_true", default=False,
-                            help="Test suites can be defined with a feature that they are testing. "
-                                 "Use features to narrow down execution of test suites only to those that "
-                                 "match this filter. Learn more @ {link}".format(link=DocumentationLinks.FEATURES))
-
-        parser.add_argument("-c", "--components", action="store_true", default=False,
-                            help="Tests can be defined with a component that they are testing. "
-                                 "Use components to narrow down execution of tests only to those that "
-                                 "match this filter. Learn more @ {link}".format(link=DocumentationLinks.COMPONENTS))
-
-        parser.add_argument("-o", "--owners", action="store_true", default=False,
-                            help="Tests & test suites can be defined with an assignee. "
-                                 "Use owners to narrow down execution of tests only to those that "
-                                 "match this filter. Learn more @ {link}".format(link=DocumentationLinks.ASSIGNEES))
-
-        parser.add_argument("-m", "--monitor_resources", action="store_true", default=False,
-                            help="Test Junkie can track resource usage for CPU & Memory as it runs tests")
-
-        parser.add_argument("--html_report", action="store_true", default=False,
-                            help="Path to FILE. This will enable HTML report generation and when ready, "
-                                 "the report will be saved to the specified file")
-
-        parser.add_argument("--xml_report", action="store_true", default=False,
-                            help="Path to FILE. This will enable XML report generation and when ready, "
-                                 "the report will be saved to the specified file")
-
-        parser.add_argument("-l", "--run_on_match_all", action="store_true", default=False,
-                            help="Test Junkie will RUN tests that match ALL of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
-
-        parser.add_argument("-k", "--run_on_match_any", action="store_true", default=False,
-                            help="Test Junkie will RUN tests that match ANY of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
-
-        parser.add_argument("-j", "--skip_on_match_all", action="store_true", default=False,
-                            help="Test Junkie will SKIP tests that match ALL of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
-
-        parser.add_argument("-g", "--skip_on_match_any", action="store_true", default=False,
-                            help="Test Junkie will SKIP tests that match ANY of the tags. Read more about it: {link}"
-                            .format(link=DocumentationLinks.TAGS))
-        parser.add_argument("-q", "--quiet", action="store_true", default=False,
-                            help="Only print the problems and the result line")
-        parser.add_argument("-p", "--per-test", action="store_true", default=False,
-                            help="Print one line per test instead of a progress bar per suite")
-        parser.add_argument("--no-capture", action="store_true", default=False,
-                            help="Show what tests print and log as it happens")
-        parser.add_argument("--code-cov", action="store_true", default=False,
-                            help="Measure code coverage")
-        parser.add_argument("--cov-rcfile", action="store_true", default=False,
-                            help="Path to configuration FILE for coverage.py "
-                                 "See {link}".format(link=DocumentationLinks.COVERAGE_CONFIG_FILE))
-        parser.add_argument("--guess-root", action="store_true", default=False,
-                            help="If your project is not part of the PYTHONPATH, you will get an error when running "
-                                 "it via command line. If this flag is used, TJ will try to guess the root directory "
-                                 "and temporary add it to the path. Usually not recommended.")
+        CliUtils.add_options(parser, "toggle")
 
     @staticmethod
     def __initialize():

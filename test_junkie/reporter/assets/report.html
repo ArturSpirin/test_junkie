@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Junkie — Run Report</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+{{css}}
+</style>
+</head>
+<body>
+<header>
+<div class="container header-inner">
+<a class="brand" href="https://www.test-junkie.com" target="_blank" rel="noopener" style="text-decoration:none"><svg class="brand-icon" viewBox="0 0 28 28" fill="none">
+  <circle cx="14" cy="14" r="11" stroke="#f37814" stroke-width="1.4" stroke-dasharray="5 3" opacity=".6"/>
+  <path d="M 25,14 A 11,11 0 0,0 14,3" stroke="#f37814" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="14" cy="14" r="6" stroke="#f37814" stroke-width="2"/>
+  <line x1="3" y1="14" x2="8" y2="14" stroke="#f37814" stroke-width="1.6"/>
+  <line x1="20" y1="14" x2="25" y2="14" stroke="#f37814" stroke-width="1.6"/>
+  <line x1="14" y1="3" x2="14" y2="8" stroke="#f37814" stroke-width="1.6"/>
+  <line x1="14" y1="20" x2="14" y2="25" stroke="#f37814" stroke-width="1.6"/>
+  <polygon points="14,10 17,14 14,18 11,14" fill="#f37814"/>
+  <circle cx="14" cy="14" r="1.5" fill="white" opacity=".9"/>
+</svg><span class="brand-name">TEST<span>JUNKIE</span></span></a>
+<div class="header-meta"><span>{{run_date}} &middot; {{run_time}}</span><span>{{runtime}} total</span>{{issue_badge}}<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode"><svg id="theme-icon-dark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><svg id="theme-icon-light" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div>
+</div>
+</header>
+<div class="container">
+<div class="stats-row">
+<div class="stat-card"><div class="stat-label">Tests Executed</div><div class="stat-value">{{stat_total}}</div><div class="stat-sub">{{stat_suite_count}}</div></div><div class="stat-card"><div class="stat-label">Passing Rate</div><div class="stat-value brand">{{stat_passing_rate}}</div><div class="stat-sub">{{stat_passing_sub}}</div></div><div class="stat-card"><div class="stat-label">Total Runtime</div><div class="stat-value">{{stat_runtime}}</div><div class="stat-sub">wall-clock time</div></div><div class="stat-card"><div class="stat-label">Avg Test Runtime</div><div class="stat-value">{{stat_avg_runtime}}</div><div class="stat-sub">@test only</div></div><div class="stat-card"><div class="stat-label">Avg CPU</div><div class="stat-value">{{stat_cpu_avg}}</div><div class="stat-sub">{{stat_cpu_sub}}</div></div><div class="stat-card"><div class="stat-label">Avg Memory</div><div class="stat-value">{{stat_mem_avg}}</div><div class="stat-sub">{{stat_mem_sub}}</div></div>
+</div>
+<div class="charts-row">
+<div class="chart-card" style="display:flex;flex-direction:column;">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><div class="card-title" style="margin-bottom:0">Resource Monitoring</div><div style="display:flex;align-items:center;gap:14px;"><div id="res-legend" style="display:flex;align-items:center;gap:14px;{{res_legend_style}}"><span style="display:flex;align-items:center;gap:6px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--ink-muted)"><span style="display:inline-block;width:18px;height:2px;background:var(--brand);border-radius:1px;vertical-align:middle"></span>CPU</span><span style="display:flex;align-items:center;gap:6px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--ink-muted)"><span style="display:inline-block;width:18px;height:2px;background:#34bff5;border-radius:1px;vertical-align:middle"></span>Memory</span></div><button class="resource-toggle-btn" id="res-toggle-btn" onclick="toggleResources()">{{res_toggle_text}}</button></div></div>
+<div id="res-enabled" class="resource-chart-wrap" style="{{res_enabled_style}}">{{resource_svg}}</div>
+<div id="res-disabled" class="resource-disabled" style="{{res_disabled_style}}"><div class="resource-disabled-icon">&#x1F4CA;</div><div class="resource-disabled-msg">Resource monitoring was not enabled for this run.<br>To track CPU and memory usage, pass<br><code>monitor_resources=True</code> to your runner.</div></div>
+</div>
+<div class="chart-card">
+<div class="card-title">Insights</div><div class="insights-list">{{insights_html}}</div></div>
+</div>
+<div class="breakdown-section">
+<div class="breakdown-card">
+<div class="tab-bar"><button class="tab-btn" data-tab="results">Results</button><button class="tab-btn active" data-tab="features">Features</button><button class="tab-btn" data-tab="components">Components</button><button class="tab-btn" data-tab="owners">Owners</button><button class="tab-btn" data-tab="suites">Suites</button><button class="tab-btn" data-tab="tags">Tags</button></div>
+<div class="tab-content" id="tab-results">{{donut_html}}</div>
+<div class="tab-content active" id="tab-features"><div id="chart-features"></div></div>
+<div class="tab-content" id="tab-components"><div id="chart-components"></div></div>
+<div class="tab-content" id="tab-owners"><div id="chart-owners"></div></div>
+<div class="tab-content" id="tab-suites"><div id="chart-suites"></div></div>
+<div class="tab-content" id="tab-tags"><div id="chart-tags"></div></div>
+</div>
+</div>
+<div class="results-section">
+<div class="results-card">
+<div class="results-header"><div class="results-title">Test Results<span class="results-count" id="visible-count">— tests</span></div><div class="search-global"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" id="global-search" placeholder="Search all columns…"></div></div>
+<div class="filter-bar" id="filter-bar"><span class="filter-label">Filters</span><button class="filter-clear-all" id="clear-all-btn">Clear all ×</button><div class="tb-filter-strip" id="tb-filter-strip">Traceback group active<button class="tb-filter-clear" onclick="clearTracebackFilter()" title="Clear traceback filter">×</button></div></div>
+<div class="table-wrap"><table id="results-table"><thead><tr id="table-head"></tr></thead><tbody id="table-body"></tbody></table></div>
+</div>
+</div>
+</div>
+<div id="overlay"></div>
+<div id="detail-panel">
+<div class="panel-header"><div style="flex:1;min-width:0"><div class="panel-test-name" id="panel-test-name">—</div><div class="panel-suite-path" id="panel-suite-path">—</div><div class="panel-tags" id="panel-tags"></div></div><button class="panel-close" id="panel-close">✕</button></div>
+<div class="panel-body" id="panel-body"></div>
+</div>
+<div id="thread-backdrop" onclick="closeThreadingDialog()"></div>
+<div id="thread-dialog" role="dialog" aria-modal="true" aria-labelledby="td-title">
+<div class="td-header"><div class="td-title" id="td-title">&#x26A1; Multi-threading Analysis</div><button class="td-close" onclick="closeThreadingDialog()" aria-label="Close">&#x2715;</button></div>
+<div class="td-summary" id="td-summary"></div>
+<div class="td-section-label">Enable in your runner</div>
+<div class="td-code-wrap" id="td-code"></div>
+<div class="td-section-label" style="margin-top:20px">Slowest tests &#x2014; bottleneck candidates</div>
+<table class="td-table"><thead><tr><th>Test</th><th>Suite</th><th style="text-align:right">Duration</th></tr></thead><tbody id="td-tbody"></tbody></table>
+<div class="td-note" id="td-note"></div>
+</div>
+<button id="support-fab" title="Support this project" aria-label="Support this project"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+<div id="support-backdrop"></div>
+<div id="support-modal" role="dialog" aria-modal="true" aria-labelledby="support-title">
+<button class="support-close" id="support-close" aria-label="Close">✕</button>
+<div class="support-logo"><svg width="32" height="32" viewBox="0 0 28 28" fill="none">
+  <circle cx="14" cy="14" r="11" stroke="#f37814" stroke-width="1.4" stroke-dasharray="5 3" opacity=".6"/>
+  <path d="M 25,14 A 11,11 0 0,0 14,3" stroke="#f37814" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="14" cy="14" r="6" stroke="#f37814" stroke-width="2"/>
+  <line x1="3" y1="14" x2="8" y2="14" stroke="#f37814" stroke-width="1.6"/>
+  <line x1="20" y1="14" x2="25" y2="14" stroke="#f37814" stroke-width="1.6"/>
+  <line x1="14" y1="3" x2="14" y2="8" stroke="#f37814" stroke-width="1.6"/>
+  <line x1="14" y1="20" x2="14" y2="25" stroke="#f37814" stroke-width="1.6"/>
+  <polygon points="14,10 17,14 14,18 11,14" fill="#f37814"/>
+  <circle cx="14" cy="14" r="1.5" fill="white" opacity=".9"/>
+</svg></div>
+<h2 class="support-title" id="support-title">Support Test Junkie</h2>
+<p class="support-message">Test Junkie is a solo open-source project. If it has saved you time writing runners, fighting flaky tests, or debugging parallel execution — a star or a coffee goes a long way and helps keep it maintained.</p>
+<div class="support-options">
+<a class="support-option" href="https://github.com/ArturSpirin/test_junkie" target="_blank" rel="noopener"><div class="support-option-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div><div class="support-option-text"><div class="support-option-label">Star on GitHub</div><div class="support-option-sub">Show you use it · costs nothing</div></div><svg class="support-option-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+<a class="support-option" href="https://www.patreon.com/join/arturspirin" target="_blank" rel="noopener"><div class="support-option-icon" style="color:#ff424d"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22.957 7.21c-.004-3.064-2.391-5.576-5.191-6.482-3.478-1.125-8.064-.962-11.384.604C2.357 3.231 1.093 7.391 1.046 11.54c-.039 3.411.302 12.396 5.369 12.46 3.765.047 4.326-4.804 6.068-7.141 1.24-1.662 2.836-2.132 4.801-2.618 3.376-.836 5.678-3.501 5.673-7.031Z"/></svg></div><div class="support-option-text"><div class="support-option-label">Support on Patreon</div><div class="support-option-sub">Monthly support · keeps the lights on</div></div><svg class="support-option-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+<a class="support-option" href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&amp;business=FJPYWX5B776YS&amp;currency_code=USD&amp;source=url" target="_blank" rel="noopener"><div class="support-option-icon" style="color:#009cde"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7.016 19.198h-4.2a.562.562 0 0 1-.555-.65L5.093.584A.692.692 0 0 1 5.776 0h7.222c3.417 0 5.904 2.488 5.846 5.5-.006.25-.027.5-.066.747A6.794 6.794 0 0 1 12.071 12H8.743a.69.69 0 0 0-.682.583l-.325 2.056-.013.083-.692 4.39-.015.087zM19.79 6.142c-.01.087-.01.175-.023.261a7.76 7.76 0 0 1-7.695 6.598H9.007l-.283 1.795-.013.083-.692 4.39-.134.843-.014.088H6.86l-.497 3.15a.562.562 0 0 0 .555.65h3.612c.34 0 .63-.249.683-.585l.952-6.031a.692.692 0 0 1 .683-.584h2.126a6.793 6.793 0 0 0 6.707-5.752c.306-1.95-.466-3.744-1.89-4.906z"/></svg></div><div class="support-option-text"><div class="support-option-label">Donate via PayPal</div><div class="support-option-sub">One-time · any amount appreciated</div></div><svg class="support-option-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+</div>
+</div>
+<script>
+const TESTS = {{tests_json}};
+const DETAILS = {{details_json}};
+const BAR_DATA = {{bar_data_json}};
+const THREADING_DATA = {{threading_json}};
+const RESOURCES_ENABLED = {{resources_enabled}};
+{{js}}</script>
+</body>
+</html>

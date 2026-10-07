@@ -1,4 +1,5 @@
 import copy
+import fnmatch
 import os
 import random
 import signal
@@ -6,7 +7,7 @@ import threading
 import time
 import traceback
 from test_junkie.console import Capture, Console, Router, RunState, TestInterrupted, capturing, unit_key
-from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks, TestOrder
+from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks, TestOrder, Undefined
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
@@ -66,11 +67,17 @@ class Runner:
                                 .format(list, suites, DocumentationLinks.RUNNER_OBJECT))
 
         self.__stats = {}
+        # TestOrder.RANDOM shuffles with this seed - the run header prints it, tj run --seed repeats an order
+        self.seed = kwargs.get("seed")
+        if self.seed is None or self.seed is Undefined:
+            self.seed = random.randrange(1, 1000000)
+        kwargs["seed"] = self.seed
+        rng = random.Random(self.seed)
 
         self.__all_suites = self.__prioritize(suites=suites)
         for suite in self.__all_suites:
             suite_object = Builder.get_execution_roster().get(suite, None)
-            suite_object.update_test_objects(self.__prioritize(suite_object=suite_object))
+            suite_object.update_test_objects(self.__prioritize(suite_object=suite_object, rng=rng))
             Runner.__process_owners(suite_object)
 
         self.__kwargs = kwargs
@@ -114,7 +121,7 @@ class Runner:
                 test.get_kwargs().update({"owner": suite_object.get_owner()})
 
     @staticmethod
-    def __prioritize(suites=None, suite_object=None):
+    def __prioritize(suites=None, suite_object=None, rng=random):
         """
         Orders suites or the tests within a suite for execution.
 
@@ -142,7 +149,7 @@ class Runner:
 
         if order == TestOrder.RANDOM:
             result = list(items)
-            random.shuffle(result)
+            rng.shuffle(result)
             return result
 
         if order == TestOrder.ALPHABETICAL:
@@ -240,6 +247,12 @@ class Runner:
         resource_monitor = None
         run_error = None
         previous_handler = None
+        objects = [Builder.get_execution_roster()[suite] for suite in self.__all_suites]
+        objects += [test for suite in objects for test in suite.get_test_objects()]
+        retry = self.__settings.retry
+        for item in objects:  # tj run --retry N / --no-retry, for this run only
+            item.retry_override = None if retry is None else (retry if hasattr(item, "get_function_name") else
+                                                              (1 if retry == 1 else None))
         router.install()
         if threading.current_thread() is threading.main_thread():
             try:
@@ -328,6 +341,9 @@ class Runner:
                                     or self.__processor.suite_multithreading())
                 reporter.generate_html_report(self.__settings.html_report)
             XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
+            if self.__settings.json_report:
+                from test_junkie.reporter.json_reporter import write_json_report
+                write_json_report(self.__settings.json_report, aggregator, runtime, self.seed)
         except Exception:
             if not errors:
                 raise
@@ -337,6 +353,8 @@ class Runner:
             # needs to run even if reporting above throws or the temp file never gets removed
             if resource_monitor is not None:
                 resource_monitor.cleanup()
+            for item in objects:
+                item.retry_override = None
             self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
         if errors:
             raise errors[0]  # same error as before, now raised after the summary and reports were written
@@ -961,10 +979,12 @@ class Runner:
         """
         can_skip = test.can_skip()
 
-        # Run only tests that were requested
+        # Run only tests that were requested: function objects, names, Suite.test names or patterns (login_*)
         if can_skip is False and self.__settings.tests is not None:
+            names = (test.get_function_name(), "{}.{}".format(test.suite.get_class_name(), test.get_function_name()))
             requested = test.get_function_object() in self.__settings.tests or \
-                        test.get_function_name() in self.__settings.tests
+                any(isinstance(pattern, str) and any(fnmatch.fnmatchcase(name, pattern) for name in names)
+                    for pattern in self.__settings.tests)
 
             can_skip = not requested  # if test was not requested as part of the tests set, we can skip it
 

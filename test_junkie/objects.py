@@ -1,5 +1,6 @@
 import copy
 import functools
+import fnmatch
 import inspect
 import traceback
 from test_junkie.decorators import DecoratorType
@@ -210,17 +211,24 @@ class SuiteObject(object):
                 return True
 
         if settings.tests is not None and can_skip is False:
+            names = self.get_test_function_names()
+            names = names + ["{}.{}".format(self.get_class_name(), name) for name in names]
             for test in settings.tests:
                 if inspect.ismethod(test) or inspect.isfunction(test):
                     test = test.__name__
-                if test in self.get_test_function_names():
+                # names, Suite.test names or patterns like login_* (tj run -t)
+                if isinstance(test, str) and any(fnmatch.fnmatchcase(name, test) for name in names):
                     return False
             return True
 
         return can_skip
 
+    retry_override = None  # set by Runner.run() for tj run --no-retry, cleared when the run ends
+
     def get_retry_limit(self):
 
+        if self.retry_override is not None:
+            return self.retry_override
         return self.__suite_definition.get("class_retry", 1)
 
     def get_rules(self):
@@ -390,8 +398,12 @@ class TestObject(object):
                 self.get_kwargs()["parameters"] = eval_result
         return self.get_kwargs().get("parameters", [None])
 
+    retry_override = None  # set by Runner.run() for tj run --retry N / --no-retry, cleared when the run ends
+
     def get_retry_limit(self):
 
+        if self.retry_override is not None:
+            return self.retry_override
         return self.get_kwargs().get("retry", 1)
 
     def get_function_name(self):
