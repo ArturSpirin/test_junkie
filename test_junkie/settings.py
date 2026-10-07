@@ -17,6 +17,8 @@ class Settings:
     __DEFAULT_TESTS = None
     __DEFAULT_RESOURCE_MON = False
     __DEFAULT_QUIET = False
+    __DEFAULT_PER_TEST = False
+    __DEFAULT_CAPTURE = True
 
     def __init__(self, runner_kwargs, run_kwargs):
         """
@@ -43,6 +45,8 @@ class Settings:
         self.__html_report = Undefined
         self.__xml_report = Undefined
         self.__quiet = Undefined
+        self.__per_test = Undefined
+        self.__capture = Undefined
 
         self.__print_settings()
 
@@ -193,6 +197,21 @@ class Settings:
             self.__quiet = self.__get_value(key="quiet",
                                             default=Settings.__DEFAULT_QUIET)
         return self.__quiet
+
+    @property
+    def per_test(self):
+        if self.__per_test is Undefined:
+            self.__per_test = self.__get_value(key="per_test", default=Settings.__DEFAULT_PER_TEST)
+        return self.__per_test
+
+    @property
+    def capture(self):
+        """
+        False shows what tests print and log live instead of only for the ones that didn't pass (tj run --no-capture)
+        """
+        if self.__capture is Undefined:
+            self.__capture = self.__get_value(key="capture", default=Settings.__DEFAULT_CAPTURE)
+        return self.__capture
 
     @property
     def html_report(self):

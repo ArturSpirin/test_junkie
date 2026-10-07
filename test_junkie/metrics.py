@@ -6,11 +6,10 @@ import time
 import traceback
 from datetime import datetime
 
-from test_junkie import __version__
 from test_junkie.cli.cli_config import Config
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType
-from test_junkie.constants import SuiteCategory, TestCategory, DocumentationLinks
+from test_junkie.constants import SuiteCategory, TestCategory
 
 
 class ClassMetrics(object):
@@ -22,6 +21,7 @@ class ClassMetrics(object):
                         DecoratorType.BEFORE_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
                         DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
                         DecoratorType.AFTER_CLASS: {"performance": [], "exceptions": [], "tracebacks": []}}
+        self.__outputs = []  # (output, log lines) printed outside of tests: @beforeClass, @afterClass, rules
 
     def __copy__(self):
         return self
@@ -54,6 +54,12 @@ class ClassMetrics(object):
 
         return self.__stats
 
+    def record_output(self, output, log):
+        self.__outputs.append((output, log))
+
+    def get_outputs(self):
+        return self.__outputs
+
     def __get_average_metric(self, decorator, metric):
 
         from statistics import mean
@@ -78,6 +84,9 @@ class TestMetrics(object):
     def __init__(self):
 
         self.__stats = {}
+        # (class param, param) -> [(run number, output, log lines), ...] for runs that printed or logged something.
+        # Kept out of __stats so its shape stays as is
+        self.__outputs = {}
 
     def __copy__(self):
         return self
@@ -142,6 +151,19 @@ class TestMetrics(object):
     def get_metrics(self):
 
         return self.__stats
+
+    def record_output(self, param, class_param, run, output, log):
+        """
+        What a run of this test printed or logged while it was captured (see test_junkie/console.py)
+        """
+        if output or log:
+            self.__outputs.setdefault((str(class_param), str(param)), []).append((run, output, log))
+
+    def get_outputs(self, param, class_param):
+        """
+        :return: LIST of (run number, output STRING, log lines LIST), oldest first - only runs that had any
+        """
+        return self.__outputs.get((str(class_param), str(param)), [])
 
 
 class Aggregator(object):
@@ -306,84 +328,13 @@ class Aggregator(object):
 
     @staticmethod
     def present_console_output(aggregator):
-        from test_junkie.cli.cli import CliUtils  # imported here: colorama + the CLI aren't needed to run tests
-
-        def parse_exception(value):
-            if value is not None:
-                error = ""
-                for line in value.split("\n"):
-                    error += "\n\t\t  {}".format(line)
-                return error
-
-        report = aggregator.get_basic_report()
-        test_report = report["tests"]
-        suite_report = report["suites"]
-        for status in TestCategory.ALL:
-            value = "[{part}/{total} {percent}%] {status}".format(part=test_report[status],
-                                                                  total=test_report["total"],
-                                                                  status=status.upper(),
-                                                                  percent=Aggregator.percentage(test_report["total"],
-                                                                                                test_report[status]))
-            if test_report[status]:
-                value = CliUtils.format_bold_string(value)
-            print(value)
-        print("")
-        for suite, stats in suite_report.items():
-            status = suite.metrics.get_metrics()["status"]
-            if status is None:  # this means that something went wrong with custom event processing
-                status = "*"+SuiteCategory.ERROR
-            print(">> [{status}] [{passed}/{total} {rate}%] [{runtime:0.2f}s] {module}.{name}"
-                  .format(module=CliUtils.format_bold_string(suite.get_class_module()),
-                          name=CliUtils.format_bold_string(suite.get_class_name()),
-                          status=CliUtils.format_bold_string(status.upper()),
-                          runtime=suite.get_runtime(),
-                          rate=Aggregator.percentage(stats["total"], stats[TestCategory.SUCCESS]),
-                          passed=stats[TestCategory.SUCCESS],
-                          total=stats["total"]))
-            if status == SuiteCategory.IGNORE:
-                print("\t|__ reason: {error}".format(error=suite.metrics.get_metrics().get("initiation_error", None)))
-            if status != SuiteCategory.SUCCESS:
-                tests = suite.get_unsuccessful_tests()
-                for test in tests:
-                    test_metrics = test.metrics.get_metrics()
-                    print("\t|__ test: {name}()".format(name=CliUtils.format_bold_string(test.get_function_name())))
-                    for class_param, class_param_data in test_metrics.items():
-                        if class_param != "None":
-                            print("\t  |__ class parameter: {class_parameter}".format(class_parameter=class_param))
-                        for param, param_data in class_param_data.items():
-                            if param != "None":
-                                print("\t    |__ parameter: {parameter}".format(parameter=param))
-                            for index in range(param_data["retry"]):
-                                trace = param_data["tracebacks"][index]
-                                if trace is not None:
-                                    try:
-                                        trace = ":: Traceback: {}".format(
-                                            CliUtils.format_color_string(
-                                                parse_exception(
-                                                    trace.encode('utf8', errors="replace")
-                                                ), "red"
-                                            )
-                                        )
-                                    except:
-                                        trace = ":: Traceback: {}".format(
-                                            CliUtils.format_color_string(
-                                                parse_exception(
-                                                    trace.encode("unicode_escape").decode("utf8")
-                                                ), "red"
-                                            )
-                                        )
-                                else:
-                                    trace = ""
-                                print("\t      |__ run #{num} [{status}] [{runtime:0.2f}s] {trace}"
-                                      .format(num=index + 1,
-                                              trace=trace,
-                                              runtime=param_data["performance"][index],
-                                              status=param_data["statuses"][index].upper()))
-        print("\n===========================================================")
-        print(". Test Junkie {} (Python{}) {} .".format(
-            __version__, sys.version_info[0], DocumentationLinks.DOMAIN)
-        )
-        print("===========================================================")
+        """
+        Prints the problems, the summary and the verdict for these results - what tj run prints at the end of a run
+        """
+        from test_junkie.console import Console
+        console = Console(None, mode="report")
+        console.start(list(aggregator.executed_suites))
+        console.finish(aggregator, sum(suite.get_runtime() or 0 for suite in aggregator.executed_suites))
 
     @staticmethod
     def get_template():

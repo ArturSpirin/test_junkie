@@ -263,8 +263,9 @@ def run_with_code_coverage():
 def ctrl_c_exits_12():
     code, out = run_cli("run", "-s", _write(INTERRUPTED_IMPORT, "interrupted_scan.py"))
     assert code == 12 and "(Ctrl+C) Exiting!" in out, out
+    # a KeyboardInterrupt in a test cancels the run like Ctrl+C: summary and reports are still written
     code, out = run_cli("run", "-s", _write(INTERRUPTED_TEST, "interrupted_run.py"))
-    assert code == 12 and "(Ctrl+C) Exiting!" in out, out
+    assert code == 12 and "CANCELLED" in out and "exit code 12" in out and "Summary" in out, out
 
 
 def unexpected_error_during_run_exits_120():
@@ -283,7 +284,7 @@ def git_folders_are_not_scanned():
     with open(os.path.join(directory, ".git", "hooks", "hidden_suite.py"), "w") as doc:
         doc.write(PASSING_SUITE.replace("CliPassingSuite", "HiddenInGitSuite"))
     code, out = run_cli("run", "-s", directory)
-    assert code is None and "Found: 1 suite(s)" in out and "HiddenInGitSuite" not in out, out
+    assert code is None and "1 suite, 1 test" in out and "HiddenInGitSuite" not in out, out
 
 
 
@@ -303,7 +304,7 @@ def same_named_files_and_stdlib_names():
         doc.write(PASSING_SUITE.replace("CliPassingSuite", "RootStdlibNamedSuite"))
     report = os.path.join(directory, "report.html")
     code, out = run_cli("run", "-s", directory, "--html_report", report, cwd=directory)
-    assert code is None and "Found: 4 suite(s)" in out, out
+    assert code is None and "4 suites, 4 tests" in out, out
     assert sys.modules["json"] is json and hasattr(json, "dumps")
     with io.open(report, encoding="utf-8") as doc:
         html = doc.read()

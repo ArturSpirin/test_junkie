@@ -264,7 +264,14 @@ class CliUtils:
                                 .format(link=DocumentationLinks.TAGS))
 
             parser.add_argument("-q", "--quiet", action="store_true", default=Undefined,
-                                help="Suppress all standard output from tests")
+                                help="Only print the problems and the result line")
+
+            parser.add_argument("-p", "--per-test", action="store_true", default=Undefined,
+                                help="Print one line per test instead of a progress bar per suite")
+
+            parser.add_argument("--no-capture", action="store_true", default=Undefined,
+                                help="Show what tests print and log as it happens, instead of only for tests that "
+                                     "didn't pass. Needed for breakpoint() / pdb")
 
             parser.add_argument("--code-cov", action="store_true", default=Undefined,
                                 help="Measure code coverage")

@@ -1,10 +1,13 @@
 import copy
+import os
 import random
+import signal
 import threading
 import time
 import traceback
+from test_junkie.console import Capture, Console, Router, RunState, TestInterrupted, capturing, unit_key
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks, TestOrder
-from test_junkie.debugger import LogJunkie, suppressed_stdout
+from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
 from test_junkie.listener import Listener
@@ -38,6 +41,19 @@ _EVENT_HANDLERS = {Event.ON_SUCCESS: "on_success", Event.ON_FAILURE: "on_failure
                    Event.ON_CLASS_COMPLETE: "on_class_complete"}
 _NATIVE_LISTENER = Listener()
 
+
+class _RunContext(object):
+    """
+    What a test needs from the run it belongs to: cancel state, the console and the output router
+    """
+
+    def __init__(self, state, console, router, cancel_by_user):
+        self.state = state
+        self.console = console
+        self.router = router
+        self.cancel_by_user = cancel_by_user
+
+
 class Runner:
 
     __STATS = {}
@@ -63,6 +79,8 @@ class Runner:
 
         self.__suites = []
         self.__cancel = False
+        self.__state = None
+        self.exit_code = None
         self.__executed_suites = []
         self.__active_suites = []
         # built here too so a bad @beforeGroup/@afterGroup definition still raises when the Runner is created
@@ -176,10 +194,34 @@ class Runner:
 
     def cancel(self):
         """
-        Flips the switch to cancel the execution of tests
+        Flips the switch to cancel the execution of tests: nothing new starts and nothing is retried, tests already
+        running finish
         :return: None
         """
         self.__cancel = True
+        if self.__state is not None:
+            self.__state.cancelled = True
+
+    def __cancel_by_user(self):
+        """
+        Ctrl+C, or a KeyboardInterrupt raised in a test
+        """
+        state = self.__state
+        if state is None or state.by_user:
+            return
+        state.cancelled = True
+        state.by_user = True
+        self.__context.console.cancelling()
+
+    def __on_interrupt(self, signum, frame):
+        state = self.__state
+        state.interrupts += 1
+        if state.interrupts > 1:
+            self.__context.console.force_stop()
+            os._exit(130)
+        self.__cancel_by_user()
+        if state.main_thread_in_test:  # a sequential run: stop the test that's running right now
+            raise TestInterrupted()
 
     def run(self, **kwargs):
         """
@@ -188,22 +230,41 @@ class Runner:
         """
         self.__reset_for_run()
         self.__settings = Settings(runner_kwargs=self.__kwargs, run_kwargs=kwargs)
+        cli = self.__settings.kwargs.get("_cli")  # set by tj run: sources and scan time for the header
+        mode = ("cli-quiet" if cli else "silent") if self.__settings.quiet else "normal"
+        state = self.__state = RunState(cancelled=self.__cancel)  # cancel() before run() is supported
+        console = Console(self.__settings, mode=mode, cli=cli, state=state)
+        router = Router(console, capture_enabled=self.__settings.capture or self.__settings.quiet)
+        self.__context = _RunContext(state, console, router, self.__cancel_by_user)
         initial_start_time = time.time()
         resource_monitor = None
         run_error = None
+        previous_handler = None
+        router.install()
+        if threading.current_thread() is threading.main_thread():
+            try:
+                if signal.getsignal(signal.SIGINT) is signal.default_int_handler:  # leave a custom handler alone
+                    previous_handler = signal.signal(signal.SIGINT, self.__on_interrupt)
+            except (ValueError, OSError):
+                previous_handler = None
         try:
             if self.__settings.monitor_resources:
                 resource_monitor = ResourceMonitor()
                 resource_monitor.start()
             self.__processor = ParallelProcessor(self.__settings)
+            console.start([Builder.get_execution_roster()[suite] for suite in self.__all_suites])
 
-            with suppressed_stdout(self.__settings.quiet):
+            try:
                 while self.__suites:
                     generation = ParallelProcessor.generation()
                     for suite in list(self.__suites):
                         # never missing - Runner() already rejected anything that isn't a registered suite
                         suite_object = Builder.get_execution_roster()[suite]
-                        if self.__processor.suite_multithreading() and suite_object.is_parallelized():
+                        if state.cancelled:  # nothing to wait for - the suite is just marked cancelled
+                            self.__executed_suites.append(suite_object)
+                            self.__run_suite(suite_object)
+                            self.__suites.remove(suite)
+                        elif self.__processor.suite_multithreading() and suite_object.is_parallelized():
                             while True:
                                 suite_generation = ParallelProcessor.generation()
                                 if self.__processor.suite_qualifies(suite_object):
@@ -227,10 +288,14 @@ class Runner:
                             self.__run_suite(suite_object)
                             self.__suites.remove(suite)
                     LogJunkie.debug("{} Suite(s) left in queue.".format(len(self.__suites)))
-                    if self.__suites:  # the rest wait on running suites - used to be a fixed 0.2s sleep every pass
+                    if self.__suites and not state.cancelled:  # the rest wait on running suites
                         ParallelProcessor.wait_for_change(generation)
+            except KeyboardInterrupt:
+                # raised outside of a test (no Ctrl+C handler on this thread, or a hook raised it): suites that
+                # didn't start are counted as cancelled
+                self.__cancel_by_user()
 
-                ParallelProcessor.wait_currently_active_suites_to_finish()
+            ParallelProcessor.wait_currently_active_suites_to_finish()
         except Exception as error:
             # report on what did run before raising - used to exit without the summary or the HTML/XML reports
             run_error = error
@@ -244,10 +309,14 @@ class Runner:
             LogJunkie.error("Another error in a suite/test thread: {!r}".format(error))
 
         runtime = time.time() - initial_start_time
-        print("========== Test Junkie finished in {:0.2f} seconds ==========".format(runtime))
         aggregator = Aggregator(self.get_executed_suites())
         try:
-            Aggregator.present_console_output(aggregator)
+            try:
+                self.exit_code = console.finish(aggregator, runtime, errors)
+            finally:
+                router.uninstall()
+                if previous_handler is not None:
+                    signal.signal(signal.SIGINT, previous_handler)
             if self.__settings.html_report:
                 from test_junkie.reporter.html_reporter import Reporter  # only loaded when a report is requested
                 reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
@@ -270,6 +339,10 @@ class Runner:
             self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
         if errors:
             raise errors[0]  # same error as before, now raised after the summary and reports were written
+        if state.by_user:
+            interrupt = KeyboardInterrupt()
+            interrupt.tj_reported = True  # the console already said it was cancelled
+            raise interrupt
         return aggregator
 
     def __capture_thread_errors(self, func):
@@ -328,11 +401,22 @@ class Runner:
 
     def __run_suite(self, suite):
 
+        context = self.__context
+        capture = Capture()
+        with capturing(context.router, capture):
+            self.__run_suite_body(suite, context)
+        if capture.output() or capture.log:
+            suite.metrics.record_output(capture.output(), capture.log)
+        context.console.suite_finished(suite)
+
+    def __run_suite_body(self, suite, context):
+
         def before_group_rule_failed():
             for group, _result in self.__before_group_failure_records.items():
                 if suite.get_class_object() in _result["definition"]["suites"]:
                     return _result["trace"]
 
+        state = context.state
         suite_start_time = time.time()
         unsuccessful_tests = None
         exception = Runner.__validate_suite_parameters(suite)
@@ -351,9 +435,12 @@ class Runner:
                     Runner.__process_event(event=event, suite=suite, error=failure["exception"],
                                            formatted_traceback=failure["trace"])
 
-        if not suite.can_skip(self.__settings) and not self.__cancel and not exception:
+        if not suite.can_skip(self.__settings) and not state.cancelled and not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
+            context.console.suite_started(suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
+                if suite_retry_attempt > 1 and state.cancelled:
+                    break
                 if suite_retry_attempt == 1 or suite.get_status() in SuiteCategory.ALL_UN_SUCCESSFUL:
 
                     for class_param in suite.get_parameters(process_functions=True):
@@ -384,7 +471,7 @@ class Runner:
                                 if not self.__positive_skip_condition(test=test) and \
                                         Runner.__runnable_tags(test=test, tag_config=self.__settings.tags):
 
-                                    if not test.is_parallelized():
+                                    if not test.is_parallelized() and not state.cancelled:
                                         LogJunkie.debug("Cant run test: {} in parallel with any other tests"
                                                         .format(test.get_function_object()))
                                         ParallelProcessor.wait_currently_active_tests_to_finish()
@@ -398,21 +485,26 @@ class Runner:
                                                                     formatted_traceback=bad_params["trace"])
                                         Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test,
                                                                class_param=class_param, error=bad_params)
+                                        context.console.unit_done(suite, unit_key(test, None, class_param),
+                                                                  TestCategory.IGNORE, Runner.__label(suite, test))
                                         continue
 
-                                    ParallelProcessor.wait_while(lambda: not self.__processor.test_qualifies(test))
+                                    ParallelProcessor.wait_while(lambda: not state.cancelled and
+                                                                 not self.__processor.test_qualifies(test))
 
                                     for param in test.get_parameters(process_functions=True):
                                         if unsuccessful_tests is not None and \
                                                 not test.is_qualified_for_retry(param, class_param=class_param):
                                             # If does not qualify with current parameter, will move to the next
                                             continue
-                                        if ((self.__processor.test_multithreading()
-                                             and param is None) or (self.__processor.test_multithreading()
-                                                                    and test.parallelized_parameters()
-                                                                    and param is not None)):
+                                        if not state.cancelled and \
+                                                ((self.__processor.test_multithreading()
+                                                  and param is None) or (self.__processor.test_multithreading()
+                                                                         and test.parallelized_parameters()
+                                                                         and param is not None)):
 
-                                                ParallelProcessor.wait_while(self.__processor.test_limit_reached)
+                                                ParallelProcessor.wait_while(lambda: not state.cancelled and
+                                                                             self.__processor.test_limit_reached())
                                                 time.sleep(Limiter.get_test_throttling())
                                                 self.__processor.run_test_in_a_thread(
                                                                                       self.__capture_thread_errors(
@@ -420,13 +512,13 @@ class Runner:
                                                                                       suite, test, param,
                                                                                       class_param,
                                                                                       before_class_error,
-                                                                                      self.__cancel)
+                                                                                      context)
                                         else:
                                             Runner.__run_test(suite=suite, test=test,
                                                               parameter=param,
                                                               class_parameter=class_param,
                                                               before_class_error=before_class_error,
-                                                              cancel=self.__cancel)
+                                                              cancel=context)
                                     tests.remove(test)
 
                                 else:
@@ -434,8 +526,12 @@ class Runner:
                                     test.metrics.update_metrics(status=TestCategory.SKIP, start_time=test_start_time)
                                     Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
                                                            class_param=class_param)
+                                    context.console.unit_done(suite, unit_key(test, None, None), TestCategory.SKIP,
+                                                              Runner.__label(suite, test))
                         # only this suite's tests - waiting on every suite's tests here held parallel suites back
                         ParallelProcessor.wait_currently_active_tests_to_finish(suite)
+                        if state.cancelled:
+                            context.console.suite_cleanup(suite, True)
                         Runner.__run_after_class(suite, class_param)
                     suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
@@ -447,7 +543,7 @@ class Runner:
                                                                 AssertionError) else Event.ON_AFTER_GROUP_ERROR
                 Runner.__process_event(event=event, suite=suite, error=after_group_failed["exception"],
                                        formatted_traceback=after_group_failed["trace"])
-        elif self.__cancel:
+        elif state.cancelled:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_CANCEL, suite=suite)
         elif exception or before_group_rule_failed():
@@ -467,7 +563,41 @@ class Runner:
         return getattr(type(rules), hook) is not getattr(Rules, hook)
 
     @staticmethod
+    def __label(suite, test, parameter=None, class_parameter=None):
+        label = "{}.{}".format(suite.get_class_name(), test.get_function_name())
+        parts = []
+        if class_parameter is not None and test.accepts_suite_parameters():
+            parts.append("suite: {}".format(class_parameter))
+        if parameter is not None:
+            parts.append(str(parameter))
+        if parts:
+            text = ", ".join(parts)
+            label += "[{}]".format(text if len(text) <= 40 else text[:39] + "…")
+        return label
+
+    @staticmethod
     def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
+        """
+        :param cancel: the run's _RunContext, or a BOOLEAN when called outside of run()
+        """
+        context = cancel if isinstance(cancel, _RunContext) else None
+        if context is None:
+            return Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error, bool(cancel))
+        key = unit_key(test, parameter, class_parameter)
+        label = Runner.__label(suite, test, parameter, class_parameter)
+        context.console.unit_started(key, label)
+        try:
+            Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error, context.state, context)
+        finally:
+            recorded = class_parameter if test.accepts_suite_parameters() else None
+            data = test.metrics.get_metrics().get(str(recorded), {}).get(str(parameter), {})
+            context.console.unit_done(suite, key, data.get("status"), label,
+                                      runtime=sum(t for t in data.get("performance", []) if t),
+                                      runs=len(data.get("statuses", [])))
+
+    @staticmethod
+    def __run_test_body(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False,
+                        context=None):
 
         def run_before_test():
             try:
@@ -535,16 +665,17 @@ class Runner:
             # for reporting purposes, so reports are properly nested
             class_parameter = None
 
+        cancelled = cancel() if callable(cancel) else cancel
         test_start_time = time.time()
-        if before_class_error is not None or cancel:
+        if before_class_error is not None or cancelled:
             if not test.accepts_suite_parameters():
                 if None in test.suite.metrics.get_metrics()[DecoratorType.BEFORE_CLASS]["exceptions"] \
                         and test.get_status(parameter, class_parameter) is not None:
                     return  # fixes ticket: #19
                 elif test.get_number_of_actual_retries(parameter, class_parameter) >= test.suite.get_retry_limit():
                     return  # fixes ticket: #27
-            _status = TestCategory.IGNORE if not cancel else TestCategory.CANCEL
-            _event = Event.ON_IGNORE if not cancel else Event.ON_CANCEL
+            _status = TestCategory.IGNORE if not cancelled else TestCategory.CANCEL
+            _event = Event.ON_IGNORE if not cancelled else Event.ON_CANCEL
             # a cancel has no @beforeClass error - indexing None here made Runner.cancel() mid-run raise TypeError
             _exception = before_class_error["exception"] if before_class_error else None
             _traceback = before_class_error["traceback"] if before_class_error else None
@@ -579,6 +710,8 @@ class Runner:
                                class_param=class_parameter, param=parameter)
         try:
             for retry_attempt in range(1, test.get_retry_limit() + 1):
+                if retry_attempt > 1 and callable(cancel) and cancel():
+                    break  # cancelled: keep the result it has, no more retries
                 if test.is_qualified_for_retry(parameter, class_param=class_parameter):
                     LogJunkie.debug("\n===============Running test==================\n"
                                     "Test Case: {}\n"
@@ -590,36 +723,65 @@ class Runner:
                                     .format(test.get_function_name(), suite.get_class_name(), parameter,
                                             class_parameter, retry_attempt, test.get_retry_limit()))
                     record_test_failure = True
+                    capture = Capture()
+                    attempt = capturing(context.router if context is not None else None, capture)
+                    attempt.__enter__()
                     try:
-                        start_time = time.time()  # before test start time
-                        if run_before_test() is False:  # if before test failed, moving on without running the test
-                            continue  # everything recorded at this point in the metrics and flow is solid
-                        # Running actual test
-                        start_time = time.time()  # test start time
-                        test_case_start = start_time
-                        Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
-                                                   test=test, parameter=parameter, class_parameter=class_parameter)
-                        runtime = time.time() - start_time
-                    except SkipTest:
-                        test.metrics.update_metrics(status=TestCategory.SKIP,
-                                                    start_time=test_start_time,
-                                                    param=parameter,
-                                                    class_param=class_parameter)
-                        Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
-                                               class_param=class_parameter, param=parameter)
-                        return
-                    except Exception as test_error:
-                        runtime = time.time() - start_time
-                        process_failure(test_error)
-                        record_test_failure = False  # already recorded the failure just above this
-                    start_time = time.time()  # after test start time
-                    if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
-                        if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
-                            test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=test_case_start, param=parameter,
-                                                        class_param=class_parameter, runtime=runtime)
-                            Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
+                        try:
+                            start_time = time.time()  # before test start time
+                            if run_before_test() is False:  # if before test failed, moving on without running the test
+                                continue  # everything recorded at this point in the metrics and flow is solid
+                            # Running actual test
+                            start_time = time.time()  # test start time
+                            test_case_start = start_time
+                            in_main = context is not None and threading.current_thread() is threading.main_thread()
+                            if in_main:  # lets Ctrl+C interrupt this test, see Runner.__on_interrupt()
+                                context.state.main_thread_in_test = True
+                            try:
+                                Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
+                                                           test=test, parameter=parameter,
+                                                           class_parameter=class_parameter)
+                            finally:
+                                if in_main:
+                                    context.state.main_thread_in_test = False
+                            runtime = time.time() - start_time
+                        except (TestInterrupted, KeyboardInterrupt):
+                            # Ctrl+C while this test ran on the main thread, or the test raised KeyboardInterrupt
+                            if context is not None:
+                                context.cancel_by_user()
+                            test.metrics.update_metrics(status=TestCategory.CANCEL, start_time=test_start_time,
+                                                        param=parameter, class_param=class_parameter,
+                                                        runtime=time.time() - start_time)
+                            Runner.__process_event(event=Event.ON_CANCEL, suite=suite, test=test,
+                                                   class_param=class_parameter, param=parameter)
+                            start_time = time.time()
+                            run_after_test(False)  # cleanup still runs
+                            return
+                        except SkipTest:
+                            test.metrics.update_metrics(status=TestCategory.SKIP,
+                                                        start_time=test_start_time,
+                                                        param=parameter,
+                                                        class_param=class_parameter)
+                            Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test,
                                                    class_param=class_parameter, param=parameter)
                             return
+                        except Exception as test_error:
+                            runtime = time.time() - start_time
+                            process_failure(test_error)
+                            record_test_failure = False  # already recorded the failure just above this
+                        start_time = time.time()  # after test start time
+                        if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
+                            if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
+                                test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=test_case_start, param=parameter,
+                                                            class_param=class_parameter, runtime=runtime)
+                                Runner.__process_event(event=Event.ON_SUCCESS, suite=suite, test=test,
+                                                       class_param=class_parameter, param=parameter)
+                                return
+                    finally:
+                        attempt.__exit__(None, None, None)
+                        if context is not None:
+                            test.metrics.record_output(parameter, class_parameter, retry_attempt,
+                                                       capture.output(), capture.log)
         finally:
             Runner.__process_event(event=Event.ON_COMPLETE, suite=suite, test=test,
                                    class_param=class_parameter, param=parameter)

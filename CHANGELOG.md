@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9a6
+- New `tj run` console output: a header, a progress bar per suite, a Problems section and a summary table
+- Tracebacks in the console are readable again: they printed as one escaped line on Python 3. Every run of a retried test is listed, identical runs share one traceback, and Test Junkie's own frames are left out
+- What tests print and log is captured and only shown for tests that didn't pass. `--no-capture` shows it live (needed for `breakpoint()`)
+- New `-p` / `--per-test` prints one line per test. `-q` now prints only the problems and a result line, and `Runner.run(quiet=True)` prints nothing
+- Ctrl+C cancels a run cleanly: nothing new starts and nothing is retried, running tests finish, cleanup hooks and reports still run, exit code 12. A second Ctrl+C stops immediately with exit code 130
+- Fixed Ctrl+C being ignored on Windows until the running test threads finished
+- `Runner.cancel()` now also stops retries of a test that is already running
+- A suite that is skipped, ignored or cancelled as a whole counts its tests in the summary. A suite ignored as a whole (e.g. bad suite parameters) now makes `tj run` exit 1
+
 ## 0.9a5
 - Fixed `monitor_resources=True` leaving a `.resources_*` temp file behind after short runs: the monitor thread could re-create it after cleanup
 - Fixed a `tag_config` that isn't a dict (e.g. a list) crashing with `AttributeError` instead of the intended `ConfigError`

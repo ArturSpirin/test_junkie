@@ -20,6 +20,12 @@ def _alive(thread):
     return thread is not None and not getattr(thread, "finished", False) and thread.is_alive()
 
 
+def _join(thread):
+    # an untimed join() can't be interrupted on Windows - Ctrl+C was only seen once the thread finished
+    while thread.is_alive():
+        thread.join(0.25)
+
+
 def _signals_when_done(func):
     def target(*args):
         try:
@@ -87,10 +93,10 @@ class ParallelProcessor:
             return _GENERATION[0]
 
     @staticmethod
-    def wait_for_change(generation, timeout=1.0):
+    def wait_for_change(generation, timeout=0.25):
         """
         Blocks until a suite/test thread finishes after `generation` was captured (returns right away if one already
-        has). The timeout is only a safety net - every state change the scheduler waits on comes from a thread finishing
+        has). The timeout is a safety net, and keeps the main thread waking up often enough to see Ctrl+C
         """
         with _CHANGED:
             if _GENERATION[0] == generation:
@@ -109,7 +115,7 @@ class ParallelProcessor:
 
     @staticmethod
     def run_suite_in_a_thread(func, suite):
-        thread = threading.Thread(target=_signals_when_done(func), args=(suite,))
+        thread = threading.Thread(target=_signals_when_done(func), args=(suite,), daemon=True)
         with _LOCK:
             # registered and started under the lock, so nobody can see (and join) a thread that isn't started yet
             ParallelProcessor.__entry(suite.get_class_object())["thread"] = thread
@@ -119,7 +125,7 @@ class ParallelProcessor:
     @staticmethod
     def run_test_in_a_thread(func, suite, test, parameter, class_parameter, before_class_error, cancel):
         thread = threading.Thread(target=_signals_when_done(func), args=(suite, test, parameter, class_parameter,
-                                                                         before_class_error, cancel))
+                                                                         before_class_error, cancel), daemon=True)
         with _LOCK:
             # a test thread used to be registered *before* start() - a concurrent wait could join() it and crash
             # with "cannot join thread before it is started"
@@ -132,7 +138,7 @@ class ParallelProcessor:
         with _LOCK:
             threads = [info["thread"] for info in ParallelProcessor.__PARALLELS.values() if info["thread"]]
         for thread in threads:  # joined outside the lock - suite threads need it to make progress
-            thread.join()
+            _join(thread)
 
     @staticmethod
     def wait_currently_active_tests_to_finish(suite=None):
@@ -146,7 +152,7 @@ class ParallelProcessor:
                 entries = [ParallelProcessor.__entry(suite.get_class_object())]
             threads = [test["thread"] for entry in entries for test in entry["tests"]]
         for thread in threads:
-            thread.join()
+            _join(thread)
 
     def suite_limit_reached(self):
         with _LOCK:

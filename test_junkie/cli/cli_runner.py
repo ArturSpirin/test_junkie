@@ -9,10 +9,9 @@ import re
 
 from test_junkie.builder import Builder
 from test_junkie.cli.cli import CliUtils
-from test_junkie.constants import CliConstants, Undefined, DocumentationLinks, TestCategory
+from test_junkie.constants import CliConstants, Undefined, DocumentationLinks
 from test_junkie.debugger import suppressed_stdout
 from test_junkie.errors import BadCliParameters
-from test_junkie.metrics import Aggregator
 from test_junkie.runner import Runner
 from test_junkie.cli.cli_config import Config
 
@@ -75,6 +74,7 @@ class CliRunner:
         self.detected_suites = {}
         self.suites = []
         self.requested_suites = suites
+        self.scan_seconds = None
         self.__config = Config(config_name=CliConstants.TJ_CONFIG_NAME if
                                self.__execution_config == Undefined else self.__execution_config)
         self.coverage = None
@@ -206,9 +206,10 @@ class CliRunner:
                 self.__find_and_register_suite(_file)
 
         try:
-            print("\n[{status}] Scanning: {location} ..."
-                  .format(location=CliUtils.format_color_string(value=",".join(self.sources), color="green"),
-                          status=CliUtils.format_color_string(value="INFO", color="blue")))
+            interactive = sys.stdout.isatty()
+            if interactive:  # replaced by the run's header once the scan is done
+                sys.stdout.write("scanning {} …".format(", ".join(self.sources)))
+                sys.stdout.flush()
             start = time.time()
             for source in self.sources:
                 if source.endswith(".py"):
@@ -222,10 +223,14 @@ class CliRunner:
 
                         for file_path in sorted(glob.glob(os.path.join(dirName, "*.py"))):
                             parse_file(file_path)
-            print("[{status}] Scan finished in: {time} seconds. Found: {suites} suite(s)."
-                  .format(status=CliUtils.format_color_string(value="INFO", color="blue"),
-                          time="{0:.2f}".format(time.time() - start),
-                          suites=CliUtils.format_bold_string(len(self.suites))))
+            self.scan_seconds = time.time() - start
+            if interactive:
+                sys.stdout.write("\r\x1b[2K")
+                sys.stdout.flush()
+            if not self.suites:
+                print("[{status}] No test suites found in {location} ({time:0.2f}s).".format(
+                    status=CliUtils.format_color_string(value="ERROR", color="red"),
+                    location=", ".join(self.sources), time=self.scan_seconds))
         except KeyboardInterrupt:
             print("(Ctrl+C) Exiting!")
             exit(12)
@@ -248,8 +253,7 @@ class CliRunner:
                       "skip_on_match_any": args.skip_on_match_any}
 
         if self.suites:
-            print("[{status}] Running tests ...\n"
-                  .format(status=CliUtils.format_color_string(value="INFO", color="blue")))
+            runner = None
             try:
                 runner = Runner(suites=self.suites,
                                 html_report=args.html_report,
@@ -262,9 +266,13 @@ class CliRunner:
                            components=args.components,
                            features=args.features,
                            tag_config=tag_config,
-                           quiet=args.quiet)
-            except KeyboardInterrupt:
-                print("(Ctrl+C) Exiting!")
+                           quiet=args.quiet,
+                           per_test=args.per_test,
+                           capture=Undefined if args.no_capture is Undefined else not args.no_capture,
+                           _cli={"sources": self.sources, "scan_seconds": self.scan_seconds})
+            except KeyboardInterrupt as interrupt:
+                if not getattr(interrupt, "tj_reported", False):  # the run's verdict already says it was cancelled
+                    print("(Ctrl+C) Exiting!")
                 exit(12)
             except:
                 print("[{status}] Unexpected error during test execution.".format(
@@ -286,9 +294,7 @@ class CliRunner:
                     except coverage.misc.CoverageException:
                         CliUtils.print_color_traceback()
                         exit(120)
-            report = Aggregator(runner.get_executed_suites()).get_basic_report()["tests"]
-            bad = [TestCategory.FAIL, TestCategory.ERROR, TestCategory.IGNORE]
-            if any(report.get(s, 0) > 0 for s in bad) or report.get("total", 0) == 0:
-                exit(1)
+            if runner.exit_code:  # the code the verdict line shows
+                exit(runner.exit_code)
             return
         exit(1)

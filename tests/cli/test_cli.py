@@ -281,6 +281,19 @@ def validate_output(expected, output, cmd):
         raise AssertionError("Not verified: {} for command: {}".format(expected, " ".join(cmd)))
 
 
+def validate_results(passed, total, output, cmd):
+    """
+    Checks the summary's Total row and test count, or with -q the verdict line
+    """
+    quiet = "-q" in cmd
+    if quiet:
+        ok = any("{} passed".format(passed) in line for line in output)
+    else:
+        ok = any(line.split()[:2] == ["Total", str(passed)] for line in output if line.split()) and             any(line.strip().startswith("{} tests".format(total)) for line in output)
+    if not ok:
+        raise AssertionError("Not verified: {}/{} passed for command: {}".format(passed, total, " ".join(cmd)))
+
+
 def test_run_with_cmd_args():
 
     Cmd.run(['python3', EXE, 'config', 'restore', '--all'])
@@ -290,7 +303,7 @@ def test_run_with_cmd_args():
                 ['python3', EXE, 'run', '-s', TESTS, '-k', 'api', '--code-cov', '-q']]:
         output = Cmd.run(cmd)
         pprint.pprint(output)
-        validate_output(expected=[["6/6 100.00", "SUCCESS"]], output=output, cmd=cmd)
+        validate_results(6, 16, output, cmd)  # suites skipped by tags count as skipped
 
 
 def test_run_with_config_and_cmd_args():
@@ -301,7 +314,7 @@ def test_run_with_config_and_cmd_args():
     cmd = ['python3', EXE, 'run', '-s', TESTS, '-k', 'api']
     output = Cmd.run(cmd)
     pprint.pprint(output)
-    validate_output(expected=[["[4/6 66.67%]", "SUCCESS"]], output=output, cmd=cmd)
+    validate_results(4, 16, output, cmd)
 
 
 def test_run_with_config():
@@ -312,7 +325,7 @@ def test_run_with_config():
     cmd = ['python3', EXE, 'run', '-s', TESTS]
     output = Cmd.run(cmd)
     pprint.pprint(output)
-    validate_output(expected=[["[9/11 81.82%]", "SUCCESS"]], output=output, cmd=cmd)
+    validate_results(9, 16, output, cmd)
 
 
 def test_runner_with_config():

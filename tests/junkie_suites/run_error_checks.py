@@ -25,7 +25,7 @@ def _run_and_expect_reports(**run_kwargs):
                 raise AssertionError("expected TestListenerError ({})".format(run_kwargs))
             except TestListenerError:
                 pass
-        assert "Test Junkie finished" in out.getvalue(), out.getvalue()[-500:]
+        assert "Summary" in out.getvalue() and "run stopped by TestListenerError" in out.getvalue(),             out.getvalue()[-500:]
         assert os.path.isfile(xml) and "BrokenListenerSuite" in open(xml).read()
         with io.open(html, encoding="utf-8") as report:
             assert "BrokenListenerSuite" in report.read()
