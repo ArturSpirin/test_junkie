@@ -148,7 +148,12 @@ class Runner:
                         order, sorted(_valid), DocumentationLinks.SUITE_DECORATOR))
 
         if order == TestOrder.RANDOM:
-            result = list(items)
+            # shuffle from declaration order, not from the current list (an earlier run in this process may have
+            # shuffled it already) - so the same seed always gives the same order
+            def declared(test):
+                code = getattr(test.get_function_object(), "__code__", None)
+                return (code.co_firstlineno if code is not None else 0), test.get_function_name()
+            result = sorted(items, key=declared)
             rng.shuffle(result)
             return result
 

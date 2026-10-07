@@ -77,6 +77,16 @@ class RetryFilters:
         ATTEMPTS.append("connection_error")
         raise ConnectionError("flaky network")
 
+    @test(retry=3, retry_on=[ConnectionError])
+    def subclass_is_retried(self):
+        ATTEMPTS.append("subclass")
+        raise ConnectionResetError("a ConnectionError subclass")
+
+    @test(retry=3, no_retry_on=[ConnectionError])
+    def subclass_is_not_retried(self):
+        ATTEMPTS.append("blocked_subclass")
+        raise ConnectionResetError("a ConnectionError subclass")
+
 
 def _run(suites, **kwargs):
     from test_junkie.runner import Runner
@@ -123,6 +133,8 @@ def retry_on_only_retries_listed_exceptions():
     _run([RetryFilters])
     assert ATTEMPTS.count("value_error") == 1
     assert ATTEMPTS.count("connection_error") == 3
+    assert ATTEMPTS.count("subclass") == 3, ATTEMPTS  # subclasses of a retry_on type are retried
+    assert ATTEMPTS.count("blocked_subclass") == 1, ATTEMPTS  # and blocked by no_retry_on
 
 
 def object_repr_and_getters():

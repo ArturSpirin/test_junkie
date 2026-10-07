@@ -500,9 +500,11 @@ class TestObject(object):
             return True
         test = self.metrics.get_metrics()[str(class_param)][str(param)]
         if test["status"] in TestCategory.ALL_UN_SUCCESSFUL:
-            if self.get_no_retry_on() and type(test["exceptions"][-1]) in self.get_no_retry_on():
+            # subclasses count: retry_on=[requests.exceptions.Timeout] also retries ReadTimeout
+            error = test["exceptions"][-1]
+            if self.get_no_retry_on() and isinstance(error, tuple(self.get_no_retry_on())):
                 return False
-            elif self.get_retry_on() and type(test["exceptions"][-1]) not in self.get_retry_on():
+            elif self.get_retry_on() and not isinstance(error, tuple(self.get_retry_on())):
                 return False
             return True
         return False

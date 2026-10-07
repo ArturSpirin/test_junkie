@@ -27,6 +27,8 @@
 - In GitHub Actions, `tj run` prints an `::error` annotation per failed test, pointing at the failing line
 - `tj audit --json` for scripts, and `tj audit --fail-on-gaps [owners,tags,...]` exits 1 when tests are missing that metadata (for CI)
 - `tj version` shows the installed package, the config in use and the docs link. `tj` with no command, or an unknown one, exits 120 with the commands to use
+- `TestOrder.RANDOM` with the same seed gives the same order in repeated runs within one process (it shuffled the previous run's order)
+- `retry_on` and `no_retry_on` also match subclasses of the listed exceptions (they matched the exact type only, so `retry_on=[requests.exceptions.Timeout]` never retried a `ReadTimeout`)
 - Smaller install despite the above (849 KB → 844 KB): the HTML report's page ships as package data, the CLI options are defined once
 
 ## 0.9a5

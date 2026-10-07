@@ -584,6 +584,14 @@ def seed_repeats_a_random_order():
     assert orders[0] != list(range(8)), orders  # actually shuffled
     code, out = run_cli("run", "-s", directory)
     assert re.search(r"seed \d+", out), out  # a seed is always printed for a random order
+    # programmatic runs in one process too: an earlier shuffle must not change what a seed gives
+    from test_junkie.runner import Runner
+    suite = sys.modules["random_suite"].ShuffledSuite
+    for _ in range(2):
+        del sys.modules["random_suite"].ORDER[:]
+        Runner([suite], seed=4242).run(quiet=True)
+        orders.append(list(sys.modules["random_suite"].ORDER))
+    assert orders[-1] == orders[-2], orders
 
 
 def retry_overrides():
