@@ -238,7 +238,7 @@ class Runner:
     def run(self, **kwargs):
         """
         Initiates the execution process that runs tests
-        :return: None
+        :return: Aggregator with the run's results, e.g. run().get_basic_report()
         """
         self.__reset_for_run()
         self.__settings = Settings(runner_kwargs=self.__kwargs, run_kwargs=kwargs)
