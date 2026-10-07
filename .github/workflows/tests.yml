@@ -35,6 +35,7 @@ jobs:
           set -o pipefail
           coverage run -m pytest -rfE tests/pytest tests/cli tests/cli_edge 2>&1 | tee pytest_output.txt
 
+      # tj run annotates its own failures here (::error per failed test, at the failing line)
       - name: Run test_junkie path
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -43,10 +44,11 @@ jobs:
           set -o pipefail
           coverage run -m test_junkie run -s tests/test_junkie 2>&1 | tee tj_output.txt
 
-      # job logs need a login to read; annotations don't - so failures stay diagnosable from the public API
-      - name: Annotate failures
+      # job logs need a login to read; annotations don't - so failures stay diagnosable from the public API.
+      # Only the pytest path needs this: tj run writes its own annotations
+      - name: Annotate pytest failures
         if: failure()
-        run: python .github/scripts/annotate_failures.py pytest_output.txt tj_output.txt
+        run: python .github/scripts/annotate_failures.py pytest_output.txt
 
       - name: Combined coverage
         run: |

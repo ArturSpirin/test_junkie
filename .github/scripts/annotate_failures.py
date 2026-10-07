@@ -1,5 +1,6 @@
 """
-Turns test failures from the saved step output into GitHub ::error annotations.
+Turns pytest failures from the saved step output into GitHub ::error annotations. The test_junkie path doesn't
+need this: tj run prints its own annotations when GITHUB_ACTIONS is set.
 Job logs need a GitHub login to read; annotations don't - so failures stay diagnosable from the public API.
 Usage: python annotate_failures.py <output file> [<output file> ...]
 """
@@ -8,9 +9,7 @@ import re
 import sys
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
-# pytest -rfE summary lines, and TJ's per-suite result lines for the real test files (not the fixture suites,
-# which fail on purpose)
-SUMMARY = re.compile(r"^(FAILED|ERROR) |^>> \[(FAIL|ERROR)\] .* test_[a-z_]+\.")
+SUMMARY = re.compile(r"^(FAILED|ERROR) ")  # pytest -rfE summary lines
 MAX_ANNOTATIONS = 25
 
 
@@ -25,14 +24,11 @@ def main(paths):
             continue
         with open(path, encoding="utf-8", errors="replace") as doc:
             lines = [ANSI.sub("", line.rstrip("\n")) for line in doc]
-        for index, line in enumerate(lines):
+        for line in lines:
             if emitted >= MAX_ANNOTATIONS:
                 return
             if SUMMARY.search(line):
-                # the next lines carry TJ's "run #N [FAIL] :: Traceback: ..." detail
-                detail = [l.strip() for l in lines[index + 1:index + 4] if l.strip().startswith("|__ run #")]
-                message = line.strip() + ("\n" + "\n".join(detail) if detail else "")
-                print("::error title={}::{}".format(os.path.basename(path), escape(message[:3000])))
+                print("::error title={}::{}".format(os.path.basename(path), escape(line.strip()[:3000])))
                 emitted += 1
 
 
