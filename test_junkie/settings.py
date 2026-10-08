@@ -4,6 +4,7 @@ from test_junkie.constants import DocumentationLinks, Undefined
 from test_junkie.debugger import LogJunkie
 from test_junkie.errors import BadParameters, ConfigError
 from test_junkie.cli.cli_config import Config
+from test_junkie.rerun import Rerun
 
 
 class Settings:
@@ -52,6 +53,7 @@ class Settings:
         self.__capture = Undefined
         self.__json_report = Undefined
         self.__retry = Undefined
+        self.__rerun = Undefined
 
         self.__print_settings()
 
@@ -265,6 +267,21 @@ class Settings:
                     raise BadParameters("\"retry\" needs a whole number of 1 or more, got: {!r}".format(value))
                 self.__retry = value
         return self.__retry
+
+    @property
+    def rerun(self):
+        """
+        :return: Rerun, the tests to run again (tj run --rerun FILE), or None to run everything
+        """
+        if self.__rerun is Undefined:
+            value = self.__get_value(key="rerun", default=None)
+            if isinstance(value, (str, os.PathLike)):
+                value = Rerun.from_report(value)
+            elif value is not None and not isinstance(value, Rerun):
+                raise BadParameters("\"rerun\" needs a Rerun or the path to a JSON report, got: {!r}. "
+                                    "See documentation: {}".format(value, DocumentationLinks.RERUN))
+            self.__rerun = value
+        return self.__rerun
 
     @property
     def xml_report(self):

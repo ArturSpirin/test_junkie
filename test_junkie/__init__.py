@@ -1,2 +1,2 @@
 name = "test_junkie"
-__version__ = "0.9a6"
+__version__ = "0.9a7"

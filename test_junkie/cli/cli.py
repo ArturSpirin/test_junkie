@@ -36,6 +36,8 @@ _OPTIONS = [
     ("retry", None, "--retry", (), "int",
      "Run each failing test up to this many times, whatever its @test(retry=) says", "run"),
     ("no_retry", None, "--no-retry", ("--no_retry",), "flag", "Run every test and suite once, no retries", "run"),
+    ("rerun", None, "--rerun", (), "str",
+     "Run again only what didn't pass in this JSON report (--json-report), down to the parameter", "once"),
     ("seed", None, "--seed", (), "int",
      "Seed for TestOrder.RANDOM, to repeat an order (the header prints the one used)", "once"),
     ("monitor_resources", "-m", "--monitor-resources", ("--monitor_resources",), "flag",
@@ -61,7 +63,7 @@ _KINDS = {"list": {"nargs": "+"}, "int": {"type": int}, "str": {"type": str}, "f
 _METAVARS = {"sources": "PATH", "tests": "TEST", "features": "FEATURE", "components": "COMPONENT", "owners": "OWNER",
              "run_on_match_all": "TAG", "run_on_match_any": "TAG", "skip_on_match_all": "TAG",
              "skip_on_match_any": "TAG", "html_report": "FILE", "xml_report": "FILE", "json_report": "FILE",
-             "cov_rcfile": "FILE"}
+             "rerun": "FILE", "cov_rcfile": "FILE"}
 _AUDIT_VIEWS = ["suites", "features", "components", "tags", "owners"]
 
 

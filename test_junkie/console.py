@@ -14,6 +14,7 @@ import time
 
 import test_junkie
 from test_junkie.constants import TestCategory, SuiteCategory, TestOrder
+from test_junkie.rerun import parameters_to_run
 
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(test_junkie.__file__))
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -393,18 +394,28 @@ class _SuiteProgress(object):
         return _worst(set(self.done.values()))
 
 
-def expected_units(suite):
+def expected_units(suite, rerun=None):
     """
     How many results a suite will produce, from what's known before it runs. Parameters given as functions count as 1
     until the runner evaluates them
+    :param rerun: Rerun, when only some of the tests and parameters run again
     """
     class_params = suite.get_parameters()
     suite_count = len(class_params) if isinstance(class_params, list) and class_params else 1
     total = 0
     for test in suite.get_test_objects():
+        if rerun is not None and not rerun.includes_test(suite.get_class_name(), test.get_function_name()):
+            continue
         params = test.get_parameters()
         count = len(params) if isinstance(params, list) and params else 1
-        total += count * (suite_count if test.accepts_suite_parameters() else 1)
+        units = count * (suite_count if test.accepts_suite_parameters() else 1)
+        known = isinstance(params, list) and params and isinstance(class_params, list) and class_params
+        if rerun is not None and known:  # parameters given as functions aren't known until they run
+            runs_under = class_params if test.accepts_suite_parameters() else [None]
+            chosen = [parameters_to_run(rerun, test, params, class_params, param) for param in runs_under]
+            if chosen[0] is not None:  # None: its parameters changed since, all of them run
+                units = sum(len(params) for params in chosen)
+        total += units
     return total
 
 
@@ -512,6 +523,19 @@ class Console(object):
         self.__write("".join("\x1b[2K{}\n".format(line) for line in out))
         self.__drawn = len(out)
         self.__dirty = False
+
+    def __rerun(self):
+        return self.__settings.rerun if self.__settings is not None else None
+
+    def __expected(self, suite):
+        return expected_units(suite, self.__rerun())
+
+    def note(self, text):
+        """
+        A line about the run itself, printed above the live block
+        """
+        if self.__mode in ("normal", "cli-quiet"):
+            self.emit(["{}  {}".format(self.badge("NOTE", "skip"), text)])
 
     def emit(self, lines):
         """
@@ -649,7 +673,7 @@ class Console(object):
     # ── events from the runner ──
 
     def start(self, suites):
-        self.__all = [_SuiteProgress(suite, expected_units(suite)) for suite in suites]
+        self.__all = [_SuiteProgress(suite, self.__expected(suite)) for suite in suites]
         self.__progress = {p.suite: p for p in self.__all}
         self.__count_width = len(str(max(sum(p.expected for p in self.__all), 1))) * 2 + 1
         self.__layout(suites)
@@ -708,6 +732,9 @@ class Console(object):
         if settings.retry is not None:
             mode += dot + ("no retries" if settings.retry == 1 else "up to {} runs per test".format(settings.retry))
         row("mode", mode)
+        if settings.rerun is not None:
+            row("rerun", str(settings.rerun) if len(settings.rerun) else "nothing to run again in {}".format(
+                settings.rerun.source or "the rerun"))
         if any(p.suite.get_order() == TestOrder.RANDOM for p in self.__all):
             seed = settings.kwargs.get("seed")
             row("order", "random{}seed {}{}".format(dot, self.style(seed, "bold"), self.style(
@@ -744,7 +771,7 @@ class Console(object):
         with self.__lock:
             progress = self.__progress.get(suite)
             if progress is None:
-                progress = self.__progress[suite] = _SuiteProgress(suite, expected_units(suite))
+                progress = self.__progress[suite] = _SuiteProgress(suite, self.__expected(suite))
                 self.__all.append(progress)
             if progress.started is None:
                 progress.started = time.time()
@@ -930,9 +957,13 @@ class Console(object):
         if self.__state.cancelled and self.__state.by_user:
             return 12
         bad = counts[TestCategory.FAIL] + counts[TestCategory.ERROR] + counts[TestCategory.IGNORE]
-        if bad or aggregator.get_basic_report()["tests"]["total"] == 0:
+        if bad or (aggregator.get_basic_report()["tests"]["total"] == 0 and not self.__nothing_to_rerun()):
             return 1
         return 0
+
+    def __nothing_to_rerun(self):
+        rerun = self.__rerun()
+        return rerun is not None and len(rerun) == 0
 
     # ── problems ──
 
@@ -1016,7 +1047,7 @@ class Console(object):
                 reason = suite_metrics.get("initiation_error")
                 entry = [whole_suite,
                          "          " + self.style("{}{}{} tests not run".format(
-                             self.__path(suite) or suite.get_class_module(), dot, expected_units(suite)), "dim"),
+                             self.__path(suite) or suite.get_class_module(), dot, self.__expected(suite)), "dim"),
                          ""]
                 if isinstance(reason, str):
                     entry.extend(self.__trace_lines(reason, TestCategory.IGNORE))
@@ -1133,7 +1164,7 @@ class Console(object):
             status = suite.metrics.get_metrics().get("status")
             if not any(row.values()) and status in (SuiteCategory.CANCEL, SuiteCategory.IGNORE, SuiteCategory.SKIP):
                 # nothing ran, so nothing was recorded per test - count the suite's tests under its status
-                row[status] = expected_units(suite)
+                row[status] = self.__expected(suite)
             elif self.__state.cancelled:
                 progress = self.__progress.get(suite)
                 if progress is not None:
@@ -1202,6 +1233,8 @@ class Console(object):
                 text += "  no tests ran"
         else:
             text = self.badge("PASSED", "pass")
+            if self.__nothing_to_rerun():
+                text += "  nothing to run again"
         if self.__mode == "cli-quiet":
             groups = []
             for words in (((TestCategory.FAIL, "failed"), (TestCategory.ERROR, "error"), (TestCategory.IGNORE, "ignored")),

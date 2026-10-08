@@ -621,6 +621,17 @@ def report_folders_and_json_report():
     assert code == 120 and "needs a .json file or a folder" in out, out
 
 
+def rerun_from_a_json_report():
+    directory = _write(FLAKY_SUITE, "flaky_suite.py")
+    report = os.path.join(tempfile.mkdtemp(), "report.json")
+    run_cli("run", "-s", directory, "--json-report", report, "--no-retry")
+    code, out = run_cli("run", "-s", directory, "--rerun", report, "--no-retry", "--json-report", report)
+    assert code == 1 and "rerun    1 test from " in out, out
+    rerun = _json(report)
+    assert rerun["totals"]["total"] == 1 and rerun["suites"][0]["tests"][0]["name"] == "always_fails", rerun
+    code, out = run_cli("run", "-s", directory, "--rerun", "no_such_report.json")
+    assert code == 120 and "needs a JSON report" in out, out
+
 def audit_json_and_fail_on_gaps():
     import json
     directory = _write(AUDIT_SUITES, "audit_suites.py")
@@ -681,7 +692,7 @@ def pyproject_table_is_read_only():
     assert code == 120 and "read-only for tj config" in out, out
 
 
-CHECKS = [bare_and_unknown_commands, version_shows_where_things_are, old_option_spellings_still_work_but_help_shows_the_new_ones, audit_tag_flags_match_tj_run, tests_and_suites_take_patterns, seed_repeats_a_random_order, retry_overrides, report_folders_and_json_report, audit_json_and_fail_on_gaps, project_config_is_found_and_used, pyproject_table_is_read_only,
+CHECKS = [bare_and_unknown_commands, version_shows_where_things_are, old_option_spellings_still_work_but_help_shows_the_new_ones, audit_tag_flags_match_tj_run, tests_and_suites_take_patterns, seed_repeats_a_random_order, retry_overrides, report_folders_and_json_report, rerun_from_a_json_report, audit_json_and_fail_on_gaps, project_config_is_found_and_used, pyproject_table_is_read_only,
           audit_lists_every_suite, guess_root_with_a_relative_source, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
           audit_no_test_meta_checks_the_tests_meta, audit_only_covers_the_requested_suites, audit_by_feature_and_verbose, audit_unknown_view_is_rejected,
           audit_and_run_without_sources_explain_what_is_missing, audit_reports_when_nothing_matches,

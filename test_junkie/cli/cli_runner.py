@@ -302,6 +302,7 @@ class CliRunner:
                            per_test=args.per_test,
                            retry=args.retry,
                            no_retry=args.no_retry,
+                           rerun=args.rerun,
                            capture=Undefined if args.no_capture is Undefined else not args.no_capture,
                            _cli={"sources": self.sources, "scan_seconds": self.scan_seconds,
                                  "from_config": dict(self.from_config)})

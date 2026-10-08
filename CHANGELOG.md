@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9a7
+- `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way
+
 ## 0.9a6
 - New `tj run` console output: a header, a progress bar per suite, a Problems section and a summary table
 - Tracebacks in the console are readable again: they printed as one escaped line on Python 3. Every run of a retried test is listed, identical runs share one traceback, and Test Junkie's own frames are left out

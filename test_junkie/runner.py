@@ -15,6 +15,7 @@ from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.objects import Limiter, arg_names
 from test_junkie.parallels import ParallelProcessor
+from test_junkie.rerun import parameters_to_run
 from test_junkie.builder import Builder
 from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.rules import Rules
@@ -104,6 +105,7 @@ class Runner:
         self.__active_suites = []
         self.__before_group_failure_records = {}
         self.__thread_errors = []
+        self.__changed_parameters = set()  # tests a rerun runs with all parameters, already reported
         self.__group_rules = Builder.build_group_definitions(self.__all_suites)
         for suite in self.__all_suites:
             suite_object = Builder.get_execution_roster().get(suite, None)
@@ -258,6 +260,11 @@ class Runner:
         for item in objects:  # tj run --retry N / --no-retry, for this run only
             item.retry_override = None if retry is None else (retry if hasattr(item, "get_function_name") else
                                                               (1 if retry == 1 else None))
+        rerun = self.__settings.rerun
+        if rerun is not None:  # suites with nothing to run again are not part of this run
+            self.__suites = [suite for suite in self.__suites if any(
+                rerun.includes_test(test.suite.get_class_name(), test.get_function_name())
+                for test in Builder.get_execution_roster()[suite].get_test_objects())]
         router.install()
         if threading.current_thread() is threading.main_thread():
             try:
@@ -270,7 +277,7 @@ class Runner:
                 resource_monitor = ResourceMonitor()
                 resource_monitor.start()
             self.__processor = ParallelProcessor(self.__settings)
-            console.start([Builder.get_execution_roster()[suite] for suite in self.__all_suites])
+            console.start([Builder.get_execution_roster()[suite] for suite in self.__suites])
 
             try:
                 while self.__suites:
@@ -383,12 +390,44 @@ class Runner:
         return target
 
     @staticmethod
-    def __needs_retry(test, class_param):
+    def __needs_retry(test, class_param, parameters):
         """
-        :return: BOOLEAN, True if any parameter of the test still qualifies for a retry under this suite parameter
+        :return: BOOLEAN, True if any of these parameters still qualifies for a retry under this suite parameter
         """
-        return any(test.is_qualified_for_retry(param, class_param=class_param)
-                   for param in test.get_parameters(process_functions=True))
+        return any(test.is_qualified_for_retry(param, class_param=class_param) for param in parameters)
+
+    def __parameters(self, test, class_param):
+        """
+        :return: LIST, the test's parameters to run under this suite parameter - all of them, unless this is a rerun
+        """
+        parameters = test.get_parameters(process_functions=True)
+        rerun = self.__settings.rerun
+        if rerun is None or not parameters or not isinstance(parameters, list):
+            return parameters  # bad parameters are reported as usual
+        chosen = parameters_to_run(rerun, test, parameters, test.suite.get_parameters(process_functions=True),
+                                   class_param)
+        if chosen is None:  # none of its parameters are in the rerun - they changed since, so all of them run
+            if test not in self.__changed_parameters:
+                self.__changed_parameters.add(test)
+                self.__context.console.note("{}.{}: none of its parameters are in the rerun, running all of them"
+                                            .format(test.suite.get_class_name(), test.get_function_name()))
+            return parameters
+        return chosen
+
+    def __in_rerun(self, test, class_param):
+        """
+        :return: BOOLEAN, True if a rerun has something left to run for the test under this suite parameter
+        """
+        if not self.__settings.rerun.includes_test(test.suite.get_class_name(), test.get_function_name()):
+            return False
+        parameters = test.get_parameters(process_functions=True)
+        if not parameters or not isinstance(parameters, list):
+            return True  # gets reported as bad parameters
+        chosen = self.__parameters(test, class_param)
+        if test.accepts_suite_parameters():
+            return bool(chosen)
+        # it runs once, under the first suite parameter - after that it has nothing left
+        return any(test.get_status(param, None) is None for param in chosen)
 
     @staticmethod
     def __validate_suite_parameters(suite):
@@ -479,11 +518,17 @@ class Runner:
                             # decided before @beforeClass - this used to run @beforeClass and then bail out
                             # without @afterClass when there was nothing left to retry for this suite parameter
                             tests = [test for test in unsuccessful_tests
-                                     if Runner.__needs_retry(test, class_param)]
+                                     if Runner.__needs_retry(test, class_param,
+                                                             self.__parameters(test, class_param))]
                             if not tests:
                                 continue
                         else:
                             tests = list(suite.get_test_objects())
+                            if self.__settings.rerun is not None:
+                                # decided before @beforeClass, same as for a retry
+                                tests = [test for test in tests if self.__in_rerun(test, class_param)]
+                                if not tests:
+                                    continue
 
                         before_class_error = Runner.__run_before_class(suite, class_param)
 
@@ -516,7 +561,7 @@ class Runner:
                                     ParallelProcessor.wait_while(lambda: not state.cancelled and
                                                                  not self.__processor.test_qualifies(test))
 
-                                    for param in test.get_parameters(process_functions=True):
+                                    for param in self.__parameters(test, class_param):
                                         if unsuccessful_tests is not None and \
                                                 not test.is_qualified_for_retry(param, class_param=class_param):
                                             # If does not qualify with current parameter, will move to the next
