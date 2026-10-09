@@ -179,6 +179,7 @@ class CancelInPoolSuite:
     @test(uses="one", priority=1)
     def holder(self):
         _work("holder")
+        time.sleep(0.6)  # the waiters are queued on the pool by now
         RUNNER[0].cancel()
         time.sleep(0.5)
 
@@ -387,7 +388,9 @@ def bad_pool_definitions_are_rejected():
 def cancel_while_waiting_for_a_pool_cancels_the_waiters():
     Limiter.pool("one", max_concurrent=1)
     try:
-        report = _run([CancelInPoolSuite], test_multithreading_limit=3)
+        # throttled so the holder starts first: three threads started at once raced for the slot, and a waiter that
+        # won it simply ran (seen on CI: 3.11 and 3.14)
+        report = _run([CancelInPoolSuite], test_multithreading_limit=3, test_throttling=0.15)
     finally:
         Limiter.remove_pools()
     statuses = {name: _units(report, "CancelInPoolSuite", name)[0]["status"]
