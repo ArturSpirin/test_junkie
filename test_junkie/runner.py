@@ -557,6 +557,18 @@ class Runner:
                                       Runner.__label(suite, test, param, class_param))
 
     def __run_suite_body(self, suite, context):
+        try:
+            self.__run_suite_steps(suite, context)
+        finally:
+            # every member reports in, however it ended: @afterGroup runs after the last one, if the group started
+            after_group_failed = self.__group_rules.run_after_group(suite)
+            if after_group_failed:
+                event = Event.ON_AFTER_GROUP_FAIL if isinstance(after_group_failed["exception"],
+                                                                AssertionError) else Event.ON_AFTER_GROUP_ERROR
+                Runner.__process_event(event=event, suite=suite, error=after_group_failed["exception"],
+                                       formatted_traceback=after_group_failed["trace"])
+
+    def __run_suite_steps(self, suite, context):
 
         def before_group_rule_failed():
             for group, _result in self.__before_group_failure_records.items():
@@ -566,9 +578,12 @@ class Runner:
         state = context.state
         suite_start_time = time.time()
         unsuccessful_tests = None
-        exception = Runner.__validate_suite_parameters(suite)
-
-        if not exception:
+        # the skip check comes first: a skipped suite doesn't evaluate its parameters or set up its group
+        skipped = suite.can_skip(self.__settings)
+        exception = None
+        if not skipped and not state.cancelled:
+            exception = Runner.__validate_suite_parameters(suite)
+        if not skipped and not state.cancelled and not exception:
             exception = before_group_rule_failed()
             if not exception:
                 result = self.__group_rules.run_before_group(suite, DecoratorType.BEFORE_GROUP)
@@ -582,7 +597,8 @@ class Runner:
                         Runner.__process_event(event=event, suite=suite, error=failure["exception"],
                                                formatted_traceback=failure["trace"])
 
-        if not suite.can_skip(self.__settings) and not state.cancelled and not exception:
+        if not skipped and not state.cancelled and not exception:
+            self.__group_rules.mark_started(suite)
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)
             context.console.suite_started(suite)
             for suite_retry_attempt in range(1, suite.get_retry_limit() + 1):
@@ -693,16 +709,10 @@ class Runner:
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
                                                        start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_COMPLETE, suite=suite)
-            after_group_failed = self.__group_rules.run_after_group(suite)
-            if after_group_failed:
-                event = Event.ON_AFTER_GROUP_FAIL if isinstance(after_group_failed["exception"],
-                                                                AssertionError) else Event.ON_AFTER_GROUP_ERROR
-                Runner.__process_event(event=event, suite=suite, error=after_group_failed["exception"],
-                                       formatted_traceback=after_group_failed["trace"])
         elif state.cancelled:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_CANCEL, suite=suite)
-        elif exception or before_group_rule_failed():
+        elif exception:
             suite.metrics.update_suite_metrics(status=SuiteCategory.IGNORE, start_time=suite_start_time,
                                                initiation_error=exception)
             Runner.__process_event(event=Event.ON_CLASS_IGNORE, suite=suite)

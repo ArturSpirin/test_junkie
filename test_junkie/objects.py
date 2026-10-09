@@ -906,6 +906,10 @@ class GroupRulesObject(object):
     Runs @beforeGroup / @afterGroup for the groups a suite belongs to. Suites can run in parallel, so each group's
     state is kept under one lock: the first member to arrive runs the group's @beforeGroup hooks (in definition order)
     while the others wait for the outcome, and @afterGroup runs once, after the last member.
+
+    Every member reports when it's done (run_after_group), whether it ran, was skipped, ignored or cancelled.
+    @afterGroup then runs if the group started: its @beforeGroup ran (passed or failed), or, for a group without
+    one, a member got as far as running. A group whose members were all skipped never runs @afterGroup.
     """
 
     _PENDING, _RUNNING, _DONE, _FAILED = "pending", "running", "done", "failed"
@@ -914,9 +918,18 @@ class GroupRulesObject(object):
 
         self.definition = definition
         self.__lock = threading.Lock()
-        # group -> {"before": state, "failure": dict or None, "finished": threading.Event()}
-        self.__state = {group: {"before": self._PENDING, "failure": None, "finished": threading.Event()}
-                        for group in definition}
+        # group -> {"before": state, "failure": dict or None, "finished": threading.Event(), "started": bool}
+        self.__state = {group: self.__new_state() for group in definition}
+
+    def __new_state(self):
+        return {"before": self._PENDING, "failure": None, "finished": threading.Event(), "started": False}
+
+    def mark_started(self, suite):
+        """The suite is about to run its tests: its groups count as started even without a @beforeGroup"""
+        with self.__lock:
+            for group, definition in self.definition.items():
+                if suite.get_class_object() in definition["suites"]:
+                    self.__state.setdefault(group, self.__new_state())["started"] = True
 
     def run_after_group(self, suite):
 
@@ -925,7 +938,8 @@ class GroupRulesObject(object):
             for group, definition in self.definition.items():
                 if suite.get_class_object() in definition["suites"]:
                     definition["suites"].remove(suite.get_class_object())
-                    if not definition["suites"] and DecoratorType.AFTER_GROUP in definition["rules"]:
+                    started = self.__state.setdefault(group, self.__new_state())["started"]
+                    if not definition["suites"] and started and DecoratorType.AFTER_GROUP in definition["rules"]:
                         to_run.extend(definition["rules"].pop(DecoratorType.AFTER_GROUP))
         for func in to_run:
             try:
@@ -944,12 +958,12 @@ class GroupRulesObject(object):
         for group, definition in self.definition.items():
             if suite.get_class_object() not in definition["suites"] or rule_type not in definition["rules"]:
                 continue
-            state = self.__state.setdefault(group, {"before": self._PENDING, "failure": None,
-                                                    "finished": threading.Event()})
             with self.__lock:
+                state = self.__state.setdefault(group, self.__new_state())
                 owner = state["before"] == self._PENDING
                 if owner:
                     state["before"] = self._RUNNING
+                    state["started"] = True
             if owner:
                 failure = None
                 for func in list(definition["rules"][rule_type]):

@@ -12,6 +12,8 @@
 - Every limit can be set for one run (`Runner.run(test_throttling=1, ...)`), from `tj run` (`--test-throttling`, `--suite-throttling`, `--ramp-up`, `--traceback-limit`, `--message-limit`, `--truncate`) or saved with `tj config update`
 - `TEST_THROTTLING` and `SUITE_THROTTLING` are run-wide: each suite thread slept on its own, so parallel suites started tests several times as often as the limit, and the first start waited too
 - `EXCEPTION_MESSAGE_LIMIT` had no effect on Python 3; messages are now cut in the console and reports, and listeners still get the full exception
+- `@afterGroup` runs after the last suite of its group however it ended (skipped, ignored, cancelled, Ctrl+C) and after a failed `@beforeGroup`; it used to be skipped whenever one suite didn't run. It doesn't run if `@beforeGroup` never ran (e.g. every suite skipped)
+- A skipped suite no longer evaluates its `parameters` or runs `@beforeGroup`; a skipped suite with bad parameters now reports as skipped, not ignored
 - A `parameters` function that raises no longer stops the run: that suite or test is ignored with the traceback, the rest of the run carries on and still fails at the end. `run()` no longer raises `TestJunkieExecutionError` for it. A function that raised isn't called again in the same run
 - `@beforeGroup` runs once when its suites run in parallel (`-S` > 1); the other suites wait for it, and if it fails they're all ignored. It used to run once per suite, at the same time
 - Several `@beforeGroup` / `@afterGroup` hooks on the same suites run in the order they're defined; a second one used to crash with `KeyError`. If one fails, the rest are skipped and the group is ignored
