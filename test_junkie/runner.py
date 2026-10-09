@@ -566,11 +566,11 @@ class Runner:
                     self.__before_group_failure_records.update(result)
                     failure = result[list(result.keys())[0]]
                     exception = failure["trace"]
-                    # documented listener events that were never fired (after-group ones always were)
-                    event = Event.ON_BEFORE_GROUP_FAIL if isinstance(failure["exception"], AssertionError) \
-                        else Event.ON_BEFORE_GROUP_ERROR
-                    Runner.__process_event(event=event, suite=suite, error=failure["exception"],
-                                           formatted_traceback=failure["trace"])
+                    if failure.get("first", True):  # once per failure, not once per waiting member
+                        event = Event.ON_BEFORE_GROUP_FAIL if isinstance(failure["exception"], AssertionError) \
+                            else Event.ON_BEFORE_GROUP_ERROR
+                        Runner.__process_event(event=event, suite=suite, error=failure["exception"],
+                                               formatted_traceback=failure["trace"])
 
         if not suite.can_skip(self.__settings) and not state.cancelled and not exception:
             Runner.__process_event(event=Event.ON_CLASS_IN_PROGRESS, suite=suite)

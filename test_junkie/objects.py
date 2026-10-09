@@ -886,34 +886,70 @@ class Limiter:
 
 
 class GroupRulesObject(object):
+    """
+    Runs @beforeGroup / @afterGroup for the groups a suite belongs to. Suites can run in parallel, so each group's
+    state is kept under one lock: the first member to arrive runs the group's @beforeGroup hooks (in definition order)
+    while the others wait for the outcome, and @afterGroup runs once, after the last member.
+    """
+
+    _PENDING, _RUNNING, _DONE, _FAILED = "pending", "running", "done", "failed"
 
     def __init__(self, definition):
 
         self.definition = definition
+        self.__lock = threading.Lock()
+        # group -> {"before": state, "failure": dict or None, "finished": threading.Event()}
+        self.__state = {group: {"before": self._PENDING, "failure": None, "finished": threading.Event()}
+                        for group in definition}
 
     def run_after_group(self, suite):
 
-        for group, definition in self.definition.items():
-            if suite.get_class_object() in definition["suites"]:
-                definition["suites"].remove(suite.get_class_object())
-                if not definition["suites"] and DecoratorType.AFTER_GROUP in definition["rules"]:
-                    for func in definition["rules"][DecoratorType.AFTER_GROUP]:
-                        try:
-                            func["decorated_function"]()
-                        except Exception as error:
-                            trace = traceback.format_exc()
-                            return {"trace": trace, "exception": error}
+        to_run = []
+        with self.__lock:
+            for group, definition in self.definition.items():
+                if suite.get_class_object() in definition["suites"]:
+                    definition["suites"].remove(suite.get_class_object())
+                    if not definition["suites"] and DecoratorType.AFTER_GROUP in definition["rules"]:
+                        to_run.extend(definition["rules"].pop(DecoratorType.AFTER_GROUP))
+        for func in to_run:
+            try:
+                func["decorated_function"]()
+            except Exception as error:
+                trace = traceback.format_exc()
+                return {"trace": trace, "exception": error}
         return None
 
     def run_before_group(self, suite, rule_type):
-
+        """
+        :return: None if every group's @beforeGroup passed, else {group: {"trace", "exception", "definition",
+                 "first"}} for the first group that failed. "first" is True only for the suite that ran the hook,
+                 so listener events fire once per failure.
+        """
         for group, definition in self.definition.items():
-            if suite.get_class_object() in definition["suites"] and rule_type in definition["rules"]:
+            if suite.get_class_object() not in definition["suites"] or rule_type not in definition["rules"]:
+                continue
+            state = self.__state.setdefault(group, {"before": self._PENDING, "failure": None,
+                                                    "finished": threading.Event()})
+            with self.__lock:
+                owner = state["before"] == self._PENDING
+                if owner:
+                    state["before"] = self._RUNNING
+            if owner:
+                failure = None
                 for func in list(definition["rules"][rule_type]):
                     try:
                         func["decorated_function"]()
-                        definition["rules"].pop(rule_type)
-                    except Exception as error:
-                        trace = traceback.format_exc()
-                        return {group: {"trace": trace, "exception": error, "definition": definition}}
+                    except Exception as error:  # the rest of the group's hooks are skipped
+                        failure = {"trace": traceback.format_exc(), "exception": error, "definition": definition}
+                        break
+                with self.__lock:
+                    state["failure"] = failure
+                    state["before"] = self._FAILED if failure else self._DONE
+                state["finished"].set()
+                if failure:
+                    return {group: dict(failure, first=True)}
+            else:
+                state["finished"].wait()
+                if state["failure"]:
+                    return {group: dict(state["failure"], first=False)}
         return None
