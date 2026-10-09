@@ -665,7 +665,8 @@ class Runner:
                                 if not tests:
                                     continue
 
-                        before_class_error = Runner.__run_before_class(suite, class_param)
+                        with ParallelProcessor.activity(state):
+                            before_class_error = Runner.__run_before_class(suite, class_param)
 
                         while tests:
                             for test in list(tests):
@@ -675,10 +676,7 @@ class Runner:
                                 if not self.__positive_skip_condition(test=test) and \
                                         Runner.__runnable_tags(test=test, tag_config=self.__settings.tags):
 
-                                    if not test.is_parallelized() and not state.cancelled:
-                                        LogJunkie.debug("Cant run test: {} in parallel with any other tests"
-                                                        .format(test.get_function_object()))
-                                        ParallelProcessor.wait_currently_active_tests_to_finish()
+                                    exclusive = not test.is_parallelized()
 
                                     bad_params = Runner.__validate_test_parameters(test)
                                     if bad_params is not None:
@@ -696,16 +694,20 @@ class Runner:
                                     ParallelProcessor.wait_while(lambda: not state.cancelled and
                                                                  not self.__processor.test_qualifies(test))
 
-                                    for param in self.__parameters(test, class_param):
-                                        if unsuccessful_tests is not None and \
-                                                not test.is_qualified_for_retry(param, class_param=class_param):
-                                            # If does not qualify with current parameter, will move to the next
-                                            continue
-                                        if not state.cancelled and \
-                                                ((self.__processor.test_multithreading()
-                                                  and param is None) or (self.__processor.test_multithreading()
-                                                                         and test.parallelized_parameters()
-                                                                         and param is not None)):
+                                    if exclusive:  # runs alone: no new test or hook anywhere in the run until it's done
+                                        LogJunkie.debug("Running {} alone".format(test.get_function_object()))
+                                        ParallelProcessor.acquire_exclusive(state)
+                                    try:
+                                        for param in self.__parameters(test, class_param):
+                                            if unsuccessful_tests is not None and \
+                                                    not test.is_qualified_for_retry(param, class_param=class_param):
+                                                # If does not qualify with current parameter, will move to the next
+                                                continue
+                                            if not exclusive and not state.cancelled and \
+                                                    ((self.__processor.test_multithreading()
+                                                      and param is None) or (self.__processor.test_multithreading()
+                                                                             and test.parallelized_parameters()
+                                                                             and param is not None)):
 
                                                 ParallelProcessor.wait_while(lambda: not state.cancelled and
                                                                              self.__processor.test_limit_reached())
@@ -714,18 +716,17 @@ class Runner:
                                                     if suite.get_kwargs().get("throttling") is not None else "test",
                                                     Limiter.get_test_throttling(suite), state)
                                                 self.__processor.run_test_in_a_thread(
-                                                                                      self.__capture_thread_errors(
-                                                                                          Runner.__run_test),
-                                                                                      suite, test, param,
-                                                                                      class_param,
-                                                                                      before_class_error,
-                                                                                      context)
-                                        else:
-                                            Runner.__run_test(suite=suite, test=test,
-                                                              parameter=param,
-                                                              class_parameter=class_param,
-                                                              before_class_error=before_class_error,
-                                                              cancel=context)
+                                                    self.__capture_thread_errors(Runner.__run_test),
+                                                    suite, test, param, class_param, before_class_error, context)
+                                            else:
+                                                Runner.__run_test(suite=suite, test=test,
+                                                                  parameter=param,
+                                                                  class_parameter=class_param,
+                                                                  before_class_error=before_class_error,
+                                                                  cancel=context)
+                                    finally:
+                                        if exclusive:
+                                            ParallelProcessor.release_exclusive()
                                     tests.remove(test)
 
                                 else:
@@ -739,7 +740,8 @@ class Runner:
                         ParallelProcessor.wait_currently_active_tests_to_finish(suite)
                         if state.cancelled:
                             context.console.suite_cleanup(suite, True)
-                        Runner.__run_after_class(suite, class_param)
+                        with ParallelProcessor.activity(state):
+                            Runner.__run_after_class(suite, class_param)
                     suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
                                                        if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
                                                        start_time=suite_start_time)
@@ -784,6 +786,11 @@ class Runner:
         context = cancel if isinstance(cancel, _RunContext) else None
         if context is None:
             return Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error, bool(cancel))
+        with ParallelProcessor.activity(context.state):  # waits while a parallelized=False test runs alone
+            Runner.__run_test_counted(suite, test, parameter, class_parameter, before_class_error, context)
+
+    @staticmethod
+    def __run_test_counted(suite, test, parameter, class_parameter, before_class_error, context):
         key = unit_key(test, parameter, class_parameter)
         label = Runner.__label(suite, test, parameter, class_parameter)
         context.console.unit_started(key, label)

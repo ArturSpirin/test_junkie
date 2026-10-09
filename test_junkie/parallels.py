@@ -52,6 +52,7 @@ class ParallelProcessor:
         with _LOCK:
             ParallelProcessor.__PARALLELS.clear()
             ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS.clear()
+            ParallelProcessor.__GATE.update({"owner": None, "depth": 0, "active": 0})
 
         self.__test_limit = settings.test_thread_limit
         if self.__test_limit == 0 or self.__test_limit is None:
@@ -73,6 +74,77 @@ class ParallelProcessor:
         LogJunkie.debug(">> Test level multi-threading enabled: {}".format(self.test_multithreading()))
         LogJunkie.debug(">> Test level multi-threading limit: {}".format(self.__test_limit))
         LogJunkie.debug("===============================================================================")
+
+    # The run-wide gate for @test(parallelized=False). Every test run and suite hook counts as activity; the owner of
+    # the gate (a suite thread running an exclusive test) waits for activity to drain, and nothing else starts until
+    # it releases the gate. owner -> threading.get_ident() of the holder, depth -> re-entries by that holder
+    __GATE = {"owner": None, "depth": 0, "active": 0}
+
+    @staticmethod
+    def __gate_closed_to_me():
+        owner = ParallelProcessor.__GATE["owner"]
+        return owner is not None and owner != threading.get_ident()
+
+    class _Activity(object):
+        """with ParallelProcessor.activity(cancel): a test run or a suite hook - waits while another thread holds the gate"""
+
+        def __init__(self, cancel=None):
+            self.__cancel = cancel
+
+        def __enter__(self):
+            with _CHANGED:
+                while ParallelProcessor._ParallelProcessor__gate_closed_to_me():
+                    if callable(self.__cancel) and self.__cancel():
+                        break  # cancelled: let it through so it can record CANCEL instead of waiting forever
+                    _CHANGED.wait(0.25)
+                ParallelProcessor._ParallelProcessor__GATE["active"] += 1
+            return self
+
+        def __exit__(self, *exc):
+            with _CHANGED:
+                gate = ParallelProcessor._ParallelProcessor__GATE
+                gate["active"] = max(0, gate["active"] - 1)  # a nested run (a run inside a test) resets the count
+                _GENERATION[0] += 1
+                _CHANGED.notify_all()
+            return False
+
+    @staticmethod
+    def activity(cancel=None):
+        return ParallelProcessor._Activity(cancel)
+
+    @staticmethod
+    def acquire_exclusive(cancel=None):
+        """
+        Closes the gate to every new test and hook in the run, then waits for what's running to finish. The caller then
+        runs alone until release_exclusive(). Re-entrant for the holder.
+        """
+        me = threading.get_ident()
+        with _CHANGED:
+            gate = ParallelProcessor.__GATE
+            if gate["owner"] == me:
+                gate["depth"] += 1
+                return
+            while gate["owner"] is not None:
+                if callable(cancel) and cancel():
+                    break
+                _CHANGED.wait(0.25)
+            gate["owner"], gate["depth"] = me, 1
+            while gate["active"] > 0:
+                if callable(cancel) and cancel():
+                    break
+                _CHANGED.wait(0.25)
+
+    @staticmethod
+    def release_exclusive():
+        with _CHANGED:
+            gate = ParallelProcessor.__GATE
+            if gate["owner"] != threading.get_ident():
+                return
+            gate["depth"] -= 1
+            if gate["depth"] <= 0:
+                gate["owner"], gate["depth"] = None, 0
+                _GENERATION[0] += 1
+                _CHANGED.notify_all()
 
     def suite_multithreading(self):
 

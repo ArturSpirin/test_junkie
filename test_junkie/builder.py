@@ -207,6 +207,10 @@ class Builder(object):
                                     expected=Builder.__fmt_expected_types(data["expected"]),
                                     actual=data["actual"].__name__,
                                     link=DocumentationLinks.TEST_DECORATOR))
+        if kwargs.get("parallelized") is False and kwargs.get("parallelized_parameters") is True:
+            raise BadParameters("@test() got parallelized=False and parallelized_parameters=True: a test that runs "
+                                "alone can't run its parameters at the same time. See documentation: {}"
+                                .format(DocumentationLinks.TEST_DECORATOR))
         retry = kwargs.get("retry")
         is_policy = isinstance(retry, RetryPolicy) or (inspect.isclass(retry) and issubclass(retry, RetryPolicy))
         if is_policy and ("retry_on" in kwargs or "no_retry_on" in kwargs):
