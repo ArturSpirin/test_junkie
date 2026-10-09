@@ -20,6 +20,7 @@ from test_junkie.builder import Builder
 from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.rules import Rules
 from test_junkie.settings import Settings
+from test_junkie.views import TestView
 
 # shared lock for __process_event() - can't create it inline there, @synchronized() would just
 # get a new Lock() every call
@@ -751,7 +752,7 @@ class Runner:
         def run_before_test():
             try:
                 if not test.skip_before_test_rule() and Runner.__overrides(suite.get_rules(), "before_test"):
-                    suite.get_rules().before_test(test=copy.deepcopy(test))
+                    suite.get_rules().before_test(test=TestView(test))
                 if not test.skip_before_test():
                     before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
                                                                    suite=suite, class_parameter=class_parameter,
@@ -802,7 +803,7 @@ class Runner:
                         process_failure(after_test_error, pre_processed=True)
                         return False
                 if not test.skip_after_test_rule() and Runner.__overrides(suite.get_rules(), "after_test"):
-                    suite.get_rules().after_test(test=copy.deepcopy(test))
+                    suite.get_rules().after_test(test=TestView(test))
                 return True
             except Exception as after_test_error:
                 if _record_test_failure:
@@ -990,10 +991,13 @@ class Runner:
             functions_list = suite.get_decorated_definition(decorator_type)
             for func in functions_list:
                 try:
-                    if "suite_parameter" in arg_names(func["decorated_function"]):
-                        func["decorated_function"](suite.get_class_instance(), suite_parameter=class_parameter)
-                    else:
-                        func["decorated_function"](suite.get_class_instance())
+                    names = arg_names(func["decorated_function"])
+                    kwargs = {}
+                    if "suite_parameter" in names:
+                        kwargs["suite_parameter"] = class_parameter
+                    if "test" in names and test is not None:  # per-test hooks only: a read-only view
+                        kwargs["test"] = TestView(test)
+                    func["decorated_function"](suite.get_class_instance(), **kwargs)
                 except Exception as decorator_error:
                     trace = traceback.format_exc()
                     update_metrics(decorator_type, decorator_error, trace)

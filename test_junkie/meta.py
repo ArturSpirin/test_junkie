@@ -1,6 +1,6 @@
-import threading
 import inspect
 from test_junkie.decorators import synchronized
+from test_junkie.views import META_LOCK
 
 
 def meta(**kwargs):
@@ -16,7 +16,7 @@ def meta(**kwargs):
 class Meta:
 
     @staticmethod
-    @synchronized(threading.Lock())
+    @synchronized(META_LOCK)
     def update(suite, parameter=None, suite_parameter=None, **kwargs):
         """
         Use this function inside a @test() where you want to update properties of the metadata
@@ -31,7 +31,7 @@ class Meta:
             metadata.update(kwargs)
 
     @staticmethod
-    @synchronized(threading.Lock())
+    @synchronized(META_LOCK)
     def get_meta(suite, parameter=None, suite_parameter=None):
         """
         Use this function inside a @test() where you want to check the current values of the metadata for that test
