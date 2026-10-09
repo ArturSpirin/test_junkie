@@ -18,13 +18,14 @@ class Builder(object):
     __CURRENT_SUITE_OBJECT = None
     __SUITE_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int], "listener": [Listener], "rules": [Rules],
                                "retry_policy": [RetryPolicy], "ids": [list, "<type 'function'>"],
+                               "conflicts_with": [list],
                                "parallelized": [bool], "priority": [int], "feature": [str], "pr": [list],
                                "order": [str], "uses": [str, list], "throttling": [int, float],
                                "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
     __TEST_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int, RetryPolicy], "parallelized_parameters": [bool],
                               "parallelized": [bool], "priority": [int], "component": [str], "tags": [list],
                               "no_retry_on": [list], "retry_on": [list], "pr": [list], "uses": [str, list],
-                              "ids": [list, "<type 'function'>"],
+                              "ids": [list, "<type 'function'>"], "conflicts_with": [list],
                               "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
 
     __GROUP_RULES = []
@@ -188,6 +189,9 @@ class Builder(object):
     @staticmethod
     def __validate_suite_kwargs(kwargs):
 
+        if "pr" in kwargs and "conflicts_with" in kwargs:
+            raise BadParameters("@Suite() got both pr= and conflicts_with=; pr= is the old name, use conflicts_with= "
+                                "only. See documentation: {}".format(DocumentationLinks.SUITE_DECORATOR))
         data = Builder.__validation_failed(kwargs)
         if data:
             raise BadParameters("Argument \"{arg}\" in @Suite() decorator expected {expected} "
@@ -199,6 +203,9 @@ class Builder(object):
 
     @staticmethod
     def __validate_test_kwargs(kwargs, decorated_function):
+        if "pr" in kwargs and "conflicts_with" in kwargs:
+            raise BadParameters("@test() got both pr= and conflicts_with=; pr= is the old name, use conflicts_with= "
+                                "only. See documentation: {}".format(DocumentationLinks.TEST_DECORATOR))
         data = Builder.__validation_failed(kwargs, suite=False)
         if data:
             raise BadParameters("Argument \"{arg}\" in @test() decorator expected {expected} "

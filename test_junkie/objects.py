@@ -295,7 +295,8 @@ class SuiteObject(object):
 
     def get_parallel_restrictions(self):
 
-        return self.get_kwargs().get("pr", [])
+        kwargs = self.get_kwargs()
+        return kwargs.get("conflicts_with", kwargs.get("pr", []))
 
     def get_parameters(self, process_functions=False):
         if process_functions:
@@ -454,7 +455,8 @@ class TestObject(object):
 
     def get_parallel_restrictions(self):
 
-        return self.get_kwargs().get("pr", [])
+        kwargs = self.get_kwargs()
+        return kwargs.get("conflicts_with", kwargs.get("pr", []))
 
     def get_tags(self):
 

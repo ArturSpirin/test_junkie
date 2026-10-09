@@ -21,8 +21,10 @@ class ThreadingTestSuite:
     def class_metrics_suite_a(self):
         assert ThreadingTestSuite._results[0].get_class_name() == "ParallelSuiteA"
         metrics = ThreadingTestSuite._results[0].metrics.get_metrics()
-        assert int(metrics["runtime"]) < int(ThreadingTestSuite._results[1].metrics.get_metrics()["runtime"])
-        assert int(metrics["runtime"]) < int(ThreadingTestSuite._results[2].metrics.get_metrics()["runtime"])
+        # ParallelSuiteA declares pr=[ParallelSuiteC]: the two never run at the same time. (This used to assert that A
+        # finished faster than B and C, which only held while pr= let conflicting tests slip in between parameters.)
+        other = ThreadingTestSuite._results[2].metrics.get_metrics()
+        assert metrics["end"] <= other["start"] or other["end"] <= metrics["start"]
         QualityManager.check_class_metrics(metrics, expected_status="success", expected_retry_count=1)
 
     @test()

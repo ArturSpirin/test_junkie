@@ -20,8 +20,10 @@ def test_class_metrics():
 
     assert results[0].get_class_name() == "ParallelSuiteA"
     metrics = results[0].metrics.get_metrics()
-    assert int(metrics["runtime"]) < int(results[1].metrics.get_metrics()["runtime"])
-    assert int(metrics["runtime"]) < int(results[2].metrics.get_metrics()["runtime"])
+    # ParallelSuiteA declares pr=[ParallelSuiteC]: the two never run at the same time. (This used to assert that A
+    # finished faster than B and C, which only held while pr= let conflicting tests slip in between parameters.)
+    other = results[2].metrics.get_metrics()
+    assert metrics["end"] <= other["start"] or other["end"] <= metrics["start"]
     QualityManager.check_class_metrics(metrics,
                                        expected_status="success",
                                        expected_retry_count=1)

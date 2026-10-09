@@ -1,10 +1,7 @@
-import inspect
 import threading
 import time
 
-from test_junkie.constants import DocumentationLinks
 from test_junkie.debugger import LogJunkie
-from test_junkie.errors import BadParameters
 
 # guards all of the bookkeeping below - suite threads, test threads and the main thread all read and write it.
 # Re-entrant because the qualification checks call the other locked helpers.
@@ -257,117 +254,64 @@ class ParallelProcessor:
             return True
         return False
 
-    def suite_qualifies(self, suite):
+    # conflicts_with=: the run's ConflictMap (set by Runner.run) and test function object -> reservations held
+    __CONFLICTS = None
+    __RESERVED = {}
 
-        def _build_reverse_restriction():
-            """
-            Bidirectional parallel restriction will be automatically added.
-            If suite `A` is restricted to run when suite `B` is running - suite `B` will be automatically restricted
-            to run when suite `A` is running
-            :return: None
-            """
-            if restriction not in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS:
-                ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS.update({restriction: [suite.get_class_object()]})
-            elif suite.get_class_object() not in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[restriction]:
-                ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[restriction].append(suite.get_class_object())
-            else:
-                return  # if nothing to add, return - to avoid logging
-            LogJunkie.debug("Added reverse restriction! {} will not be processed while {} is running"
-                            .format(restriction, suite.get_class_object()))
-
-        def _passes_restriction():
-            """
-            If current suite does not have any active restrictions, we can run it
-            :return: BOOLEAN
-            """
-            info = ParallelProcessor.__PARALLELS.get(restriction, None)
-            if info is not None and _alive(info["thread"]):
-                LogJunkie.debug("Suite: {} can't run while: {} is running."
-                                .format(suite.get_class_object(), restriction))
-                return False
-            return True
-
-        def _passes_reverse_restriction():
-            """
-            If current suite is part of parallel restriction in another suite which is currently active, can't run it.
-            :return: BOOLEAN
-            """
-            for reverse_suite in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS.get(suite.get_class_object(), []):
-                info = ParallelProcessor.__PARALLELS.get(reverse_suite, None)
-                if info is not None and _alive(info["thread"]):
-                    LogJunkie.debug("Suite: {} can't run while: {} is running due to reverse restriction."
-                                    .format(suite.get_class_object(), reverse_suite))
-                    return False
-            return True
-
+    @staticmethod
+    def set_conflicts(conflict_map):
         with _LOCK:
-            if suite.get_parallel_restrictions():
-                for restriction in suite.get_parallel_restrictions():
-                    if not inspect.isclass(restriction):
-                        raise BadParameters("Parallel suite restrictions must be class objects decorated with "
-                                            "@Suite(). Suite {} received a non-class restriction: {!r} (type: {}). "
-                                            "See documentation: {}"
-                                            .format(suite.get_class_object(), restriction,
-                                                    type(restriction).__name__, DocumentationLinks.THREADING))
-                    _build_reverse_restriction()
-                    if not _passes_restriction():
-                        return False
-            if not _passes_reverse_restriction():
-                return False
+            ParallelProcessor.__CONFLICTS = conflict_map
+            ParallelProcessor.__RESERVED.clear()
 
+    def suite_qualifies(self, suite):
+        """A suite named in another's conflicts_with (suite to suite) doesn't start while that suite's thread runs"""
+        conflicts = ParallelProcessor.__CONFLICTS
+        with _LOCK:
+            for other in (conflicts.suite_conflicts(suite) if conflicts is not None else ()):
+                info = ParallelProcessor.__PARALLELS.get(other, None)
+                if info is not None and _alive(info["thread"]):
+                    LogJunkie.debug("Suite: {} can't run while: {} is running.".format(suite.get_class_object(), other))
+                    return False
         # waiting for a free slot happens outside the lock - the suites holding the slots need it to finish
         ParallelProcessor.wait_while(self.suite_limit_reached)
         return True
 
-    def test_qualifies(self, test):
+    @staticmethod
+    def reserve(test, cancel=None):
+        """
+        Waits until no test it conflicts with holds a reservation, then takes one - checked and taken in one step, so two
+        conflicting tests can't both get through. The caller holds it for the whole test (every parameter) and calls
+        release(); each test thread started for it calls hold()/release() too.
+        :return: (seconds waited, [names of the tests it waited for])
+        """
+        conflicts = ParallelProcessor.__CONFLICTS
+        others = conflicts.conflicts(test) if conflicts is not None else set()
+        key = test.get_function_object()
+        started, blockers = time.monotonic(), []
+        with _CHANGED:
+            while True:
+                busy = [other for other in others if ParallelProcessor.__RESERVED.get(other, 0) > 0]
+                if not busy or (callable(cancel) and cancel()):
+                    break
+                for other in busy:
+                    name = conflicts.name(other)
+                    if name not in blockers:
+                        blockers.append(name)
+                _CHANGED.wait(0.25)
+            ParallelProcessor.__RESERVED[key] = ParallelProcessor.__RESERVED.get(key, 0) + 1
+        return time.monotonic() - started, blockers
 
-        def _build_reverse_restriction():
-            """
-            Bidirectional parallel restriction will be automatically added.
-            If suite `A` is restricted to run when suite `B` is running - suite `B` will be automatically restricted
-            to run when suite `A` is running
-            :return: None
-            """
-            if restriction not in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS:
-                ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS.update({restriction: [test.get_function_object()]})
-            elif test.get_function_object() not in ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[restriction]:
-                ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS[restriction].append(test.get_function_object())
-            else:
-                return  # if nothing to add, return - to avoid logging
-            LogJunkie.debug("Added reverse test restriction! {} will not be processed while test: {} is running"
-                            .format(restriction, test.get_function_object()))
+    @staticmethod
+    def hold(test):
+        with _CHANGED:
+            key = test.get_function_object()
+            ParallelProcessor.__RESERVED[key] = ParallelProcessor.__RESERVED.get(key, 0) + 1
 
-        def _running_tests():
-            return [test_mapping for suite_mapping in ParallelProcessor.__PARALLELS.values()
-                    for test_mapping in suite_mapping["tests"] if _alive(test_mapping["thread"])]
-
-        def _passes_restriction():
-            """
-            If current test does not have any active restrictions, we can run it
-            :return: BOOLEAN
-            """
-            return not any(test_mapping["test"].get_function_object() in test.get_parallel_restrictions()
-                           for test_mapping in _running_tests())
-
-        def _passes_reverse_restriction():
-            """
-            If current test is part of parallel restriction in another test which is currently active, can't run it.
-            :return: BOOLEAN
-            """
-            reverse_tests = ParallelProcessor.__REVERSE_PARALLEL_RESTRICTIONS.get(test.get_function_object(), [])
-            return not any(test_mapping["test"].get_function_object() in reverse_tests
-                           for test_mapping in _running_tests())
-
-        with _LOCK:
-            if test.get_parallel_restrictions():
-                for restriction in test.get_parallel_restrictions():
-                    if not inspect.isfunction(restriction) and not inspect.ismethod(restriction):
-                        raise BadParameters("Parallel test restrictions must be function objects decorated with "
-                                            "@test(). Test {} received a non-function restriction: {!r} (type: {}). "
-                                            "See documentation: {}"
-                                            .format(test.get_function_name(), restriction,
-                                                    type(restriction).__name__, DocumentationLinks.THREADING))
-                    _build_reverse_restriction()
-                    if not _passes_restriction():
-                        return False
-            return _passes_reverse_restriction()
+    @staticmethod
+    def release(test):
+        with _CHANGED:
+            key = test.get_function_object()
+            ParallelProcessor.__RESERVED[key] = max(0, ParallelProcessor.__RESERVED.get(key, 0) - 1)
+            _GENERATION[0] += 1
+            _CHANGED.notify_all()

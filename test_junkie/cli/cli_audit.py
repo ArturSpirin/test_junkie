@@ -157,7 +157,34 @@ class CliAudit:
                               console.style("  exit code 1", "dim")])
             exit(1)
 
+    def __conflicts(self):
+        """tj audit conflicts: every pair of tests that conflicts_with=/pr= keeps apart, resolved like a run would"""
+        import json
+        from test_junkie.conflicts import ConflictMap
+        from test_junkie.errors import BadParameters
+        suites = [self.exe_roster[suite] for suite in self.suites if suite in self.exe_roster]
+        try:
+            pairs = ConflictMap.build(suites, list(self.exe_roster.values())).pairs()
+        except BadParameters as error:
+            print(json.dumps({"error": str(error)}, indent=1) if self.args.json
+                  else "conflicts_with problem: {}".format(error))
+            raise SystemExit(1)
+        if self.args.json:
+            print(json.dumps({"conflicts": [list(pair) for pair in pairs]}, indent=1))
+            return
+        from test_junkie.console import Console
+        console = Console(None, mode="report")
+        lines = console.head([("tests", console.found(self.sources, len(suites), sum(
+            len(s.get_test_objects()) for s in suites), self.scan_seconds)), ("audit", "conflicts")])
+        if not pairs:
+            lines.append(console.style("No conflicts declared.", "dim"))
+        for first, second in pairs:
+            lines.append("  {}  {}  {}".format(first, console.style("x", "dim"), second))
+        console.emit(lines)
+
     def print_results(self):
+        if self.args.command == "conflicts":
+            return self.__conflicts()
         if self.args.json:
             self.__json()
         else:

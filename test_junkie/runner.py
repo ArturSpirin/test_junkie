@@ -21,6 +21,7 @@ from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.rules import Rules
 from test_junkie.settings import Settings
 from test_junkie.views import TestView
+from test_junkie.conflicts import ConflictMap
 from test_junkie.params import param_key, duplicates, reset as reset_param_ids
 
 # shared lock for __process_event() - can't create it inline there, @synchronized() would just
@@ -260,6 +261,9 @@ class Runner:
         objects = [Builder.get_execution_roster()[suite] for suite in self.__all_suites]
         objects += [test for suite in objects for test in suite.get_test_objects()]
         Limiter.check_pools([Builder.get_execution_roster()[suite] for suite in self.__suites])
+        # every conflicts_with=/pr= target is resolved and checked now, before anything runs
+        conflict_map = ConflictMap.build([Builder.get_execution_roster()[suite] for suite in self.__suites],
+                                         list(Builder.get_execution_roster().values()))
         _FuncEval.provider_failures.clear()
         reset_param_ids()
         limits = Limiter.start_run(self.__settings.limits)  # put back in the finally at the end of run()
@@ -284,6 +288,7 @@ class Runner:
                 resource_monitor = ResourceMonitor()
                 resource_monitor.start()
             self.__processor = ParallelProcessor(self.__settings)
+            ParallelProcessor.set_conflicts(conflict_map)
             console.start([Builder.get_execution_roster()[suite] for suite in self.__suites])
 
             try:
@@ -691,12 +696,20 @@ class Runner:
                                                                   TestCategory.IGNORE, Runner.__label(suite, test))
                                         continue
 
-                                    ParallelProcessor.wait_while(lambda: not state.cancelled and
-                                                                 not self.__processor.test_qualifies(test))
+                                    # held until its last parameter is done, so nothing it conflicts with starts
+                                    # in between; reserved in one step with the check, so two can't both start
+                                    waited, blockers = ParallelProcessor.reserve(test, state)
+                                    if blockers and waited >= 0.05:
+                                        test.metrics.record_conflict_wait(class_param if test.accepts_suite_parameters()
+                                                                          else None, waited, blockers)
 
                                     if exclusive:  # runs alone: no new test or hook anywhere in the run until it's done
                                         LogJunkie.debug("Running {} alone".format(test.get_function_object()))
-                                        ParallelProcessor.acquire_exclusive(state)
+                                        try:
+                                            ParallelProcessor.acquire_exclusive(state)
+                                        except BaseException:
+                                            ParallelProcessor.release(test)
+                                            raise
                                     try:
                                         for param in self.__parameters(test, class_param):
                                             if unsuccessful_tests is not None and \
@@ -715,8 +728,9 @@ class Runner:
                                                     ("test", suite.get_class_object())
                                                     if suite.get_kwargs().get("throttling") is not None else "test",
                                                     Limiter.get_test_throttling(suite), state)
+                                                ParallelProcessor.hold(test)  # released when the thread is done
                                                 self.__processor.run_test_in_a_thread(
-                                                    self.__capture_thread_errors(Runner.__run_test),
+                                                    self.__capture_thread_errors(Runner.__run_test_holding),
                                                     suite, test, param, class_param, before_class_error, context)
                                             else:
                                                 Runner.__run_test(suite=suite, test=test,
@@ -727,6 +741,7 @@ class Runner:
                                     finally:
                                         if exclusive:
                                             ParallelProcessor.release_exclusive()
+                                        ParallelProcessor.release(test)
                                     tests.remove(test)
 
                                 else:
@@ -790,6 +805,14 @@ class Runner:
             Runner.__run_test_counted(suite, test, parameter, class_parameter, before_class_error, context)
 
     @staticmethod
+    def __run_test_holding(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
+        """__run_test in a test thread, giving back the conflicts_with reservation the suite thread took for it"""
+        try:
+            Runner.__run_test(suite, test, parameter, class_parameter, before_class_error, cancel)
+        finally:
+            ParallelProcessor.release(test)
+
+    @staticmethod
     def __run_test_counted(suite, test, parameter, class_parameter, before_class_error, context):
         key = unit_key(test, parameter, class_parameter)
         label = Runner.__label(suite, test, parameter, class_parameter)
@@ -807,7 +830,8 @@ class Runner:
             context.console.unit_done(suite, key, data.get("status"), label,
                                       runtime=sum(t for t in data.get("performance", []) if t),
                                       runs=len(data.get("statuses", [])),
-                                      retries=test.metrics.get_retries(parameter, recorded))
+                                      retries=test.metrics.get_retries(parameter, recorded),
+                                      waits=test.metrics.get_conflict_waits(recorded))
 
     @staticmethod
     def __run_test_body(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False,

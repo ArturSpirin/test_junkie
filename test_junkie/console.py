@@ -835,7 +835,7 @@ class Console(object):
         with self.__lock:
             self.__running[key] = (label, time.time())
 
-    def unit_done(self, suite, key, status, label=None, runtime=None, runs=None, retries=None):
+    def unit_done(self, suite, key, status, label=None, runtime=None, runs=None, retries=None, waits=None):
         with self.__lock:
             running = self.__running.pop(key, None)
             progress = self.__progress.get(suite)
@@ -851,7 +851,7 @@ class Console(object):
             if self.__per_test and label is not None:
                 prefix = suite.get_class_name() + "."
                 line = self.__test_line(status, label[len(prefix):] if label.startswith(prefix) else label, runtime,
-                                        runs, retries)
+                                        runs, retries, waits)
                 if self.__threaded:
                     progress.lines.append(line)
                     line = None
@@ -876,7 +876,7 @@ class Console(object):
         text = "{}, when {}".format(policed[-1]["policy"], " then ".join(whens))
         return text + (": waited {:g}s".format(round(waited, 1)) if waited else "")
 
-    def __test_line(self, status, label, runtime, runs, retries=None):
+    def __test_line(self, status, label, runtime, runs, retries=None, waits=None):
         words = {TestCategory.SUCCESS: "PASSED", TestCategory.FAIL: "FAILED", TestCategory.ERROR: "ERROR",
                  TestCategory.SKIP: "SKIPPED", TestCategory.IGNORE: "IGNORED", TestCategory.CANCEL: "CANCELLED"}
         word = words.get(status, str(status).upper())
@@ -887,6 +887,13 @@ class Console(object):
         summary = self.retry_summary(retries)
         if summary:
             note = "{} ({})".format(note, summary)
+        if waits:
+            names = []
+            for wait in waits:
+                names += [n for n in wait["with"] if n not in names]
+            waited = "waited {:g}s (conflicts with {})".format(round(sum(w["seconds"] for w in waits), 1),
+                                                              ", ".join(names))
+            note = "{} {}".format(note, waited).strip()
         done = sum(len(p.done) for p in self.__suites)
         total = max(sum(p.total() for p in self.__all), done, 1)
         return "  {}  {}  {}  {}  {}".format(

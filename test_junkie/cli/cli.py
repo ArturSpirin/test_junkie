@@ -101,7 +101,7 @@ _METAVARS = {"sources": "PATH", "tests": "TEST", "features": "FEATURE", "compone
              "rerun": "FILE", "cov_rcfile": "FILE", "suite_throttling": "SECONDS", "test_throttling": "SECONDS",
              "ramp_up": "SECONDS", "traceback_limit": "CHARS", "message_limit": "CHARS",
              "truncate": "{top,bottom,middle}"}
-_AUDIT_VIEWS = ["suites", "features", "components", "tags", "owners"]
+_AUDIT_VIEWS = ["suites", "features", "components", "tags", "owners", "conflicts"]
 
 
 def _add(parser, dest, short, long_flag, aliases, extra, help_text):
@@ -168,8 +168,9 @@ features\t one block per feature
 components\t one block per component
 tags\t\t one block per tag
 owners\t\t one block per owner
+conflicts\t every pair of tests that must not run together (conflicts_with=)
 """)
-        parser.add_argument('command', help='the view: suites, features, components, tags or owners')
+        parser.add_argument('command', help='the view: suites, features, components, tags, owners or conflicts')
         for flag, text in (("--by-components", "Split every block by component"),
                            ("--by-features", "Split every block by feature"),
                            ("--no-rules", "Only suites without custom rules"),
@@ -204,7 +205,8 @@ owners\t\t one block per owner
                            "Views: suites, features, components, tags, owners. tj audit -h lists every option.")
         args = parser.parse_args(sys.argv[2:])
         if args.command not in _AUDIT_VIEWS:
-            CliUtils.error("'{}' is not an audit view. Use one of: suites, features, components, tags, owners"
+            CliUtils.error("'{}' is not an audit view. Use one of: suites, features, components, tags, owners, "
+                           "conflicts"
                            .format(args.command), "tj audit -h lists every option.")
         if args.verbose:
             from test_junkie.debugger import LogJunkie

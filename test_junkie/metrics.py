@@ -103,6 +103,8 @@ class TestMetrics(object):
         self.__outputs = {}
         # (class param, param) -> [{"run", "policy", "when", "waited"}, ...]: one entry per retry, see record_retry()
         self.__retries = {}
+        # class param -> [{"seconds", "with"}, ...]: time spent waiting for conflicting tests (conflicts_with=)
+        self.__conflict_waits = {}
 
     def __copy__(self):
         return self
@@ -188,6 +190,14 @@ class TestMetrics(object):
         """
         self.__retries.setdefault((param_key(class_param), param_key(param)), []).append(
             {"run": run, "policy": policy, "when": when, "waited": waited})
+
+    def record_conflict_wait(self, class_param, seconds, blockers):
+        self.__conflict_waits.setdefault(param_key(class_param), []).append(
+            {"seconds": round(seconds, 3), "with": list(blockers)})
+
+    def get_conflict_waits(self, class_param):
+        """:return: LIST of {"seconds", "with"} for waits under this suite parameter, oldest first"""
+        return self.__conflict_waits.get(param_key(class_param), [])
 
     def get_retries(self, param, class_param):
         """:return: LIST of the dicts record_retry() stored, oldest first"""
