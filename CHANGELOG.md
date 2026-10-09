@@ -12,6 +12,7 @@
 - Every limit can be set for one run (`Runner.run(test_throttling=1, ...)`), from `tj run` (`--test-throttling`, `--suite-throttling`, `--ramp-up`, `--traceback-limit`, `--message-limit`, `--truncate`) or saved with `tj config update`
 - `TEST_THROTTLING` and `SUITE_THROTTLING` are run-wide: each suite thread slept on its own, so parallel suites started tests several times as often as the limit, and the first start waited too
 - `EXCEPTION_MESSAGE_LIMIT` had no effect on Python 3; messages are now cut in the console and reports, and listeners still get the full exception
+- `@beforeTest` / `@afterTest` hooks can take a `test` argument: a read-only view of the test they run around (`test.get_tags()`, `test.get_meta()`, ...). Rules get the same view; changes to it never reach the run
 - `html_report` and `xml_report` create a folder that doesn't exist yet (e.g. `html_report="reports/"`), like `json_report` already did
 
 ## 0.9a7
