@@ -15,6 +15,7 @@ import time
 import test_junkie
 from test_junkie.constants import TestCategory, SuiteCategory, TestOrder
 from test_junkie.rerun import parameters_to_run
+from test_junkie.params import param_key
 
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(test_junkie.__file__))
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -460,7 +461,7 @@ def units_estimated(suite, rerun=None):
 
 
 def unit_key(test, param, class_param):
-    return test.get_test_id(), str(class_param if test.accepts_suite_parameters() else None), str(param)
+    return test.get_test_id(), param_key(class_param if test.accepts_suite_parameters() else None), param_key(param)
 
 
 def _short(value, limit=60):

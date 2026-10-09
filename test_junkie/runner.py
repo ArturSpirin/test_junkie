@@ -21,6 +21,7 @@ from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.rules import Rules
 from test_junkie.settings import Settings
 from test_junkie.views import TestView
+from test_junkie.params import param_key, duplicates, reset as reset_param_ids
 
 # shared lock for __process_event() - can't create it inline there, @synchronized() would just
 # get a new Lock() every call
@@ -260,6 +261,7 @@ class Runner:
         objects += [test for suite in objects for test in suite.get_test_objects()]
         Limiter.check_pools([Builder.get_execution_roster()[suite] for suite in self.__suites])
         _FuncEval.provider_failures.clear()
+        reset_param_ids()
         limits = Limiter.start_run(self.__settings.limits)  # put back in the finally at the end of run()
         retry = self.__settings.retry
         for item in objects:  # tj run --retry N / --no-retry, for this run only
@@ -464,7 +466,33 @@ class Runner:
                 return BadParameters("Argument: \"parameters\" in @Suite() decorator must be of type: <class 'list'> "
                                      "but found: {}. For more info, see @Suite() decorator documentation: {}"
                                      .format(type(parameters), DocumentationLinks.SUITE_DECORATOR))
-        return False
+        return Runner.__parameter_problem(suite.get_kwargs().get("ids"), parameters,
+                                          "@Suite() of {}".format(suite.get_class_name())) or False
+
+    @staticmethod
+    def __parameter_problem(ids, parameters, owner):
+        """
+        :return: BadParameters if ids= doesn't fit the parameters, or two parameters would be recorded under the same
+                 text (results, meta and reruns find a parameter by it), else None
+        """
+        if isinstance(ids, list) and len(ids) != len(parameters):
+            return BadParameters("ids= in {} has {} labels for {} parameters. For more info, see: {}".format(
+                owner, len(ids), len(parameters), DocumentationLinks.PARAMETERIZED_TESTS))
+        if ids is not None:
+            labels = ids if isinstance(ids, list) else [ids(parameter) for parameter in parameters]
+            wrong = [label for label in labels if not isinstance(label, str)]
+            if wrong:
+                return BadParameters("ids= in {} must give text for every parameter, got {!r}. For more info, see: {}"
+                                     .format(owner, wrong[0], DocumentationLinks.PARAMETERIZED_TESTS))
+        clashes = duplicates(parameters)
+        if clashes:
+            text, values = clashes[0]
+            return BadParameters(
+                "{} has parameters that all read as {!r}: {}. Test Junkie records results by that text, so they would "
+                "overwrite each other. Make them read differently (__str__), or name them with ids=[...]. "
+                "For more info, see: {}".format(owner, text, ", ".join(repr(value) for value in values[:5]),
+                                                DocumentationLinks.PARAMETERIZED_TESTS))
+        return None
 
     @staticmethod
     def __validate_test_parameters(test):
@@ -487,6 +515,13 @@ class Runner:
                 raise exception
             except:
                 return {"exception": exception, "trace": traceback.format_exc()}
+        problem = Runner.__parameter_problem(test.get_kwargs().get("ids"), parameters, "@test() of {}.{}".format(
+            test.suite.get_class_name(), test.get_function_name()))
+        if problem is not None:
+            try:
+                raise problem
+            except BadParameters:
+                return {"exception": problem, "trace": traceback.format_exc()}
 
     def __run_suite(self, suite):
 
@@ -735,7 +770,7 @@ class Runner:
         if class_parameter is not None and test.accepts_suite_parameters():
             parts.append("suite: {}".format(class_parameter))
         if parameter is not None:
-            parts.append(str(parameter))
+            parts.append(param_key(parameter))
         if parts:
             text = ", ".join(parts)
             label += "[{}]".format(text if len(text) <= 40 else text[:39] + "…")
@@ -761,7 +796,7 @@ class Runner:
             raise
         finally:
             recorded = class_parameter if test.accepts_suite_parameters() else None
-            data = test.metrics.get_metrics().get(str(recorded), {}).get(str(parameter), {})
+            data = test.metrics.get_metrics().get(param_key(recorded), {}).get(param_key(parameter), {})
             context.console.unit_done(suite, key, data.get("status"), label,
                                       runtime=sum(t for t in data.get("performance", []) if t),
                                       runs=len(data.get("statuses", [])),
@@ -985,7 +1020,7 @@ class Runner:
         Records the retry, tells listeners (on_retry) and waits `delay` seconds without holding any pool slot.
         Returns False if the run was cancelled while waiting.
         """
-        runs = test.metrics.get_metrics().get(str(class_parameter), {}).get(str(parameter), {}).get("statuses", [])
+        runs = test.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {}).get("statuses", [])
         info = {"run": len(runs), "policy": policy, "when": when, "waited": round(delay, 3)}
         test.metrics.record_retry(parameter, class_parameter, info["run"], policy, when, info["waited"])
         Runner.__process_event(event=Event.ON_RETRY, suite=suite, test=test, class_param=class_parameter,

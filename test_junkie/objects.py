@@ -9,6 +9,7 @@ from test_junkie.decorators import DecoratorType
 from test_junkie.constants import DocumentationLinks, TestCategory
 from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
+from test_junkie.params import param_key, register as register_ids
 
 
 
@@ -302,6 +303,7 @@ class SuiteObject(object):
             eval_result = _FuncEval.eval_params(parameters)
             if eval_result is not None:
                 self.__suite_definition["class_parameters"] = eval_result
+            register_ids(self.__suite_definition["class_parameters"], self.get_kwargs().get("ids"))
         return self.__suite_definition["class_parameters"]
 
     def get_kwargs(self):
@@ -414,6 +416,7 @@ class TestObject(object):
             eval_result = _FuncEval.eval_params(parameters)
             if eval_result is not None:
                 self.get_kwargs()["parameters"] = eval_result
+            register_ids(self.get_kwargs().get("parameters"), self.get_kwargs().get("ids"))
         return self.get_kwargs().get("parameters", [None])
 
     retry_override = None  # set by Runner.run() for tj run --retry N / --no-retry, cleared when the run ends
@@ -459,8 +462,8 @@ class TestObject(object):
 
     def get_meta(self, parameter=None, class_parameter=None, copy_of_meta=False):
 
-        string_param = str(parameter)
-        string_class_param = str(class_parameter)
+        string_param = param_key(parameter)
+        string_class_param = param_key(class_parameter)
 
         if not self.get_kwargs().get("meta", {}):  # does not require meta to be defined in order to Meta.update it
             self.get_kwargs().update({"meta": {}})
@@ -522,14 +525,14 @@ class TestObject(object):
         :param class_param: class parameter
         :return: BOOLEAN, True if test has not ran yet, False otherwise
         """
-        return str(class_param) not in self.metrics.get_metrics() or \
-            str(param) not in self.metrics.get_metrics()[str(class_param)]
+        return param_key(class_param) not in self.metrics.get_metrics() or \
+            param_key(param) not in self.metrics.get_metrics()[param_key(class_param)]
 
     def is_qualified_for_retry(self, param=None, class_param=None):
 
         if self.__not_ran(param, class_param):
             return True
-        test = self.metrics.get_metrics()[str(class_param)][str(param)]
+        test = self.metrics.get_metrics()[param_key(class_param)][param_key(param)]
         if test["status"] in TestCategory.ALL_UN_SUCCESSFUL:
             # subclasses count: retry_on=[requests.exceptions.Timeout] also retries ReadTimeout
             error = test["exceptions"][-1]
@@ -547,13 +550,13 @@ class TestObject(object):
 
         if self.__not_ran(param, class_param):
             return None
-        return self.metrics.get_metrics()[str(class_param)][str(param)]["status"]
+        return self.metrics.get_metrics()[param_key(class_param)][param_key(param)]["status"]
 
     def get_number_of_actual_retries(self, param, class_param):
 
         if self.__not_ran(param, class_param):
             return 0
-        return self.metrics.get_metrics()[str(class_param)][str(param)]["retry"]
+        return self.metrics.get_metrics()[param_key(class_param)][param_key(param)]["retry"]
 
 
 class _Pool(object):

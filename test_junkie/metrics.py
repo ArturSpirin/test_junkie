@@ -10,6 +10,7 @@ from test_junkie.cli.cli_config import Config
 from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import SuiteCategory, TestCategory
+from test_junkie.params import param_key
 
 
 class ClassMetrics(object):
@@ -128,8 +129,8 @@ class TestMetrics(object):
                     DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []}}
 
         runtime = runtime if runtime is not None else time.time() - start_time
-        string_param = str(param)
-        string_class_param = str(class_param)
+        string_param = param_key(param)
+        string_class_param = param_key(class_param)
         if string_class_param not in self.__stats:
             self.__stats.update({string_class_param: {string_param: __get_template()}})
         elif string_param not in self.__stats[string_class_param]:
@@ -172,25 +173,25 @@ class TestMetrics(object):
         What a run of this test printed or logged while it was captured (see test_junkie/console.py)
         """
         if output or log:
-            self.__outputs.setdefault((str(class_param), str(param)), []).append((run, output, log))
+            self.__outputs.setdefault((param_key(class_param), param_key(param)), []).append((run, output, log))
 
     def get_outputs(self, param, class_param):
         """
         :return: LIST of (run number, output STRING, log lines LIST), oldest first - only runs that had any
         """
-        return self.__outputs.get((str(class_param), str(param)), [])
+        return self.__outputs.get((param_key(class_param), param_key(param)), [])
 
     def record_retry(self, param, class_param, run, policy, when, waited):
         """
         A retry of this test: `run` is the run that failed (counting from 1 across the test's runs), `policy` the
         RetryPolicy name, `when` what matched (a When label, or None for plain retry=N), `waited` seconds slept.
         """
-        self.__retries.setdefault((str(class_param), str(param)), []).append(
+        self.__retries.setdefault((param_key(class_param), param_key(param)), []).append(
             {"run": run, "policy": policy, "when": when, "waited": waited})
 
     def get_retries(self, param, class_param):
         """:return: LIST of the dicts record_retry() stored, oldest first"""
-        return self.__retries.get((str(class_param), str(param)), [])
+        return self.__retries.get((param_key(class_param), param_key(param)), [])
 
 
 class Aggregator(object):

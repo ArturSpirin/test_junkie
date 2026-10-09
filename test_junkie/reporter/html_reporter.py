@@ -15,6 +15,7 @@ from test_junkie.debugger import LogJunkie
 from test_junkie.metrics import Aggregator
 from test_junkie.reporter.analyzer import Analyzer
 from test_junkie.reporter.html_template import ReportTemplate
+from test_junkie.params import param_key
 
 
 class Reporter:
@@ -424,7 +425,7 @@ class Reporter:
         def _str_param(val):
             if val is None:
                 return None
-            s = str(val)
+            s = param_key(val)
             if s.startswith("<") and s.endswith(">"):
                 s = "&lt;{}&gt;".format(s[1:-1])
             return s

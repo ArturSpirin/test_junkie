@@ -2,10 +2,11 @@ import json
 
 from test_junkie.constants import DocumentationLinks, TestCategory
 from test_junkie.errors import BadParameters
+from test_junkie.params import param_key
 
 
 def _text(value):
-    return None if value is None else str(value)
+    return None if value is None else param_key(value)
 
 
 class Rerun(object):

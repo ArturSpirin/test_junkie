@@ -17,13 +17,14 @@ class Builder(object):
     __EXECUTION_ROSTER = {}
     __CURRENT_SUITE_OBJECT = None
     __SUITE_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int], "listener": [Listener], "rules": [Rules],
-                               "retry_policy": [RetryPolicy],
+                               "retry_policy": [RetryPolicy], "ids": [list, "<type 'function'>"],
                                "parallelized": [bool], "priority": [int], "feature": [str], "pr": [list],
                                "order": [str], "uses": [str, list], "throttling": [int, float],
                                "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
     __TEST_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int, RetryPolicy], "parallelized_parameters": [bool],
                               "parallelized": [bool], "priority": [int], "component": [str], "tags": [list],
                               "no_retry_on": [list], "retry_on": [list], "pr": [list], "uses": [str, list],
+                              "ids": [list, "<type 'function'>"],
                               "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
 
     __GROUP_RULES = []

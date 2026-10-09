@@ -3,6 +3,7 @@ import os
 
 import test_junkie
 from test_junkie.constants import TestCategory
+from test_junkie.params import param_key
 
 
 def _error(exception):
@@ -25,8 +26,8 @@ def write_json_report(path, aggregator, runtime, seed=None):
                     retried = {r["run"]: r for r in test.metrics.get_retries(data.get("param"), data.get("class_param"))}
                     tests.append({
                         "name": test.get_function_name(),
-                        "parameter": None if data.get("param") is None else str(data.get("param")),
-                        "suite_parameter": None if data.get("class_param") is None else str(data.get("class_param")),
+                        "parameter": None if data.get("param") is None else param_key(data.get("param")),
+                        "suite_parameter": None if data.get("class_param") is None else param_key(data.get("class_param")),
                         "status": data["status"],
                         "runs": [{"status": status,
                                   "runtime": round(runtime_, 4) if runtime_ is not None else None,
