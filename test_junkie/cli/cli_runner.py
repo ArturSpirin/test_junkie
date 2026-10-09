@@ -303,6 +303,12 @@ class CliRunner:
                            retry=args.retry,
                            no_retry=args.no_retry,
                            rerun=args.rerun,
+                           suite_throttling=getattr(args, "suite_throttling", Undefined),
+                           test_throttling=getattr(args, "test_throttling", Undefined),
+                           ramp_up=getattr(args, "ramp_up", Undefined),
+                           traceback_limit=getattr(args, "traceback_limit", Undefined),
+                           message_limit=getattr(args, "message_limit", Undefined),
+                           truncate=getattr(args, "truncate", Undefined),
                            capture=Undefined if args.no_capture is Undefined else not args.no_capture,
                            _cli={"sources": self.sources, "scan_seconds": self.scan_seconds,
                                  "from_config": dict(self.from_config)})

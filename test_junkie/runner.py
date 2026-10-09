@@ -256,6 +256,8 @@ class Runner:
         previous_handler = None
         objects = [Builder.get_execution_roster()[suite] for suite in self.__all_suites]
         objects += [test for suite in objects for test in suite.get_test_objects()]
+        Limiter.check_pools([Builder.get_execution_roster()[suite] for suite in self.__suites])
+        limits = Limiter.start_run(self.__settings.limits)  # put back in the finally at the end of run()
         retry = self.__settings.retry
         for item in objects:  # tj run --retry N / --no-retry, for this run only
             item.retry_override = None if retry is None else (retry if hasattr(item, "get_function_name") else
@@ -293,7 +295,7 @@ class Runner:
                             while True:
                                 suite_generation = ParallelProcessor.generation()
                                 if self.__processor.suite_qualifies(suite_object):
-                                    time.sleep(Limiter.get_suite_throttling())
+                                    Limiter.wait_turn("suite", Limiter.get_suite_throttling(), state)
                                     self.__executed_suites.append(suite_object)
                                     ParallelProcessor.run_suite_in_a_thread(
                                         self.__capture_thread_errors(self.__run_suite), suite_object)
@@ -378,6 +380,7 @@ class Runner:
                 resource_monitor.cleanup()
             for item in objects:
                 item.retry_override = None
+            Limiter.end_run(limits)
             self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
         if errors:
             raise errors[0]  # same error as before, now raised after the summary and reports were written
@@ -643,7 +646,10 @@ class Runner:
 
                                                 ParallelProcessor.wait_while(lambda: not state.cancelled and
                                                                              self.__processor.test_limit_reached())
-                                                time.sleep(Limiter.get_test_throttling())
+                                                Limiter.wait_turn(
+                                                    ("test", suite.get_class_object())
+                                                    if suite.get_kwargs().get("throttling") is not None else "test",
+                                                    Limiter.get_test_throttling(suite), state)
                                                 self.__processor.run_test_in_a_thread(
                                                                                       self.__capture_thread_errors(
                                                                                           Runner.__run_test),
@@ -865,6 +871,14 @@ class Runner:
                                     "============================================="
                                     .format(test.get_function_name(), suite.get_class_name(), parameter,
                                             class_parameter, retry_attempt, test.get_retry_limit()))
+                    pools = Limiter.acquire(Limiter.pools_used(suite, test),
+                                            cancel if callable(cancel) else None)
+                    if pools is None:  # cancelled while waiting for a pool slot
+                        test.metrics.update_metrics(status=TestCategory.CANCEL, start_time=test_start_time,
+                                                    param=parameter, class_param=class_parameter)
+                        Runner.__process_event(event=Event.ON_CANCEL, suite=suite, test=test,
+                                               class_param=class_parameter, param=parameter)
+                        return
                     record_test_failure = True
                     capture = Capture()
                     attempt = capturing(context.router if context is not None else None, capture)
@@ -921,6 +935,7 @@ class Runner:
                                                        class_param=class_parameter, param=parameter)
                                 return
                     finally:
+                        Limiter.release(pools)
                         attempt.__exit__(None, None, None)
                         if context is not None:
                             test.metrics.record_output(parameter, class_parameter, retry_attempt,

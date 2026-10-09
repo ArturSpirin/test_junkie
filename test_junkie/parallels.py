@@ -1,5 +1,6 @@
 import inspect
 import threading
+import time
 
 from test_junkie.constants import DocumentationLinks
 from test_junkie.debugger import LogJunkie
@@ -57,6 +58,8 @@ class ParallelProcessor:
             LogJunkie.warn("Thread limit for tests cannot be 0 or None, "
                            "falling back to limit of 1 thread per test case.")
             self.__test_limit = 1
+
+        self.__started = time.monotonic()  # Limiter.RAMP_UP grows the limits from here
 
         self.__suite_limit = settings.suite_thread_limit
         if self.__suite_limit == 0 or self.__suite_limit is None:
@@ -154,11 +157,17 @@ class ParallelProcessor:
         for thread in threads:
             _join(thread)
 
+    def __ramped(self, limit):
+        # wait_while() re-checks at least every 0.25 s, so a limit that grows with time is seen without a signal
+        from test_junkie.objects import Limiter
+        return Limiter.ramped(limit, time.monotonic() - self.__started)
+
     def suite_limit_reached(self):
         with _LOCK:
             active = sum(1 for info in ParallelProcessor.__PARALLELS.values() if _alive(info["thread"]))
-        if active >= self.__suite_limit:
-            LogJunkie.debug("Suite limit: {}/{}".format(active, self.__suite_limit))
+        limit = self.__ramped(self.__suite_limit)
+        if active >= limit:
+            LogJunkie.debug("Suite limit: {}/{}".format(active, limit))
             return True
         return False
 
@@ -170,8 +179,9 @@ class ParallelProcessor:
                 # can't both remove the same entry (used to raise "list.remove(x): x not in list")
                 info["tests"] = [test for test in info["tests"] if _alive(test["thread"])]
                 active += len(info["tests"])
-        if active >= self.__test_limit:
-            LogJunkie.debug("Test limit: {}/{}".format(active, self.__test_limit))
+        limit = self.__ramped(self.__test_limit)
+        if active >= limit:
+            LogJunkie.debug("Test limit: {}/{}".format(active, limit))
             return True
         return False
 

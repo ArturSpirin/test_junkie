@@ -8,7 +8,8 @@ from test_junkie.constants import DocumentationLinks, CliConstants, Undefined
 from colorama import Fore, Style
 
 # Every option the commands share, defined once: (setting, short flag, documented long flag, old spellings that
-# still work, kind, help, where). kind: "list" (one or more values), "int", "str" or "flag". where: "run" for tj run
+# still work, kind, help, where). kind: "list" (one or more values), "int", "seconds" (0 or more, decimals ok),
+# "count" (0 or more), "truncate" (top, bottom or middle), "str" or "flag". where: "run" for tj run
 # and tj config update/show/restore, "audit" for tj audit too, "once" for tj run only (not saved to the config)
 _OPTIONS = [
     ("sources", "-s", "--sources", (), "list",
@@ -36,6 +37,13 @@ _OPTIONS = [
     ("retry", None, "--retry", (), "int",
      "Run each failing test up to this many times, whatever its @test(retry=) says", "run"),
     ("no_retry", None, "--no-retry", ("--no_retry",), "flag", "Run every test and suite once, no retries", "run"),
+    ("suite_throttling", None, "--suite-throttling", (), "seconds",
+     "At least this many seconds between two suites starting, across the run. See " + DocumentationLinks.THROTTLING,
+     "run"),
+    ("test_throttling", None, "--test-throttling", (), "seconds",
+     "At least this many seconds between two tests starting, across the run", "run"),
+    ("ramp_up", None, "--ramp-up", (), "seconds",
+     "Grow the suite and test thread limits from 1 to -S/-T over this many seconds", "run"),
     ("rerun", None, "--rerun", (), "str",
      "Run again only what didn't pass in this JSON report (--json-report), down to the parameter", "once"),
     ("seed", None, "--seed", (), "int",
@@ -48,6 +56,13 @@ _OPTIONS = [
      "Write a JUnit XML report to this file, or to report.xml in this folder", "run"),
     ("json_report", None, "--json-report", ("--json_report",), "str",
      "Write a JSON report to this file, or to report.json in this folder", "run"),
+    ("traceback_limit", None, "--traceback-limit", (), "count",
+     "Keep at most this many characters of each traceback. See " + DocumentationLinks.TRUNCATION, "run"),
+    ("message_limit", None, "--message-limit", (), "count",
+     "Keep at most this many characters of each exception message", "run"),
+    ("truncate", None, "--truncate", (), "truncate",
+     "What to keep of a message or traceback over its limit: top cuts the start, bottom cuts the end, "
+     "middle keeps both ends (default)", "run"),
     ("quiet", "-q", "--quiet", (), "flag", "Only print the problems and the result line", "run"),
     ("per_test", "-p", "--per-test", ("--per_test",), "flag",
      "Print one line per test instead of a progress bar per suite", "run"),
@@ -59,11 +74,33 @@ _OPTIONS = [
     ("guess_root", None, "--guess-root", ("--guess_root",), "flag",
      "If an import fails, look for your project's root in the folders above the test files", "audit"),
 ]
-_KINDS = {"list": {"nargs": "+"}, "int": {"type": int}, "str": {"type": str}, "flag": {"action": "store_true"}}
+def _at_least_zero(convert, what):
+    def parse(value):
+        try:
+            number = convert(value)
+        except ValueError:
+            number = -1
+        if number < 0:
+            raise argparse.ArgumentTypeError("needs {}, got {!r}".format(what, value))
+        return number
+    parse.__name__ = what  # argparse names the type in its error
+    return parse
+
+
+def _seconds(value):
+    number = _at_least_zero(float, "0 or more seconds")(value)
+    return int(number) if number == int(number) else number  # saved as 2, not 2.0
+
+
+_KINDS = {"list": {"nargs": "+"}, "int": {"type": int}, "str": {"type": str}, "flag": {"action": "store_true"},
+          "seconds": {"type": _seconds}, "count": {"type": _at_least_zero(int, "a whole number of 0 or more")},
+          "truncate": {"type": str, "choices": ("top", "bottom", "middle")}}
 _METAVARS = {"sources": "PATH", "tests": "TEST", "features": "FEATURE", "components": "COMPONENT", "owners": "OWNER",
              "run_on_match_all": "TAG", "run_on_match_any": "TAG", "skip_on_match_all": "TAG",
              "skip_on_match_any": "TAG", "html_report": "FILE", "xml_report": "FILE", "json_report": "FILE",
-             "rerun": "FILE", "cov_rcfile": "FILE"}
+             "rerun": "FILE", "cov_rcfile": "FILE", "suite_throttling": "SECONDS", "test_throttling": "SECONDS",
+             "ramp_up": "SECONDS", "traceback_limit": "CHARS", "message_limit": "CHARS",
+             "truncate": "{top,bottom,middle}"}
 _AUDIT_VIEWS = ["suites", "features", "components", "tags", "owners"]
 
 

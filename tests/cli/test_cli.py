@@ -220,7 +220,7 @@ def test_config_restore_all():
         for line in output:
             assert "Traceback (most recent call last)" not in line, \
                 "Command: {} produced exception. {}".format(cmd, output)
-        assert "RESTORED" in output[0] and "all 23 settings to their defaults" in output[0], output
+        assert "RESTORED" in output[0] and "all 29 settings to their defaults" in output[0], output
 
 
 def test_config_show_all():

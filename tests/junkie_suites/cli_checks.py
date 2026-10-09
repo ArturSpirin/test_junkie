@@ -264,7 +264,7 @@ def config_commands():
         code, out = run_cli(*command)
         assert code == 120 and "[ERROR]" in out and text in out, (command, out)
     code, out = run_cli("config", "show", "--all")
-    assert code is None and "Config  " in out and "Discovery" in out and "0 of 23 settings saved" in out, out
+    assert code is None and "Config  " in out and "Discovery" in out and "0 of 29 settings saved" in out, out
     code, out = run_cli("config", "show", "--sources")
     assert code is None and re.search(r"^  sources +\.$", out, re.M), out  # unset: a dot (ASCII for ·)
 
@@ -278,12 +278,12 @@ def config_update_show_restore():
     code, out = run_cli("config", "update", "-T", "2", home=home, keep_home=True)
     assert re.search(r"^  test_multithreading_limit +4 +-> +2$", out, re.M), out
     code, out = run_cli("config", "show", "--all", home=home, keep_home=True)
-    assert "2 of 23 settings saved" in out and re.search(r"^  sources +tests$", out, re.M), out
+    assert "2 of 29 settings saved" in out and re.search(r"^  sources +tests$", out, re.M), out
     code, out = run_cli("config", "restore", "-T", home=home, keep_home=True)
     assert "[RESTORED]  1 setting to its default" in out and re.search(
         r"^  test_multithreading_limit +2 +-> +default 1$", out, re.M), out
     code, out = run_cli("config", "restore", "--all", home=home, keep_home=True)
-    assert "all 23 settings to their defaults . 1 had values" in out and "sources" in out, out
+    assert "all 29 settings to their defaults . 1 had values" in out and "sources" in out, out
     # tj config update --no-capture is read back by tj run
     code, out = run_cli("config", "update", "--no-capture", home=home, keep_home=True)
     from test_junkie.settings import Settings

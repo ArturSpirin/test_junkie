@@ -5,6 +5,13 @@
 - Tests a suite never got to, because it ended early (a test calling `sys.exit()`, say), are reported as ignored instead of being left out of the summary and reports
 - Logs from a logger with `propagate = False` are captured again; they were dropped instead of being shown for tests that didn't pass
 - The header shows a test count that includes parameter functions as an estimate, e.g. `16+ tests`
+- Resource pools: `Limiter.pool("grid", max_concurrent=5, min_interval=0.5)` and `@test(uses="grid")` / `@Suite(uses=)` cap how many tests use one resource at once and how often they start
+- `Limiter.RAMP_UP` grows the suite and test thread limits from 1 to `-S`/`-T` over that many seconds
+- `@Suite(throttling=N)` gives a suite its own spacing between tests, e.g. 0 to exempt it from `TEST_THROTTLING`
+- Truncation can keep the top, bottom or middle of a message or traceback (`Limiter.TRACEBACK_TRUNCATE`, `EXCEPTION_MESSAGE_TRUNCATE`); middle is the default, so a cut traceback keeps the line that raised
+- Every limit can be set for one run (`Runner.run(test_throttling=1, ...)`), from `tj run` (`--test-throttling`, `--suite-throttling`, `--ramp-up`, `--traceback-limit`, `--message-limit`, `--truncate`) or saved with `tj config update`
+- `TEST_THROTTLING` and `SUITE_THROTTLING` are run-wide: each suite thread slept on its own, so parallel suites started tests several times as often as the limit, and the first start waited too
+- `EXCEPTION_MESSAGE_LIMIT` had no effect on Python 3; messages are now cut in the console and reports, and listeners still get the full exception
 
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way

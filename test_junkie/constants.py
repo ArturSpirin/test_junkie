@@ -87,6 +87,9 @@ class DocumentationLinks:
     XML_REPORT = "{}/documentation/#xml_report".format(DOMAIN)
     RETRY = "{}/documentation/#retry".format(DOMAIN)
     RERUN = "{}/documentation/#rerun".format(DOMAIN)
+    THROTTLING = "{}/documentation/#throttling".format(DOMAIN)
+    RESOURCE_POOLS = "{}/documentation/#resource_pools".format(DOMAIN)
+    TRUNCATION = "{}/documentation/#truncation".format(DOMAIN)
     SKIP = "{}/documentation/#skip".format(DOMAIN)
     CLI_RUN = "{}/documentation/#cli_run".format(DOMAIN)
     FEATURES = "{}/documentation/#features".format(DOMAIN)
@@ -144,6 +147,12 @@ no_capture=None
 json_report=None
 retry=None
 no_retry=None
+suite_throttling=None
+test_throttling=None
+ramp_up=None
+traceback_limit=None
+message_limit=None
+truncate=None
 """
 
 

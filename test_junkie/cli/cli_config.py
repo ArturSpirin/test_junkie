@@ -179,6 +179,8 @@ _GROUPS = [
     ("Discovery", [("sources", None), ("guess_root", "off")]),
     ("Parallel and retries", [("test_multithreading_limit", "1"), ("suite_multithreading_limit", "1"),
                               ("retry", None), ("no_retry", "off")]),
+    ("Limits", [("suite_throttling", "0"), ("test_throttling", "0"), ("ramp_up", "0"), ("traceback_limit", "3000"),
+                ("message_limit", "3000"), ("truncate", "middle")]),
     ("Filters", [("tests", None), ("features", None), ("components", None), ("owners", None),
                  ("run_on_match_any", None), ("run_on_match_all", None), ("skip_on_match_any", None),
                  ("skip_on_match_all", None)]),

@@ -284,6 +284,20 @@ class Settings:
         return self.__rerun
 
     @property
+    def limits(self):
+        """
+        :return: DICT, the Limiter settings this run sets (Runner.run() kwargs, tj run flags or the saved config),
+                 e.g. {"test_throttling": 1}. What isn't set keeps the value Limiter has in code
+        """
+        from test_junkie.objects import Limiter
+        limits = {}
+        for setting in Limiter.SETTINGS:
+            value = self.__get_value(key=setting, default=None)
+            if value is not None:
+                limits[setting] = value
+        return limits
+
+    @property
     def xml_report(self):
         if self.__xml_report is Undefined:
             self.__xml_report = self.__report("xml_report", ".xml", DocumentationLinks.XML_REPORT)

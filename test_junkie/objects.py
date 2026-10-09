@@ -2,6 +2,8 @@ import copy
 import functools
 import fnmatch
 import inspect
+import threading
+import time
 import traceback
 from test_junkie.decorators import DecoratorType
 from test_junkie.constants import DocumentationLinks, TestCategory
@@ -522,44 +524,349 @@ class TestObject(object):
         return self.metrics.get_metrics()[str(class_param)][str(param)]["retry"]
 
 
+class _Pool(object):
+
+    def __init__(self, name, max_concurrent, min_interval):
+        self.name = name
+        self.max_concurrent = max_concurrent
+        self.min_interval = min_interval
+        self.in_use = 0
+
+
 class Limiter:
+    """
+    Global limits for a run. Set them in code before Runner.run(), or per run with Runner.run(...) / tj run flags,
+    which take precedence for that run only.
+
+    Truncation (what reports and the console keep of a failure):
+        EXCEPTION_MESSAGE_LIMIT / EXCEPTION_MESSAGE_TRUNCATE - str(exception), e.g. "expected 200 but got 500"
+        TRACEBACK_LIMIT / TRACEBACK_TRUNCATE                 - the formatted traceback, frames + the exception line
+        *_TRUNCATE is TRUNCATE_TOP (cut the start, keep the end), TRUNCATE_BOTTOM (cut the end, keep the start) or
+        TRUNCATE_MIDDLE (keep both ends, the default)
+
+    Pacing (parallel runs):
+        SUITE_THROTTLING / TEST_THROTTLING - at least this many seconds between two suite/test starts, run-wide
+        RAMP_UP - seconds over which the suite and test thread limits grow from 1 to their full value
+        pool() - named resource pools that tests and suites claim with uses=
+    """
 
     # honor limits or not
     ACTIVE = True
 
+    TRUNCATE_TOP = "top"
+    TRUNCATE_BOTTOM = "bottom"
+    TRUNCATE_MIDDLE = "middle"
+    TRUNCATE_MODES = (TRUNCATE_TOP, TRUNCATE_BOTTOM, TRUNCATE_MIDDLE)
+
     # truncation limits
     __DEFAULT_LIMIT = 3000
     EXCEPTION_MESSAGE_LIMIT = __DEFAULT_LIMIT
+    EXCEPTION_MESSAGE_TRUNCATE = TRUNCATE_MIDDLE
     TRACEBACK_LIMIT = __DEFAULT_LIMIT
+    TRACEBACK_TRUNCATE = TRUNCATE_MIDDLE
 
-    # throttling limits
+    # throttling limits, seconds
     SUITE_THROTTLING = 0  # only applies to parallels
     TEST_THROTTLING = 0  # only applies to parallels
+    RAMP_UP = 0
+
+    # run setting -> Limiter attribute. Runner.run() kwargs, tj run flags and saved configs use the setting names
+    SETTINGS = {"suite_throttling": "SUITE_THROTTLING", "test_throttling": "TEST_THROTTLING", "ramp_up": "RAMP_UP",
+                "traceback_limit": "TRACEBACK_LIMIT", "message_limit": "EXCEPTION_MESSAGE_LIMIT",
+                "truncate": ("TRACEBACK_TRUNCATE", "EXCEPTION_MESSAGE_TRUNCATE")}
+
+    __LOCK = threading.Condition()
+    __NEXT_START = {}  # gate -> earliest time.monotonic() the next start through it may happen
+    __POOLS = {}  # name -> _Pool
+    __TRUNCATED_TYPES = {}  # exception class -> subclass whose str() is the truncated message
+
+    # ---------------------------------------------------------------------------------------------- truncation --
+
+    @staticmethod
+    def truncate(text, limit, mode=TRUNCATE_MIDDLE):
+        """
+        :param text: STRING
+        :param limit: INT, how many characters of `text` to keep
+        :param mode: STRING, Limiter.TRUNCATE_TOP, TRUNCATE_BOTTOM or TRUNCATE_MIDDLE
+        :return: STRING, `text` if it fits, otherwise `limit` characters of it with a marker saying how much was cut
+        """
+        if not isinstance(text, str) or limit is None or limit < 0 or len(text) <= limit:
+            return text
+        cut = len(text) - limit
+        if mode == Limiter.TRUNCATE_TOP:
+            return "[. . . {:,} characters cut . . .]\n{}".format(cut, text[cut:])
+        if mode == Limiter.TRUNCATE_BOTTOM:
+            return "{}\n[. . . {:,} characters cut . . .]".format(text[:limit], cut)
+        head = (limit + 1) // 2
+        tail = limit - head
+        return "{}\n[. . . {:,} characters cut . . .]\n{}".format(text[:head], cut,
+                                                                 text[len(text) - tail:] if tail else "")
 
     @staticmethod
     def parse_exception_object(value):
-
-        if Limiter.ACTIVE and value is not None:
-            msg = str(value)
-            if isinstance(msg, str) and len(msg) > Limiter.EXCEPTION_MESSAGE_LIMIT:
-                value.message = "{} [. . .]".format(msg[:Limiter.EXCEPTION_MESSAGE_LIMIT])
-        return value
+        """
+        :return: the exception, or a copy of it whose str() is truncated to EXCEPTION_MESSAGE_LIMIT. The copy is an
+                 instance of a subclass named like the original, so isinstance(), retry_on and reports still see the
+                 original type. The exception itself is never changed - listeners get it untouched
+        """
+        if not Limiter.ACTIVE or not isinstance(value, BaseException):
+            return value
+        try:
+            message = str(value)
+        except Exception:
+            return value
+        truncated = Limiter.truncate(message, Limiter.EXCEPTION_MESSAGE_LIMIT, Limiter.EXCEPTION_MESSAGE_TRUNCATE)
+        if truncated is message:
+            return value
+        try:
+            cls = type(value)
+            sub = Limiter.__TRUNCATED_TYPES.get(cls)
+            if sub is None:
+                sub = type(cls.__name__, (cls,), {"__str__": lambda self: self._tj_message,
+                                                  "__module__": cls.__module__})
+                sub.__qualname__ = getattr(cls, "__qualname__", cls.__name__)
+                Limiter.__TRUNCATED_TYPES[cls] = sub
+            copied = sub.__new__(sub, *value.args)
+            copied.__dict__.update(getattr(value, "__dict__", {}))
+            copied._tj_message = truncated
+            copied.__traceback__ = value.__traceback__
+            copied.__cause__, copied.__context__ = value.__cause__, value.__context__
+            return copied
+        except Exception:  # a type that can't be subclassed or created like this: keep the original
+            return value
 
     @staticmethod
     def parse_traceback(value):
 
-        if Limiter.ACTIVE and value is not None:
-            if isinstance(value, str) and len(value) > Limiter.TRACEBACK_LIMIT:
-                value = "{} [. . .]".format(value[:Limiter.TRACEBACK_LIMIT])
+        if Limiter.ACTIVE and isinstance(value, str):
+            return Limiter.truncate(value, Limiter.TRACEBACK_LIMIT, Limiter.TRACEBACK_TRUNCATE)
         return value
+
+    # ------------------------------------------------------------------------------------------------ pacing --
 
     @staticmethod
     def get_suite_throttling():
         return Limiter.SUITE_THROTTLING if Limiter.ACTIVE else 0
 
     @staticmethod
-    def get_test_throttling():
-        return Limiter.TEST_THROTTLING if Limiter.ACTIVE else 0
+    def get_test_throttling(suite=None):
+        """
+        :param suite: SuiteObject, its @Suite(throttling=) wins over TEST_THROTTLING
+        """
+        if not Limiter.ACTIVE:
+            return 0
+        if suite is not None and suite.get_kwargs().get("throttling") is not None:
+            return suite.get_kwargs()["throttling"]
+        return Limiter.TEST_THROTTLING
+
+    @staticmethod
+    def get_ramp_up():
+        return Limiter.RAMP_UP if Limiter.ACTIVE else 0
+
+    @staticmethod
+    def ramped(limit, elapsed):
+        """
+        :return: INT, the thread limit `elapsed` seconds into a run: grows from 1 to `limit` over RAMP_UP seconds
+        """
+        ramp = Limiter.get_ramp_up()
+        if not ramp or limit <= 1 or elapsed >= ramp:
+            return limit
+        return max(1, min(limit, 1 + int((limit - 1) * elapsed / float(ramp))))
+
+    @staticmethod
+    def wait_turn(gate, interval, cancelled=None):
+        """
+        Waits for the next start through `gate`: starts through the same gate are at least `interval` seconds apart,
+        across every thread. The first start doesn't wait. Each caller reserves its slot, so waiters go in order
+        :param gate: hashable, e.g. "suite", "test", ("test", SuiteClass), ("pool", "grid")
+        :param interval: NUMBER, seconds
+        :param cancelled: callable returning True once the run is cancelled - stops waiting
+        :return: BOOLEAN, False if the wait was cut short by a cancel
+        """
+        if not Limiter.ACTIVE or not interval:
+            return True
+        with Limiter.__LOCK:
+            now = time.monotonic()
+            start = max(now, Limiter.__NEXT_START.get(gate, now))
+            Limiter.__NEXT_START[gate] = start + interval
+        while True:
+            remaining = start - time.monotonic()
+            if remaining <= 0:
+                return True
+            if cancelled is not None and cancelled():
+                return False
+            time.sleep(min(remaining, 0.25))
+
+    # -------------------------------------------------------------------------------------------------- pools --
+
+    @staticmethod
+    def pool(name, max_concurrent=None, min_interval=0):
+        """
+        Defines (or redefines) a resource pool that tests claim with @test(uses="name") or @Suite(uses="name")
+        :param name: STRING
+        :param max_concurrent: INT, how many tests may hold the pool at once. None: no cap
+        :param min_interval: NUMBER, seconds between two tests starting with the pool
+        """
+        if not isinstance(name, str) or not name:
+            raise BadParameters("Limiter.pool() needs a name, e.g. Limiter.pool(\"grid\", max_concurrent=5). "
+                                "See documentation: {}".format(DocumentationLinks.RESOURCE_POOLS))
+        if max_concurrent is not None and (isinstance(max_concurrent, bool) or not isinstance(max_concurrent, int)
+                                           or max_concurrent < 1):
+            raise BadParameters("Limiter.pool(\"{}\") max_concurrent must be a whole number of at least 1, or None. "
+                                "See documentation: {}".format(name, DocumentationLinks.RESOURCE_POOLS))
+        if isinstance(min_interval, bool) or not isinstance(min_interval, (int, float)) or min_interval < 0:
+            raise BadParameters("Limiter.pool(\"{}\") min_interval must be 0 or more seconds. "
+                                "See documentation: {}".format(name, DocumentationLinks.RESOURCE_POOLS))
+        with Limiter.__LOCK:
+            Limiter.__POOLS[name] = _Pool(name, max_concurrent, min_interval)
+            return Limiter.__POOLS[name]
+
+    @staticmethod
+    def get_pools():
+        """
+        :return: DICT, pool name -> {"max_concurrent": ..., "min_interval": ..., "in_use": ...}
+        """
+        with Limiter.__LOCK:
+            return {name: {"max_concurrent": pool.max_concurrent, "min_interval": pool.min_interval,
+                           "in_use": pool.in_use} for name, pool in Limiter.__POOLS.items()}
+
+    @staticmethod
+    def remove_pools(*names):
+        """
+        Removes these pools, or every pool if no names are given
+        """
+        with Limiter.__LOCK:
+            for name in (names or list(Limiter.__POOLS)):
+                Limiter.__POOLS.pop(name, None)
+
+    @staticmethod
+    def pools_used(suite, test):
+        """
+        :return: LIST of pool names the test claims: its own uses= plus its suite's, sorted (the order they're taken)
+        """
+        names = set()
+        for kwargs in (suite.get_kwargs(), test.get_kwargs()):
+            uses = kwargs.get("uses")
+            if uses:
+                names.update([uses] if isinstance(uses, str) else uses)
+        return sorted(names)
+
+    @staticmethod
+    def check_pools(suites):
+        """
+        Every uses= must name a pool defined with Limiter.pool() - checked before anything runs
+        :param suites: LIST of SuiteObjects
+        """
+        with Limiter.__LOCK:
+            known = set(Limiter.__POOLS)
+        for suite in suites:
+            for test in suite.get_test_objects():
+                for kwargs, where in ((suite.get_kwargs(), "@Suite() of {}".format(suite.get_class_name())),
+                                      (test.get_kwargs(), "@test() of {}.{}".format(suite.get_class_name(),
+                                                                                    test.get_function_name()))):
+                    uses = kwargs.get("uses")
+                    for name in ([uses] if isinstance(uses, str) else uses or []):
+                        if not isinstance(name, str):
+                            raise BadParameters("uses= in {} takes pool names, got {!r}. See documentation: {}"
+                                                .format(where, name, DocumentationLinks.RESOURCE_POOLS))
+                        if name not in known:
+                            raise BadParameters("uses=\"{}\" in {}: there is no such pool. Define it before the run "
+                                                "with Limiter.pool(\"{}\", max_concurrent=N). See documentation: {}"
+                                                .format(name, where, name, DocumentationLinks.RESOURCE_POOLS))
+
+    @staticmethod
+    def acquire(names, cancelled=None):
+        """
+        Takes a slot in each pool, in name order so two tests can't each hold one pool the other waits for
+        :param names: LIST of pool names, from pools_used()
+        :param cancelled: callable returning True once the run is cancelled - stops waiting
+        :return: LIST of the pools taken (pass it to release()), or None if a cancel stopped the wait
+        """
+        taken = []
+        if not Limiter.ACTIVE:
+            return taken
+        for name in names:
+            with Limiter.__LOCK:
+                pool = Limiter.__POOLS.get(name)
+                if pool is None:  # removed after check_pools(): nothing left to limit
+                    continue
+                while pool.max_concurrent is not None and pool.in_use >= pool.max_concurrent:
+                    if cancelled is not None and cancelled():
+                        Limiter.__release(taken)
+                        return None
+                    Limiter.__LOCK.wait(0.25)
+                pool.in_use += 1
+                taken.append(pool)
+            if not Limiter.wait_turn(("pool", name), pool.min_interval, cancelled):
+                Limiter.release(taken)
+                return None
+        return taken
+
+    @staticmethod
+    def release(taken):
+        with Limiter.__LOCK:
+            Limiter.__release(taken)
+
+    @staticmethod
+    def __release(taken):
+        for pool in taken or []:
+            pool.in_use = max(0, pool.in_use - 1)
+        Limiter.__LOCK.notify_all()
+
+    # ------------------------------------------------------------------------------------------- per-run state --
+
+    @staticmethod
+    def start_run(overrides=None):
+        """
+        Called by Runner.run(): applies that run's limits on top of the ones set in code, and resets the throttling
+        gates so a run never waits on the previous one
+        :param overrides: DICT, setting name (see SETTINGS) -> value
+        :return: DICT, what to pass to end_run() to put the previous values back
+        """
+        overrides = overrides or {}
+        Limiter.validate(overrides)
+        previous = {}
+        for setting, value in overrides.items():
+            for attribute in Limiter.__attributes(setting):
+                previous[attribute] = getattr(Limiter, attribute)
+                setattr(Limiter, attribute, value)
+        with Limiter.__LOCK:
+            Limiter.__NEXT_START.clear()
+            for pool in Limiter.__POOLS.values():
+                pool.in_use = 0
+        return previous
+
+    @staticmethod
+    def end_run(previous):
+        for attribute, value in (previous or {}).items():
+            setattr(Limiter, attribute, value)
+
+    @staticmethod
+    def __attributes(setting):
+        attributes = Limiter.SETTINGS[setting]
+        return attributes if isinstance(attributes, tuple) else (attributes,)
+
+    @staticmethod
+    def validate(settings):
+        """
+        :param settings: DICT, setting name (see SETTINGS) -> value. Raises BadParameters for a bad one
+        """
+        for setting, value in settings.items():
+            if setting not in Limiter.SETTINGS:
+                raise BadParameters("Unknown limit \"{}\". Use one of: {}"
+                                    .format(setting, ", ".join(sorted(Limiter.SETTINGS))))
+            if setting == "truncate":
+                if value not in Limiter.TRUNCATE_MODES:
+                    raise BadParameters("truncate must be one of: {}, got {!r}. See documentation: {}"
+                                        .format(", ".join(Limiter.TRUNCATE_MODES), value,
+                                                DocumentationLinks.TRUNCATION))
+            elif setting in ("traceback_limit", "message_limit"):
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise BadParameters("{} must be a whole number of characters, got {!r}. See documentation: {}"
+                                        .format(setting, value, DocumentationLinks.TRUNCATION))
+            elif isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise BadParameters("{} must be 0 or more seconds, got {!r}. See documentation: {}"
+                                    .format(setting, value, DocumentationLinks.THROTTLING))
 
 
 class GroupRulesObject(object):
