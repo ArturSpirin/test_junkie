@@ -12,6 +12,7 @@
 - Every limit can be set for one run (`Runner.run(test_throttling=1, ...)`), from `tj run` (`--test-throttling`, `--suite-throttling`, `--ramp-up`, `--traceback-limit`, `--message-limit`, `--truncate`) or saved with `tj config update`
 - `TEST_THROTTLING` and `SUITE_THROTTLING` are run-wide: each suite thread slept on its own, so parallel suites started tests several times as often as the limit, and the first start waited too
 - `EXCEPTION_MESSAGE_LIMIT` had no effect on Python 3; messages are now cut in the console and reports, and listeners still get the full exception
+- `html_report` and `xml_report` create a folder that doesn't exist yet (e.g. `html_report="reports/"`), like `json_report` already did
 
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way

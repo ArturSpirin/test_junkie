@@ -1,3 +1,4 @@
+import os
 import sys
 import traceback
 
@@ -57,6 +58,7 @@ class XmlReporter:
                                 test = SubElement(suite, "testcase", name=str(test_name), status=str(test_status))
                                 if test_status == "failure":
                                     SubElement(test, "failure", type="failure")
+                os.makedirs(os.path.dirname(os.path.abspath(write_file)), exist_ok=True)
                 ElementTree(root).write(write_file)
             except Exception:
                 trace = traceback.format_exc()

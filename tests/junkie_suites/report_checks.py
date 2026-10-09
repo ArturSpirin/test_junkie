@@ -143,6 +143,23 @@ def report_inlines_its_assets():
     assert html.count("<script>") == 1 and html.count("<style>") == 1
 
 
+def reports_into_folders_that_dont_exist_yet():
+    """
+    html_report="reports/" (a folder) used to fail with FileNotFoundError when the folder didn't exist; the JSON
+    report already created it
+    """
+    from test_junkie.runner import Runner
+    import shutil
+    folder = tempfile.mkdtemp()
+    try:
+        out = os.path.join(folder, "new", "reports") + os.sep
+        Runner([VariantsSuite], html_report=out, xml_report=out, json_report=out).run(quiet=True)
+        for name in ("report.html", "report.xml", "report.json"):
+            assert os.path.isfile(os.path.join(out, name)), os.listdir(folder)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 CHECKS = [report_keeps_tests_with_uncopyable_exceptions, report_variants_and_parameters,
           report_handles_a_suite_that_never_ran, report_resource_data_and_long_runtimes,
-          report_inlines_its_assets]
+          report_inlines_its_assets, reports_into_folders_that_dont_exist_yet]

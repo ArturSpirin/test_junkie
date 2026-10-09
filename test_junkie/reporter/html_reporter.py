@@ -3,6 +3,7 @@ import copy
 import html as html_module
 import json
 import math
+import os
 import re
 import time
 import traceback
@@ -107,6 +108,7 @@ class Reporter:
         }
 
         html_content = ReportTemplate.render(template_data)
+        os.makedirs(os.path.dirname(os.path.abspath(write_file)), exist_ok=True)  # e.g. html_report="reports/"
         with open(write_file, "w+", encoding="utf8") as output:
             output.write(html_content)
 
