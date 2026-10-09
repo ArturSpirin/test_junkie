@@ -37,6 +37,8 @@ _OPTIONS = [
     ("retry", None, "--retry", (), "int",
      "Run each failing test up to this many times, whatever its @test(retry=) says", "run"),
     ("no_retry", None, "--no-retry", ("--no_retry",), "flag", "Run every test and suite once, no retries", "run"),
+    ("retry_policy", None, "--retry-policy", ("--retry_policy",), "str",
+     "A RetryPolicy (module:Class) for every test that sets no retry of its own", "run"),
     ("suite_throttling", None, "--suite-throttling", (), "seconds",
      "At least this many seconds between two suites starting, across the run. See " + DocumentationLinks.THROTTLING,
      "run"),

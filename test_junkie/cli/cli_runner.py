@@ -302,6 +302,7 @@ class CliRunner:
                            per_test=args.per_test,
                            retry=args.retry,
                            no_retry=args.no_retry,
+                           retry_policy=getattr(args, "retry_policy", Undefined),
                            rerun=args.rerun,
                            suite_throttling=getattr(args, "suite_throttling", Undefined),
                            test_throttling=getattr(args, "test_throttling", Undefined),

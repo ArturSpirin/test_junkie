@@ -22,6 +22,7 @@ from test_junkie.rules import Rules
 from test_junkie.settings import Settings
 from test_junkie.views import TestView
 from test_junkie.conflicts import ConflictMap
+from test_junkie.retry import reset_circuits
 from test_junkie.params import param_key, duplicates, reset as reset_param_ids
 
 # shared lock for __process_event() - can't create it inline there, @synchronized() would just
@@ -271,9 +272,13 @@ class Runner:
         reset_param_ids()
         limits = Limiter.start_run(self.__settings.limits)  # put back in the finally at the end of run()
         retry = self.__settings.retry
-        for item in objects:  # tj run --retry N / --no-retry, for this run only
+        run_policy = self.__settings.retry_policy
+        reset_circuits()  # circuit= counts per run
+        for item in objects:  # tj run --retry N / --no-retry / --retry-policy, for this run only
             item.retry_override = None if retry is None else (retry if hasattr(item, "get_function_name") else
                                                               (1 if retry == 1 else None))
+            if hasattr(item, "get_function_name"):
+                item.run_policy = run_policy
         rerun = self.__settings.rerun
         if rerun is not None:  # suites with nothing to run again are not part of this run
             self.__suites = [suite for suite in self.__suites if any(
@@ -393,6 +398,8 @@ class Runner:
                 resource_monitor.cleanup()
             for item in objects:
                 item.retry_override = None
+                if hasattr(item, "get_function_name"):
+                    item.run_policy = None
             Limiter.end_run(limits)
             self.__cancel = False  # a cancel applies to the run it was requested for, not every later run()
         if errors:
@@ -966,6 +973,7 @@ class Runner:
         policy = test.get_retry_policy() if test.retry_override != 1 else None
         first_attempt = len(run_errors) + 1 if resume else 1
         deferred = False
+        gave_up = False  # failed even after retrying, for circuit=
         try:
             for retry_attempt in range(first_attempt, test.get_retry_limit() + 1):
                 if retry_attempt > 1 and callable(cancel) and cancel():
@@ -975,6 +983,7 @@ class Runner:
                         decision = resume["decision"]  # decided before the class was set up again
                     else:
                         decision = policy.decide(run_errors, time.monotonic() - first_started)
+                        gave_up = decision.reason in ("out of attempts", "out of time")
                         decision.retry = bool(policy.should_retry(run_errors[-1] if run_errors else None, decision,
                                                                   TestView(test)))
                         if decision.retry and decision.when is None:  # should_retry forced a retry nothing matched
@@ -1069,6 +1078,20 @@ class Runner:
                             record_test_failure = False  # already recorded the failure just above this
                         start_time = time.time()  # after test start time
                         if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
+                            if record_test_failure and policy is not None and policy.flaky == "fail" and run_errors:
+                                # passed, but only on a retry: flaky="fail" counts that as a failure
+                                flaky = AssertionError("passed on run {}, after failing {} time{}; {} counts that as "
+                                                       "a failure (flaky=\"fail\")".format(
+                                                           len(run_errors) + 1, len(run_errors),
+                                                           "" if len(run_errors) == 1 else "s", policy.name()))
+                                test.metrics.update_metrics(status=TestCategory.FAIL, start_time=test_case_start,
+                                                            param=parameter, class_param=class_parameter,
+                                                            exception=flaky, formatted_traceback=str(flaky),
+                                                            runtime=runtime)
+                                Runner.__process_event(event=Event.ON_FAILURE, suite=suite, test=test,
+                                                       class_param=class_parameter, param=parameter, error=flaky,
+                                                       formatted_traceback=str(flaky))
+                                return
                             if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
                                 test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=test_case_start, param=parameter,
                                                             class_param=class_parameter, runtime=runtime)
@@ -1081,7 +1104,15 @@ class Runner:
                         if context is not None:
                             test.metrics.record_output(parameter, class_parameter, retry_attempt,
                                                        capture.output(), capture.log)
+            else:  # every run it was allowed failed
+                gave_up = len(run_errors) > 1
         finally:
+            if not deferred and policy is not None and gave_up and policy.gave_up():
+                note = "{}: {} tests failed even after retrying; no more retries with it this run (circuit={})" \
+                    .format(policy.name(), policy._circuit, policy._circuit)
+                LogJunkie.warn(note)
+                if context is not None:
+                    context.console.note(note)
             if not deferred:  # a held retry completes when it's finally run
                 Runner.__process_event(event=Event.ON_COMPLETE, suite=suite, test=test,
                                        class_param=class_parameter, param=parameter)

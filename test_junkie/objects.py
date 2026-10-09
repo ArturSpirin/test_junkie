@@ -421,6 +421,7 @@ class TestObject(object):
         return self.get_kwargs().get("parameters", [None])
 
     retry_override = None  # set by Runner.run() for tj run --retry N / --no-retry, cleared when the run ends
+    run_policy = None  # set by Runner.run() for tj run --retry-policy, cleared when the run ends
 
     def get_retry_limit(self):
 
@@ -428,17 +429,22 @@ class TestObject(object):
             return self.retry_override
         policy = self.get_retry_policy()
         if policy is not None:
-            return policy.total_attempts()
+            return policy.total_attempts() or 1
         return self.get_kwargs().get("retry", 1)
 
     def get_retry_policy(self):
-        """The RetryPolicy this test retries with: @test(retry=Policy), else @Suite(retry_policy=). None for retry=N."""
+        """
+        The RetryPolicy this test retries with: @test(retry=Policy), else @Suite(retry_policy=), else the run's
+        --retry-policy. None for a test that sets retry=N.
+        """
         if "_TestObject__retry_policy" not in self.__dict__:
             from test_junkie.retry import resolve
             retry = self.get_kwargs().get("retry")
             if retry is None or isinstance(retry, int):
                 retry = None if "retry" in self.get_kwargs() else self.suite.get_kwargs().get("retry_policy")
             self.__retry_policy = resolve(retry, "@test(retry=...)")
+        if self.__retry_policy is None and "retry" not in self.get_kwargs():
+            return self.run_policy  # the run's --retry-policy, for tests that set nothing themselves
         return self.__retry_policy
 
     def get_function_name(self):

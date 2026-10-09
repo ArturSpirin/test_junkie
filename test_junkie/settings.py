@@ -53,6 +53,7 @@ class Settings:
         self.__capture = Undefined
         self.__json_report = Undefined
         self.__retry = Undefined
+        self.__retry_policy = Undefined
         self.__rerun = Undefined
 
         self.__print_settings()
@@ -267,6 +268,18 @@ class Settings:
                     raise BadParameters("\"retry\" needs a whole number of 1 or more, got: {!r}".format(value))
                 self.__retry = value
         return self.__retry
+
+    @property
+    def retry_policy(self):
+        """
+        :return: RetryPolicy for every test that sets no retry of its own and whose suite sets no retry_policy
+                 (tj run --retry-policy module:Class, Runner.run(retry_policy=...)), or None
+        """
+        if self.__retry_policy is Undefined:
+            from test_junkie.retry import load, resolve
+            value = self.__get_value(key="retry_policy", default=None)
+            self.__retry_policy = load(value) if isinstance(value, str) else resolve(value, "retry_policy")
+        return self.__retry_policy
 
     @property
     def rerun(self):

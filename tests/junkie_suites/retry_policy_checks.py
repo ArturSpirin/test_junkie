@@ -553,6 +553,114 @@ def bad_reset_and_max_time_are_rejected():
             raise AssertionError("accepted: " + body)
 
 
+# -- phase 3: circuit, flaky="fail", a run-wide policy ---------------------------------------------------------------
+
+class Breaker(RetryPolicy):
+    attempts = 2
+    circuit = 2
+
+
+@Suite()
+class CircuitSuite:
+
+    @test(retry=Breaker)
+    def a(self):
+        _mark("a")
+        assert False
+
+    @test(retry=Breaker)
+    def b(self):
+        _mark("b")
+        assert False
+
+    @test(retry=Breaker)
+    def c(self):
+        _mark("c")
+        assert False
+
+    @test(retry=Breaker)
+    def d(self):
+        _mark("d")
+        assert False
+
+
+class Strict(RetryPolicy):
+    attempts = 3
+    flaky = "fail"
+
+
+@Suite()
+class FlakySuite:
+
+    @test(retry=Strict)
+    def passes_second_time(self):
+        if _mark("passes_second_time") < 2:
+            assert False
+
+    @test(retry=Strict)
+    def passes_first_time(self):
+        _mark("passes_first_time")
+
+
+class RunWide(RetryPolicy):
+    attempts = 3
+
+
+@Suite()
+class RunPolicySuite:
+
+    @test()
+    def bare(self):
+        if _mark("bare") < 2:
+            assert False
+
+    @test(retry=1)
+    def capped(self):
+        _mark("capped")
+        assert False
+
+
+def circuit_stops_retrying_after_n_give_ups():
+    for _ in range(2):  # counted per run: the second run starts with the circuit closed
+        _phase2([CircuitSuite])
+        assert sorted(COUNTS.values()) == [1, 1, 2, 2], COUNTS
+        assert COUNTS["a"] == COUNTS["b"] == 2, COUNTS
+
+
+def flaky_fail_counts_a_retried_pass_as_failed():
+    _phase2([FlakySuite])
+    _, data = _variant(FlakySuite, "passes_second_time")
+    assert data["status"] == TestCategory.FAIL, data["status"]
+    assert "passed on run 2" in str(data["exceptions"][-1]), data["exceptions"]
+    _, data = _variant(FlakySuite, "passes_first_time")
+    assert data["status"] == TestCategory.SUCCESS, data["status"]
+
+
+def run_policy_applies_to_tests_that_set_no_retry():
+    for value in (RunWide, RunWide(), __name__ + ":RunWide"):
+        _phase2([RunPolicySuite], retry_policy=value)
+        assert COUNTS == {"bare": 2, "capped": 1}, (value, COUNTS)
+    _phase2([RunPolicySuite])  # and only for that run
+    assert COUNTS == {"bare": 1, "capped": 1}, COUNTS
+
+
+def bad_circuit_flaky_and_policy_names_are_rejected():
+    for body, field in (("circuit = 0", "circuit"), ("flaky = 'maybe'", "flaky")):
+        try:
+            exec("class Bad(RetryPolicy):\n    " + body, {"RetryPolicy": RetryPolicy})
+        except BadParameters as error:
+            assert field in str(error), str(error)
+        else:
+            raise AssertionError("accepted: " + body)
+    for text in ("no_colon", "no_such_module_tj:Policy", __name__ + ":NoSuchPolicy"):
+        try:
+            Runner([RunPolicySuite]).run(quiet=True, retry_policy=text)
+        except BadParameters as error:
+            assert "--retry-policy" in str(error), str(error)
+        else:
+            raise AssertionError("accepted: " + text)
+
+
 def _variant_param(suite_class, name, class_param):
     suite = Builder.get_execution_roster().get(suite_class)
     for test_object in suite.get_test_objects():
@@ -571,4 +679,6 @@ CHECKS = [each_condition_has_its_own_budget, no_retry_on_and_unmatched_failures_
           should_retry_has_the_last_word, before_retry_runs_before_each_retry,
           a_raising_before_retry_stops_retrying, max_time_stops_retrying,
           reset_class_sets_up_again_once_for_all_held_retries, reset_class_setup_failure_ignores_the_held_retry,
-          reset_can_be_set_on_one_condition, bad_reset_and_max_time_are_rejected]
+          reset_can_be_set_on_one_condition, bad_reset_and_max_time_are_rejected,
+          circuit_stops_retrying_after_n_give_ups, flaky_fail_counts_a_retried_pass_as_failed,
+          run_policy_applies_to_tests_that_set_no_retry, bad_circuit_flaky_and_policy_names_are_rejected]

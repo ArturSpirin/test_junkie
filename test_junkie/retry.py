@@ -10,8 +10,10 @@ Retry policies: which failures to retry, how many times, and how long to wait in
 
 A policy decides from the failures a test has had so far, so one policy can be shared by every test and parameter.
 """
+import importlib
 import random
 import re
+import threading
 
 from test_junkie.errors import BadParameters
 
@@ -148,7 +150,16 @@ class Decision(object):
 
 
 _FIELDS = ("attempts", "retry_on", "no_retry_on", "message", "delay", "backoff", "max_delay", "jitter", "chain",
-           "when", "max_time", "reset")
+           "when", "max_time", "reset", "circuit", "flaky")
+
+# circuit=: policy class -> how many tests with it failed even after retrying, this run (reset by Runner.run)
+_GAVE_UP = {}
+_CIRCUIT_LOCK = threading.Lock()
+
+
+def reset_circuits():
+    with _CIRCUIT_LOCK:
+        _GAVE_UP.clear()
 
 
 class RetryPolicy(object):
@@ -170,6 +181,9 @@ class RetryPolicy(object):
                  it isn't started).
     reset:       "class" runs @afterClass and @beforeClass before retrying: retries are held until that suite
                  parameter's other tests are done, then run together after one fresh setup.
+    circuit:     after this many tests with this policy failed even after retrying, it stops retrying for the rest
+                 of the run - something bigger is broken, and retrying only takes longer.
+    flaky:       "pass" (default) counts a test that passed on a retry as passed; "fail" counts it as failed.
 
     Override should_retry(error, decision, test) to have the last word, and before_retry(error, decision, test) to
     do something right before a retry (refresh a token, clear a cache). `test` is a read-only view of the test.
@@ -187,6 +201,8 @@ class RetryPolicy(object):
     when = ()
     max_time = None
     reset = None
+    circuit = None
+    flaky = "pass"
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -213,6 +229,9 @@ class RetryPolicy(object):
         jitter = _check_number(owner, "jitter", target.jitter, 0, allow_none=False)
         max_time = _check_number(owner, "max_time", target.max_time, 0)
         reset = _check_reset(owner, target.reset)
+        circuit = _check_number(owner, "circuit", target.circuit, 1, integer=True)
+        if target.flaky not in ("pass", "fail"):
+            raise BadParameters('{}.flaky must be "pass" or "fail", got {!r}'.format(owner, target.flaky))
         if not isinstance(target.chain, bool):
             raise BadParameters("{}.chain must be True or False, got {!r}".format(owner, target.chain))
         whens = _as_list(target.when)
@@ -231,7 +250,7 @@ class RetryPolicy(object):
         target._attempts = attempts
         target._no_retry_on = no_retry_on
         target._delay, target._backoff, target._max_delay, target._jitter = delay, backoff, max_delay, jitter
-        target._max_time, target._reset = max_time, reset
+        target._max_time, target._reset, target._circuit = max_time, reset, circuit
 
     # -- the decision -------------------------------------------------------------------------------------------
 
@@ -280,6 +299,8 @@ class RetryPolicy(object):
         error = errors[-1] if errors else None
         if error is None:
             return Decision(False, run=run, of=run, reason="no error")
+        if self.circuit_open():
+            return Decision(False, run=run, of=run, reason="circuit open")
         if self._excluded(error):
             return Decision(False, run=run, of=run, reason="no_retry_on")
         when = self._match(error)
@@ -308,6 +329,22 @@ class RetryPolicy(object):
             delay += random.uniform(0, jitter)
         return delay
 
+    def circuit_open(self):
+        if self._circuit is None:
+            return False
+        with _CIRCUIT_LOCK:
+            return _GAVE_UP.get(type(self), 0) >= self._circuit
+
+    def gave_up(self):
+        """
+        A test with this policy failed even after retrying. :return: True if that just opened the circuit
+        """
+        if self._circuit is None:
+            return False
+        with _CIRCUIT_LOCK:
+            _GAVE_UP[type(self)] = _GAVE_UP.get(type(self), 0) + 1
+            return _GAVE_UP[type(self)] == self._circuit
+
     def total_attempts(self):
         """The most runs this policy can give a test, for counts and reports (None = no fixed cap)."""
         if self._attempts is not None:
@@ -324,6 +361,18 @@ class _LegacyRetry(RetryPolicy):
 
     def name(self):
         return "retry"
+
+
+def load(text):
+    """"package.module:Class" (tj run --retry-policy) -> that RetryPolicy, as an instance"""
+    module_name, _, class_name = str(text).partition(":")
+    if not module_name or not class_name:
+        raise BadParameters("--retry-policy needs module:Class, e.g. my_project.retries:Flaky, got {!r}".format(text))
+    try:
+        target = getattr(importlib.import_module(module_name), class_name)
+    except (ImportError, AttributeError) as error:
+        raise BadParameters("--retry-policy {!r}: {}".format(text, error))
+    return resolve(target, "--retry-policy")
 
 
 def resolve(value, owner):
