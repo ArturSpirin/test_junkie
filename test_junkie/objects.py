@@ -67,20 +67,36 @@ class _FuncEval:
                         got=type(val).__name__, link=DocumentationLinks.SKIP))
         return val
 
+    # parameter functions that raised during this run -> the error to raise again: a provider that timed out isn't
+    # called again for every suite or test sharing it. Cleared by Runner.run() at the start of each run
+    provider_failures = {}
+    _provider_lock = threading.Lock()
+
     @staticmethod
     def eval_params(params):
 
+        if not (inspect.isfunction(params) or inspect.ismethod(params)):
+            return params
+        key = (getattr(params, "__self__", None) is not None and id(params.__self__), params.__qualname__,
+               getattr(params, "__func__", params))
+        with _FuncEval._provider_lock:
+            failed = _FuncEval.provider_failures.get(key)
+        if failed is not None:
+            raise failed
         try:
             if inspect.isfunction(params):
                 return params()
-            elif inspect.ismethod(params):
-                return getattr(params.__self__, params.__name__)()
+            return getattr(params.__self__, params.__name__)()
         except Exception as e:
-            raise TestJunkieExecutionError(
+            error = TestJunkieExecutionError(
                 "parameters function '{name}' raised an unexpected error: {err}. See documentation: {link}".format(
                     name=getattr(params, '__name__', repr(params)), err=e,
-                    link=DocumentationLinks.PARAMETERIZED_TESTS)) from e
-        return params
+                    link=DocumentationLinks.PARAMETERIZED_TESTS))
+            error.__cause__ = e
+            error.provider_traceback = traceback.format_exc()
+            with _FuncEval._provider_lock:
+                _FuncEval.provider_failures[key] = error
+            raise error from e
 
 
 class SuiteObject(object):

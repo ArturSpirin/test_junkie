@@ -13,7 +13,7 @@ from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
 from test_junkie.listener import Listener
 from test_junkie.metrics import Aggregator, ResourceMonitor
-from test_junkie.objects import Limiter, arg_names
+from test_junkie.objects import Limiter, arg_names, _FuncEval
 from test_junkie.parallels import ParallelProcessor
 from test_junkie.rerun import parameters_to_run
 from test_junkie.builder import Builder
@@ -259,6 +259,7 @@ class Runner:
         objects = [Builder.get_execution_roster()[suite] for suite in self.__all_suites]
         objects += [test for suite in objects for test in suite.get_test_objects()]
         Limiter.check_pools([Builder.get_execution_roster()[suite] for suite in self.__suites])
+        _FuncEval.provider_failures.clear()
         limits = Limiter.start_run(self.__settings.limits)  # put back in the finally at the end of run()
         retry = self.__settings.retry
         for item in objects:  # tj run --retry N / --no-retry, for this run only
@@ -436,7 +437,10 @@ class Runner:
         """
         if not self.__settings.rerun.includes_test(test.suite.get_class_name(), test.get_function_name()):
             return False
-        parameters = test.get_parameters(process_functions=True)
+        try:
+            parameters = test.get_parameters(process_functions=True)
+        except TestJunkieExecutionError:
+            return True  # gets reported as bad parameters
         if not parameters or not isinstance(parameters, list):
             return True  # gets reported as bad parameters
         chosen = self.__parameters(test, class_param)
@@ -447,7 +451,10 @@ class Runner:
 
     @staticmethod
     def __validate_suite_parameters(suite):
-        parameters = suite.get_parameters(process_functions=True)
+        try:
+            parameters = suite.get_parameters(process_functions=True)
+        except TestJunkieExecutionError as error:  # the parameters function raised: this suite is ignored, not the run
+            return error
         if not parameters or not isinstance(parameters, list):
             if isinstance(parameters, list):
                 return BadParameters("Argument: \"parameters\" in @Suite() decorator returned empty: <class 'list'>. "
@@ -461,7 +468,10 @@ class Runner:
 
     @staticmethod
     def __validate_test_parameters(test):
-        parameters = test.get_parameters(process_functions=True)
+        try:
+            parameters = test.get_parameters(process_functions=True)
+        except TestJunkieExecutionError as error:  # the parameters function raised: this test is ignored, not the run
+            return {"exception": error, "trace": getattr(error, "provider_traceback", None) or str(error)}
         if not parameters or not isinstance(parameters, list):
             exception = None
             try:
