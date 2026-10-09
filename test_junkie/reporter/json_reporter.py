@@ -3,6 +3,7 @@ import os
 
 import test_junkie
 from test_junkie.constants import TestCategory
+from test_junkie.metrics import is_flaky
 from test_junkie.params import param_key
 
 
@@ -29,6 +30,7 @@ def write_json_report(path, aggregator, runtime, seed=None):
                         "parameter": None if data.get("param") is None else param_key(data.get("param")),
                         "suite_parameter": None if data.get("class_param") is None else param_key(data.get("class_param")),
                         "status": data["status"],
+                        "flaky": is_flaky(data),
                         "runs": [{"status": status,
                                   "runtime": round(runtime_, 4) if runtime_ is not None else None,
                                   "error": _error(exceptions[index] if index < len(exceptions) else None),

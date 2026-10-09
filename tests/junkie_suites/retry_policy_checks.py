@@ -553,7 +553,7 @@ def bad_reset_and_max_time_are_rejected():
             raise AssertionError("accepted: " + body)
 
 
-# -- phase 3: circuit, flaky="fail", a run-wide policy ---------------------------------------------------------------
+# -- phase 3: circuit, a run-wide policy ------------------------------------------------------------------------
 
 class Breaker(RetryPolicy):
     attempts = 2
@@ -584,24 +584,6 @@ class CircuitSuite:
         assert False
 
 
-class Strict(RetryPolicy):
-    attempts = 3
-    flaky = "fail"
-
-
-@Suite()
-class FlakySuite:
-
-    @test(retry=Strict)
-    def passes_second_time(self):
-        if _mark("passes_second_time") < 2:
-            assert False
-
-    @test(retry=Strict)
-    def passes_first_time(self):
-        _mark("passes_first_time")
-
-
 class RunWide(RetryPolicy):
     attempts = 3
 
@@ -627,15 +609,6 @@ def circuit_stops_retrying_after_n_give_ups():
         assert COUNTS["a"] == COUNTS["b"] == 2, COUNTS
 
 
-def flaky_fail_counts_a_retried_pass_as_failed():
-    _phase2([FlakySuite])
-    _, data = _variant(FlakySuite, "passes_second_time")
-    assert data["status"] == TestCategory.FAIL, data["status"]
-    assert "passed on run 2" in str(data["exceptions"][-1]), data["exceptions"]
-    _, data = _variant(FlakySuite, "passes_first_time")
-    assert data["status"] == TestCategory.SUCCESS, data["status"]
-
-
 def run_policy_applies_to_tests_that_set_no_retry():
     for value in (RunWide, RunWide(), __name__ + ":RunWide"):
         _phase2([RunPolicySuite], retry_policy=value)
@@ -644,8 +617,8 @@ def run_policy_applies_to_tests_that_set_no_retry():
     assert COUNTS == {"bare": 1, "capped": 1}, COUNTS
 
 
-def bad_circuit_flaky_and_policy_names_are_rejected():
-    for body, field in (("circuit = 0", "circuit"), ("flaky = 'maybe'", "flaky")):
+def bad_circuit_and_policy_names_are_rejected():
+    for body, field in (("circuit = 0", "circuit"),):
         try:
             exec("class Bad(RetryPolicy):\n    " + body, {"RetryPolicy": RetryPolicy})
         except BadParameters as error:
@@ -680,5 +653,5 @@ CHECKS = [each_condition_has_its_own_budget, no_retry_on_and_unmatched_failures_
           a_raising_before_retry_stops_retrying, max_time_stops_retrying,
           reset_class_sets_up_again_once_for_all_held_retries, reset_class_setup_failure_ignores_the_held_retry,
           reset_can_be_set_on_one_condition, bad_reset_and_max_time_are_rejected,
-          circuit_stops_retrying_after_n_give_ups, flaky_fail_counts_a_retried_pass_as_failed,
-          run_policy_applies_to_tests_that_set_no_retry, bad_circuit_flaky_and_policy_names_are_rejected]
+          circuit_stops_retrying_after_n_give_ups,
+          run_policy_applies_to_tests_that_set_no_retry, bad_circuit_and_policy_names_are_rejected]

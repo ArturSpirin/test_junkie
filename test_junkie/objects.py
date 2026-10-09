@@ -566,6 +566,29 @@ class TestObject(object):
             return 0
         return self.metrics.get_metrics()[param_key(class_param)][param_key(param)]["retry"]
 
+    def is_flaky(self, parameter=None, suite_parameter=None):
+        """
+        True if this test, for these parameters, passed in the end after failing or erroring at least once in this
+        run, whatever retried it: retry=N, a RetryPolicy or a suite retry pass
+        """
+        return self.metrics.is_flaky(parameter, suite_parameter)
+
+    def get_flaky(self):
+        """
+        :return: LIST of {"parameter", "suite_parameter", "passed_on_run", "errors"}, one per parameter combination
+                 that was flaky in this run. "errors" has what each failed run raised, as text, oldest first
+        """
+        from test_junkie.metrics import is_flaky
+        flaky = []
+        for by_param in self.metrics.get_metrics().values():
+            for data in by_param.values():
+                if is_flaky(data):
+                    flaky.append({"parameter": data.get("param"), "suite_parameter": data.get("class_param"),
+                                  "passed_on_run": len(data["statuses"]),
+                                  "errors": ["{}: {}".format(type(error).__name__, error).split("\n")[0]
+                                             for error in data.get("exceptions", [])[:-1] if error is not None]})
+        return flaky
+
 
 class _Pool(object):
 

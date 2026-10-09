@@ -50,6 +50,8 @@ class Settings:
         self.__xml_report = Undefined
         self.__quiet = Undefined
         self.__per_test = Undefined
+        self.__flag_flaky = Undefined
+        self.__fail_on_flaky = Undefined
         self.__capture = Undefined
         self.__json_report = Undefined
         self.__retry = Undefined
@@ -213,6 +215,20 @@ class Settings:
         if self.__per_test is Undefined:
             self.__per_test = self.__get_value(key="per_test", default=Settings.__DEFAULT_PER_TEST)
         return self.__per_test
+
+    @property
+    def flag_flaky(self):
+        """tj run --flag-flaky: list the tests that passed only after failing, after the summary"""
+        if self.__flag_flaky is Undefined:
+            self.__flag_flaky = bool(self.__get_value(key="flag_flaky", default=False))
+        return self.__flag_flaky
+
+    @property
+    def fail_on_flaky(self):
+        """tj run --fail-on-flaky: a flaky test fails the run (exit code 1), and is listed like --flag-flaky"""
+        if self.__fail_on_flaky is Undefined:
+            self.__fail_on_flaky = bool(self.__get_value(key="fail_on_flaky", default=False))
+        return self.__fail_on_flaky
 
     @property
     def capture(self):

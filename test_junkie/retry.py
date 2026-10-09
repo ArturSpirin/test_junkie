@@ -150,7 +150,7 @@ class Decision(object):
 
 
 _FIELDS = ("attempts", "retry_on", "no_retry_on", "message", "delay", "backoff", "max_delay", "jitter", "chain",
-           "when", "max_time", "reset", "circuit", "flaky")
+           "when", "max_time", "reset", "circuit")
 
 # circuit=: policy class -> how many tests with it failed even after retrying, this run (reset by Runner.run)
 _GAVE_UP = {}
@@ -183,7 +183,6 @@ class RetryPolicy(object):
                  parameter's other tests are done, then run together after one fresh setup.
     circuit:     after this many tests with this policy failed even after retrying, it stops retrying for the rest
                  of the run - something bigger is broken, and retrying only takes longer.
-    flaky:       "pass" (default) counts a test that passed on a retry as passed; "fail" counts it as failed.
 
     Override should_retry(error, decision, test) to have the last word, and before_retry(error, decision, test) to
     do something right before a retry (refresh a token, clear a cache). `test` is a read-only view of the test.
@@ -202,7 +201,6 @@ class RetryPolicy(object):
     max_time = None
     reset = None
     circuit = None
-    flaky = "pass"
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -230,8 +228,6 @@ class RetryPolicy(object):
         max_time = _check_number(owner, "max_time", target.max_time, 0)
         reset = _check_reset(owner, target.reset)
         circuit = _check_number(owner, "circuit", target.circuit, 1, integer=True)
-        if target.flaky not in ("pass", "fail"):
-            raise BadParameters('{}.flaky must be "pass" or "fail", got {!r}'.format(owner, target.flaky))
         if not isinstance(target.chain, bool):
             raise BadParameters("{}.chain must be True or False, got {!r}".format(owner, target.chain))
         whens = _as_list(target.when)

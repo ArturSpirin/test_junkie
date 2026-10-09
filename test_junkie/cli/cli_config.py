@@ -187,7 +187,7 @@ _GROUPS = [
     ("Reports and output", [("html_report", None), ("xml_report", None), ("json_report", None),
                             ("monitor_resources", "off"),
                             ("code_cov", "off"), ("cov_rcfile", None), ("quiet", "off"), ("per_test", "off"),
-                            ("no_capture", "off")]),
+                            ("no_capture", "off"), ("flag_flaky", "off"), ("fail_on_flaky", "off")]),
 ]
 _DEFAULTS = dict(item for _, items in _GROUPS for item in items)
 _WIDTH = 30

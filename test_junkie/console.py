@@ -983,6 +983,7 @@ class Console(object):
             self.__thread.join(1)
         counts, rows = self.__counts(aggregator)
         code = self.exit_code(counts, aggregator, errors)
+        self.__flaky_count = len(self.flaky(aggregator)) if self.__fail_on_flaky() else 0
         with self.__lock:
             self.__erase()
             self.__live = False
@@ -1001,6 +1002,8 @@ class Console(object):
                 lines.append("")
         if self.__mode in ("normal", "report"):
             lines.extend(self.__summary(rows, counts, runtime))
+        if self.__flag_flaky():
+            lines.extend(self.__flaky_block(aggregator))
         if resources is not None and self.__mode == "normal":
             lines.extend(self.__resources(resources))
             lines.extend(["", self.style("─" * _RULE_WIDTH, "dim"), ""])
@@ -1029,7 +1032,41 @@ class Console(object):
         bad = counts[TestCategory.FAIL] + counts[TestCategory.ERROR] + counts[TestCategory.IGNORE]
         if bad or (aggregator.get_basic_report()["tests"]["total"] == 0 and not self.__nothing_to_rerun()):
             return 1
+        if self.__fail_on_flaky() and self.flaky(aggregator):
+            return 1
         return 0
+
+    def __fail_on_flaky(self):
+        return self.__settings is not None and bool(self.__settings.fail_on_flaky)
+
+    def __flag_flaky(self):
+        return self.__settings is not None and bool(self.__settings.flag_flaky or self.__settings.fail_on_flaky)
+
+    @staticmethod
+    def flaky(aggregator):
+        """:return: LIST of (suite, test, entry) for every flaky parameter combination, see TestObject.get_flaky()"""
+        found = []
+        for suite in aggregator.executed_suites:
+            for test in suite.get_test_objects():
+                for entry in test.get_flaky():
+                    found.append((suite, test, entry))
+        return found
+
+    def __flaky_block(self, aggregator):
+        found = self.flaky(aggregator)
+        if not found:
+            return [self.rule("Flaky", "0"), "", "  " + self.style("No test needed a retry to pass.", "dim"), ""]
+        lines = [self.rule("Flaky", str(len(found))), ""]
+        for suite, test, entry in found:
+            params = self.__params(test, entry["parameter"], entry["suite_parameter"])
+            first = entry["errors"][0] if entry["errors"] else ""
+            lines.append("  {} {}  {}".format(
+                self.style("{}.{}".format(suite.get_class_name(), test.get_function_name()), "warn", "bold"),
+                params, self.style("passed on run {}".format(entry["passed_on_run"]), "dim")))
+            if first:
+                lines.append("      " + self.style(_short(first, 100), "dim"))
+        lines.append("")
+        return lines
 
     def __nothing_to_rerun(self):
         rerun = self.__rerun()
@@ -1329,7 +1366,9 @@ class Console(object):
         elif code:
             text = self.badge("FAILED", "err")
             if not (counts[TestCategory.FAIL] or counts[TestCategory.ERROR] or counts[TestCategory.IGNORE]):
-                text += "  no tests ran"
+                flaky = self.__flaky_count
+                text += "  {} flaky test{} (--fail-on-flaky)".format(flaky, "" if flaky == 1 else "s") if flaky \
+                    else "  no tests ran"
         else:
             text = self.badge("PASSED", "pass")
             if self.__nothing_to_rerun():

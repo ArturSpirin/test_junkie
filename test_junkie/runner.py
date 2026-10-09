@@ -1078,20 +1078,6 @@ class Runner:
                             record_test_failure = False  # already recorded the failure just above this
                         start_time = time.time()  # after test start time
                         if run_after_test(record_test_failure) is True:  # if did not fail, test is OK
-                            if record_test_failure and policy is not None and policy.flaky == "fail" and run_errors:
-                                # passed, but only on a retry: flaky="fail" counts that as a failure
-                                flaky = AssertionError("passed on run {}, after failing {} time{}; {} counts that as "
-                                                       "a failure (flaky=\"fail\")".format(
-                                                           len(run_errors) + 1, len(run_errors),
-                                                           "" if len(run_errors) == 1 else "s", policy.name()))
-                                test.metrics.update_metrics(status=TestCategory.FAIL, start_time=test_case_start,
-                                                            param=parameter, class_param=class_parameter,
-                                                            exception=flaky, formatted_traceback=str(flaky),
-                                                            runtime=runtime)
-                                Runner.__process_event(event=Event.ON_FAILURE, suite=suite, test=test,
-                                                       class_param=class_parameter, param=parameter, error=flaky,
-                                                       formatted_traceback=str(flaky))
-                                return
                             if record_test_failure:  # Test failed and failure was already recorded thus can't pass it
                                 test.metrics.update_metrics(status=TestCategory.SUCCESS, start_time=test_case_start, param=parameter,
                                                             class_param=class_parameter, runtime=runtime)

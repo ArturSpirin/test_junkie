@@ -265,7 +265,7 @@ def config_commands():
         code, out = run_cli(*command)
         assert code == 120 and "[ERROR]" in out and text in out, (command, out)
     code, out = run_cli("config", "show", "--all")
-    assert code is None and "Config  " in out and "Discovery" in out and "0 of 30 settings saved" in out, out
+    assert code is None and "Config  " in out and "Discovery" in out and "0 of 32 settings saved" in out, out
     code, out = run_cli("config", "show", "--sources")
     assert code is None and re.search(r"^  sources +\.$", out, re.M), out  # unset: a dot (ASCII for ·)
 
@@ -279,12 +279,12 @@ def config_update_show_restore():
     code, out = run_cli("config", "update", "-T", "2", home=home, keep_home=True)
     assert re.search(r"^  test_multithreading_limit +4 +-> +2$", out, re.M), out
     code, out = run_cli("config", "show", "--all", home=home, keep_home=True)
-    assert "2 of 30 settings saved" in out and re.search(r"^  sources +tests$", out, re.M), out
+    assert "2 of 32 settings saved" in out and re.search(r"^  sources +tests$", out, re.M), out
     code, out = run_cli("config", "restore", "-T", home=home, keep_home=True)
     assert "[RESTORED]  1 setting to its default" in out and re.search(
         r"^  test_multithreading_limit +2 +-> +default 1$", out, re.M), out
     code, out = run_cli("config", "restore", "--all", home=home, keep_home=True)
-    assert "all 30 settings to their defaults . 1 had values" in out and "sources" in out, out
+    assert "all 32 settings to their defaults . 1 had values" in out and "sources" in out, out
     # tj config update --no-capture is read back by tj run
     code, out = run_cli("config", "update", "--no-capture", home=home, keep_home=True)
     from test_junkie.settings import Settings
@@ -635,6 +635,37 @@ def retry_policy_flag():
     assert code == 120 and "--retry-policy needs module:Class" in out, (code, out)
 
 
+FLAKY_ONCE_SUITE = """from test_junkie.decorators import Suite, test
+
+RUNS = []
+
+
+@Suite()
+class ShakySuite:
+
+    @test(retry=2)
+    def recovers(self):
+        RUNS.append(1)
+        assert len(RUNS) % 2 == 0, "odd run"  # fails then passes, in every tj run of this process
+
+    @test()
+    def steady(self):
+        pass
+"""
+
+
+def flaky_flags():
+    directory = _write(FLAKY_ONCE_SUITE, "shaky_suite.py")
+    code, out = run_cli("run", "-s", directory)
+    assert code is None and "Flaky " not in out, out  # nothing extra without a flag
+    code, out = run_cli("run", "-s", directory, "--flag-flaky")
+    assert code is None and re.search(r"^Flaky 1 ", out, re.M), out  # listed, the run still passes
+    assert "ShakySuite.recovers" in out and "passed on run 2" in out and "AssertionError: odd run" in out, out
+    assert "ShakySuite.steady" not in out, out
+    code, out = run_cli("run", "-s", directory, "--fail-on-flaky")
+    assert code == 1 and "1 flaky test (--fail-on-flaky)" in out and "ShakySuite.recovers" in out, (code, out)
+
+
 def report_folders_and_json_report():
     directory = _write(FLAKY_SUITE, "flaky_suite.py")
     folder = tempfile.mkdtemp() + os.sep
@@ -720,7 +751,7 @@ def pyproject_table_is_read_only():
     assert code == 120 and "read-only for tj config" in out, out
 
 
-CHECKS = [bare_and_unknown_commands, version_shows_where_things_are, old_option_spellings_still_work_but_help_shows_the_new_ones, audit_tag_flags_match_tj_run, tests_and_suites_take_patterns, seed_repeats_a_random_order, retry_overrides, retry_policy_flag, report_folders_and_json_report, rerun_from_a_json_report, audit_json_and_fail_on_gaps, project_config_is_found_and_used, pyproject_table_is_read_only,
+CHECKS = [bare_and_unknown_commands, version_shows_where_things_are, old_option_spellings_still_work_but_help_shows_the_new_ones, audit_tag_flags_match_tj_run, tests_and_suites_take_patterns, seed_repeats_a_random_order, retry_overrides, retry_policy_flag, flaky_flags, report_folders_and_json_report, rerun_from_a_json_report, audit_json_and_fail_on_gaps, project_config_is_found_and_used, pyproject_table_is_read_only,
           audit_lists_every_suite, guess_root_with_a_relative_source, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
           audit_no_test_meta_checks_the_tests_meta, audit_only_covers_the_requested_suites, audit_by_feature_and_verbose, audit_unknown_view_is_rejected,
           audit_and_run_without_sources_explain_what_is_missing, audit_reports_when_nothing_matches,

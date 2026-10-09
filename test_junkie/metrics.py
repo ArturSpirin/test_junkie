@@ -203,6 +203,17 @@ class TestMetrics(object):
         """:return: LIST of the dicts record_retry() stored, oldest first"""
         return self.__retries.get((param_key(class_param), param_key(param)), [])
 
+    def is_flaky(self, param, class_param):
+        """True if these parameters passed in the end after at least one failed or errored run"""
+        return is_flaky(self.__stats.get(param_key(class_param), {}).get(param_key(param)))
+
+
+def is_flaky(data):
+    """data: one parameter slot of get_metrics(). Passed on its last run, failed or errored on an earlier one"""
+    if not data or data.get("status") != TestCategory.SUCCESS:
+        return False
+    return any(status in (TestCategory.FAIL, TestCategory.ERROR) for status in (data.get("statuses") or [])[:-1])
+
 
 class Aggregator(object):
 
