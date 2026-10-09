@@ -330,6 +330,17 @@ class Runner:
                 resource_monitor.shutdown()
 
         errors = ([run_error] if run_error is not None else []) + self.__thread_errors
+        listener_errors = [error for suite in self.get_executed_suites()
+                           for error in suite.metrics.get_listener_errors()]
+        if listener_errors:
+            first = listener_errors[0]
+            listener_error = TestListenerError(
+                "{} listener call{} failed, first: {}.{}: {!r}. For help on defining custom event listeners, see "
+                "documentation: {}".format(len(listener_errors), "" if len(listener_errors) == 1 else "s",
+                                           first["test"].suite.get_class_name() if first["test"] else "suite",
+                                           first["event"], first["exception"], DocumentationLinks.LISTENERS))
+            listener_error.listener_calls = len(listener_errors)
+            errors.append(listener_error)
         for error in errors[1:]:
             LogJunkie.error("Another error in a suite/test thread: {!r}".format(error))
 
@@ -466,11 +477,69 @@ class Runner:
 
         context = self.__context
         capture = Capture()
-        with capturing(context.router, capture):
-            self.__run_suite_body(suite, context)
-        if capture.output() or capture.log:
-            suite.metrics.record_output(capture.output(), capture.log)
+        start_time = time.time()
+        try:
+            with capturing(context.router, capture):
+                self.__run_suite_body(suite, context)
+        except (TestInterrupted, KeyboardInterrupt):
+            raise
+        except BaseException as error:
+            # something ended the suite early: report the tests it never got to as ignored instead of leaving them out
+            self.__ignore_unfinished(suite, error, traceback.format_exc(), start_time)
+            context.console.suite_finished(suite)
+            raise
+        finally:
+            if capture.output() or capture.log:
+                suite.metrics.record_output(capture.output(), capture.log)
         context.console.suite_finished(suite)
+
+    def __ignore_unfinished(self, suite, error, trace, start_time):
+        """
+        Records every test of the suite that would have run but has no result yet as ignored, with the error that
+        ended the suite
+        """
+        ParallelProcessor.wait_currently_active_tests_to_finish(suite)
+        try:
+            class_params = suite.get_parameters(process_functions=True)
+        except Exception:
+            class_params = None
+        if not isinstance(class_params, list) or not class_params:
+            class_params = [None]
+        rerun = self.__settings.rerun
+        for test in suite.get_test_objects():
+            if self.__positive_skip_condition(test=test) or \
+                    not Runner.__runnable_tags(test=test, tag_config=self.__settings.tags):
+                continue
+            if rerun is not None and not rerun.includes_test(suite.get_class_name(), test.get_function_name()):
+                continue
+            for class_param in class_params if test.accepts_suite_parameters() else class_params[:1]:
+                try:
+                    parameters = self.__parameters(test, class_param)
+                except Exception:
+                    continue
+                if not isinstance(parameters, list):
+                    continue
+                for param in parameters:
+                    Runner.__ignore_unit(self.__context, suite, test, param, class_param, error, trace)
+        if suite.metrics.get_metrics()["status"] is None:
+            suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL, start_time=start_time)
+
+    @staticmethod
+    def __ignore_unit(context, suite, test, param, class_param, error, trace):
+        """
+        Records one test run that never got a result as ignored
+        :param context: the run's _RunContext to update the console, None if the caller does that itself
+        """
+        recorded = class_param if test.accepts_suite_parameters() else None
+        if test.get_status(param, recorded) is not None:
+            return
+        test.metrics.update_metrics(status=TestCategory.IGNORE, start_time=time.time(), param=param,
+                                    class_param=recorded, exception=error, formatted_traceback=trace)
+        Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test, class_param=recorded, param=param,
+                               error=error, formatted_traceback=trace)
+        if context is not None:
+            context.console.unit_done(suite, unit_key(test, param, class_param), TestCategory.IGNORE,
+                                      Runner.__label(suite, test, param, class_param))
 
     def __run_suite_body(self, suite, context):
 
@@ -657,6 +726,11 @@ class Runner:
         context.console.unit_started(key, label)
         try:
             Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error, context.state, context)
+        except (TestInterrupted, KeyboardInterrupt):
+            raise
+        except BaseException as error:  # e.g. the test called sys.exit()
+            Runner.__ignore_unit(None, suite, test, parameter, class_parameter, error, traceback.format_exc())
+            raise
         finally:
             recorded = class_parameter if test.accepts_suite_parameters() else None
             data = test.metrics.get_metrics().get(str(recorded), {}).get(str(parameter), {})
@@ -956,10 +1030,12 @@ class Runner:
             else:
                 native_function(custom_function=custom_function,
                                 properties=__create_properties())
-        except Exception:
-            raise TestListenerError("Exception occurred while processing custom event listener for function: {}. "
-                                    "For help on defining custom event listeners, see documentation: {}"
-                                    .format(custom_function, DocumentationLinks.LISTENERS))
+        except Exception as listener_error:
+            # recorded instead of raised: raising ended the suite and its remaining tests went unreported.
+            # run() raises TestListenerError once every suite is done
+            LogJunkie.error("Listener {} raised: {!r}".format(custom_function, listener_error))
+            suite.metrics.record_listener_error(name, test, param, class_param, listener_error,
+                                                traceback.format_exc())
 
     @staticmethod
     def __runnable_tags(test, tag_config):

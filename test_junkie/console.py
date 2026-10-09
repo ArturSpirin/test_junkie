@@ -221,6 +221,25 @@ class _Stream(object):
         return getattr(self.__original, name)
 
 
+def _capture_record(router, stack, record):
+    """
+    Adds a log record to the running test's captured log, once per run - the same record can pass through several
+    handlers. Per run, not once overall: a run inside a test of another run captures it too
+    """
+    seen = record.__dict__.setdefault("_tj_captured_by", set())
+    if id(router) in seen:
+        return
+    seen.add(id(router))
+    try:
+        message = record.getMessage()
+    except Exception:
+        message = str(record.msg)
+    stack[-1].log.append((record.levelname, record.name, message))
+
+
+_CAPTURING_ROUTERS = []  # routers with capture installed, outermost first
+
+
 class _LogCapture(logging.Handler):
 
     def __init__(self, router):
@@ -232,16 +251,13 @@ class _LogCapture(logging.Handler):
             return
         stack = _stack(self.__router)
         if stack:
-            try:
-                message = record.getMessage()
-            except Exception:
-                message = str(record.msg)
-            stack[-1].log.append((record.levelname, record.name, message))
+            _capture_record(self.__router, stack, record)
 
 
 class _SkipCaptured(logging.Filter):
     """
-    Keeps console log handlers quiet for records a test logged while captured - they're in its captured log instead
+    Keeps console log handlers quiet for records a test logged while captured - they're in its captured log instead.
+    Captures the record itself: a logger with propagate = False never reaches the root logger's _LogCapture
     """
 
     def __init__(self, router):
@@ -249,7 +265,17 @@ class _SkipCaptured(logging.Filter):
         self.__router = router
 
     def filter(self, record):
-        return record.name == "TestJunkieLogger" or not _stack(self.__router)
+        if record.name == "TestJunkieLogger":
+            return True
+        # every run capturing on this thread gets it: once this filter says no, the handler skips its other filters,
+        # and with them the filter of a run started inside this one
+        captured = False
+        for router in list(_CAPTURING_ROUTERS):
+            stack = _stack(router)
+            if stack:
+                _capture_record(router, stack, record)
+                captured = True
+        return not captured
 
 
 class Router(object):
@@ -273,6 +299,7 @@ class Router(object):
         sys.stdout, sys.stderr = self.__stdout, self.__stderr
         self.active = True
         if self.capture_enabled:
+            _CAPTURING_ROUTERS.append(self)
             self.__log_handler = _LogCapture(self)
             logging.getLogger().addHandler(self.__log_handler)
             skip = _SkipCaptured(self)
@@ -299,6 +326,8 @@ class Router(object):
         for handler, skip in self.__filtered:
             handler.removeFilter(skip)
         self.__filtered = []
+        if self in _CAPTURING_ROUTERS:
+            _CAPTURING_ROUTERS.remove(self)
 
 
 # ── tracebacks ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -417,6 +446,17 @@ def expected_units(suite, rerun=None):
                 units = sum(len(params) for params in chosen)
         total += units
     return total
+
+
+def units_estimated(suite, rerun=None):
+    """
+    :return: BOOLEAN, True if expected_units() counted parameters given as functions as 1 - they aren't known until the
+             runner calls them, so the suite may produce more results than that
+    """
+    if not isinstance(suite.get_parameters(), list):
+        return True
+    return any(not isinstance(test.get_parameters(), list) for test in suite.get_test_objects()
+               if rerun is None or rerun.includes_test(suite.get_class_name(), test.get_function_name()))
 
 
 def unit_key(test, param, class_param):
@@ -696,13 +736,16 @@ class Console(object):
         lines.append("")
         return lines
 
-    def found(self, sources, suites, tests, seconds=None):
+    def found(self, sources, suites, tests, seconds=None, estimate=False):
         """
+        :param estimate: BOOLEAN, some parameters are functions that haven't run yet - the count is at least this many
         :return: STRING, the header's "tests" value: where, how many suites and tests, how long the scan took
         """
         dot = self.style(" · ", "dim")
+        count = "{}+".format(tests) if estimate else tests
         value = ("{}{}".format(", ".join(sources), dot) if sources else "") + "{} suite{}, {} test{}".format(
-            self.style(suites, "bold"), "" if suites == 1 else "s", self.style(tests, "bold"), "" if tests == 1 else "s")
+            self.style(suites, "bold"), "" if suites == 1 else "s", self.style(count, "bold"),
+            "" if tests == 1 and not estimate else "s")
         if seconds is not None:
             value += dot + self.style("found in {:0.2f}s".format(seconds), "dim")
         return value
@@ -715,8 +758,10 @@ class Console(object):
         def row(label, value):
             rows.append((label, value))
 
+        rerun = self.__rerun()
         row("tests", self.found(self.__cli.get("sources"), len(self.__all), sum(p.expected for p in self.__all),
-                                self.__cli.get("scan_seconds")))
+                                self.__cli.get("scan_seconds"),
+                                estimate=any(units_estimated(p.suite, rerun) for p in self.__all)))
         suite_threads, test_threads = settings.suite_thread_limit or 1, settings.test_thread_limit or 1
         if suite_threads > 1 or test_threads > 1:
             mode = "parallel{}{} suite thread{}{}{} test thread{}".format(
@@ -1081,7 +1126,28 @@ class Console(object):
                 for output, log in suite.metrics.get_outputs()[-1:]:
                     entry.extend(self.__captured(output, log, "@beforeClass"))
                 entries.append(entry)
+        for suite in aggregator.executed_suites:  # every suite, including ones ignored as a whole
+            for failure in suite.metrics.get_listener_errors():
+                entries.append(self.__listener_entry(suite, failure))
         return entries
+
+    def __listener_entry(self, suite, failure):
+        """
+        A listener call that raised - the test's own result stands, the run fails once it's over
+        """
+        dot = self.style(" · ", "dim")
+        test = failure["test"]
+        name = "{}.{}".format(suite.get_class_name(), test.get_function_name()) if test else suite.get_class_name()
+        head = "{} {}  {}".format(self.badge("LISTENER", "err"), self.style(name, "bold"),
+                                  self.style(failure["event"], "dim"))
+        params = self.__params(test, failure["param"], failure["class_param"]) if test else ""
+        if params:
+            head += "  " + params
+        detail = "{}{}listener raised{}{}".format(self.__location(failure["trace"]) or self.__path(suite), dot, dot,
+                                                 "result unchanged" if test else "suite carried on")
+        entry = [head, "           " + self.style(detail, "dim"), "", "  " + self.style("Traceback", "bold")]
+        entry.extend(self.__trace_lines(failure["trace"], TestCategory.ERROR))
+        return entry
 
     def __unit_entry(self, suite, test, data):
         dot = self.style(" · ", "dim")
@@ -1223,7 +1289,10 @@ class Console(object):
     def __verdict(self, code, counts, runtime, errors):
         cli = bool(self.__cli)
         dot = self.style(" · ", "dim")
-        if errors:
+        if errors and getattr(errors[0], "listener_calls", None):
+            calls = errors[0].listener_calls
+            text = "{}  {} listener call{} failed".format(self.badge("FAILED", "err"), calls, "" if calls == 1 else "s")
+        elif errors:
             text = "{}  {}".format(self.badge("FAILED", "err"), "run stopped by {}".format(type(errors[0]).__name__))
         elif self.__state.cancelled and self.__state.by_user:
             text = "{}  {}".format(self.badge("CANCELLED", "canc"), self.style("by Ctrl+C", "dim"))

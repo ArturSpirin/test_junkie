@@ -1,7 +1,8 @@
 """
 When a run fails (here: a broken listener), run() still raises - but only after the console summary and the HTML/XML
 reports are written. Before 0.9a5 it raised first, so a threaded run with a failing listener ran every test and then
-produced no summary and no reports. Shared by the pytest and TJ test paths.
+produced no summary and no reports. Since 0.9a8 a listener error no longer stops the run, see listener_error_checks.py.
+Shared by the pytest and TJ test paths.
 """
 import contextlib
 import io
@@ -25,7 +26,7 @@ def _run_and_expect_reports(**run_kwargs):
                 raise AssertionError("expected TestListenerError ({})".format(run_kwargs))
             except TestListenerError:
                 pass
-        assert "Summary" in out.getvalue() and "run stopped by TestListenerError" in out.getvalue(),             out.getvalue()[-500:]
+        assert "Summary" in out.getvalue() and "1 listener call failed" in out.getvalue(),             out.getvalue()[-500:]
         assert os.path.isfile(xml) and "BrokenListenerSuite" in open(xml).read()
         with io.open(html, encoding="utf-8") as report:
             assert "BrokenListenerSuite" in report.read()

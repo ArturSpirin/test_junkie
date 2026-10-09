@@ -22,6 +22,7 @@ class ClassMetrics(object):
                         DecoratorType.AFTER_TEST: {"performance": [], "exceptions": [], "tracebacks": []},
                         DecoratorType.AFTER_CLASS: {"performance": [], "exceptions": [], "tracebacks": []}}
         self.__outputs = []  # (output, log lines) printed outside of tests: @beforeClass, @afterClass, rules
+        self.__listener_errors = []  # one dict per listener call that raised, see record_listener_error()
 
     def __copy__(self):
         return self
@@ -59,6 +60,18 @@ class ClassMetrics(object):
 
     def get_outputs(self):
         return self.__outputs
+
+    def record_listener_error(self, event, test, param, class_param, exception, trace):
+        """
+        A listener call that raised. The run carries on and run() raises TestListenerError once it's over
+        :param event: STRING, the listener function, e.g. "on_success"
+        :param test: TestObject or None for suite events
+        """
+        self.__listener_errors.append({"event": event, "test": test, "param": param, "class_param": class_param,
+                                       "exception": exception, "trace": trace})
+
+    def get_listener_errors(self):
+        return self.__listener_errors
 
     def __get_average_metric(self, decorator, metric):
 

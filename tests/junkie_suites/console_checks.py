@@ -395,7 +395,63 @@ def github_annotations_point_at_the_failing_line():
     assert "title=ConsoleMixedSuite.fails_differently_first::FAIL: AssertionError" in lines[0], lines
 
 
-CHECKS = [tracebacks_print_as_lines, retried_test_lists_every_run_and_groups_tracebacks,
+def _three_params():
+    return [1, 2, 3]
+
+
+@Suite()
+class ConsoleParameterFunctionSuite:
+
+    @test(parameters=_three_params)
+    def takes_a_function(self, parameter):
+        pass
+
+
+def header_marks_a_count_that_is_an_estimate():
+    # parameters given as a function count as 1 until the runner calls it, so the header said "1 test" for 3
+    _, out = _run([ConsoleParameterFunctionSuite])
+    assert "1 suite, 1+ tests" in out, out
+    _, out = _run([ConsoleMixedSuite])
+    assert "1 suite, 2 tests" in out and "2+" not in out, out
+
+
+NO_PROPAGATE = logging.getLogger("console.checks.no_propagate")
+NO_PROPAGATE_STREAM = io.StringIO()
+_handler = logging.StreamHandler(NO_PROPAGATE_STREAM)
+_handler.setFormatter(logging.Formatter("%(message)s"))
+NO_PROPAGATE.addHandler(_handler)
+NO_PROPAGATE.setLevel(logging.INFO)
+NO_PROPAGATE.propagate = False
+
+
+@Suite()
+class ConsoleNoPropagateSuite:
+
+    @test()
+    def logs_and_passes(self):
+        NO_PROPAGATE.info("NOPROP-PASS-MARK")
+
+    @test()
+    def logs_and_fails(self):
+        NO_PROPAGATE.info("NOPROP-FAIL-MARK")
+        assert False, "fails on purpose"
+
+
+def logger_that_does_not_propagate_is_captured():
+    # its handler was silenced while a test ran, but only the root logger collected captured records - a logger
+    # with propagate = False never reaches it, so its lines were dropped instead of captured
+    NO_PROPAGATE_STREAM.seek(0)
+    NO_PROPAGATE_STREAM.truncate()
+    _, out = _run([ConsoleNoPropagateSuite])
+    assert "NOPROP-FAIL-MARK" in out, out
+    assert "NOPROP-PASS-MARK" not in out, out
+    assert "NOPROP" not in NO_PROPAGATE_STREAM.getvalue(), NO_PROPAGATE_STREAM.getvalue()  # captured, not live
+    _, out = _run([ConsoleNoPropagateSuite], capture=False)
+    assert "NOPROP-FAIL-MARK" not in out, out  # not captured - live (or captured by an outer run, in the TJ path)
+
+
+CHECKS = [header_marks_a_count_that_is_an_estimate, logger_that_does_not_propagate_is_captured,
+          tracebacks_print_as_lines, retried_test_lists_every_run_and_groups_tracebacks,
           output_is_shown_only_for_tests_that_did_not_pass, no_capture_prints_output_live, quiet_run_prints_nothing,
           summary_table_and_verdict, failed_before_class_is_one_entry, per_test_prints_a_line_per_test,
           keyboard_interrupt_in_a_test_cancels_the_run, cancel_stops_retries, parse_traceback_keeps_the_users_frames,

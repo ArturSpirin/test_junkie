@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9a8
+- A listener that raises no longer ends its suite: the rest of the suite runs, each listener error is listed under Problems and the run still fails at the end with `TestListenerError`
+- Tests a suite never got to, because it ended early (a test calling `sys.exit()`, say), are reported as ignored instead of being left out of the summary and reports
+- Logs from a logger with `propagate = False` are captured again; they were dropped instead of being shown for tests that didn't pass
+- The header shows a test count that includes parameter functions as an estimate, e.g. `16+ tests`
+
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way
 
