@@ -11,7 +11,7 @@ import time
 
 from test_junkie.builder import Builder
 from test_junkie.constants import TestCategory
-from test_junkie.decorators import Suite, test
+from test_junkie.decorators import Suite, test, beforeClass, afterClass
 from test_junkie.errors import BadParameters
 from test_junkie.listener import Listener
 from test_junkie.objects import Limiter
@@ -341,10 +341,234 @@ def mixing_a_policy_with_retry_on_is_rejected():
         raise AssertionError("policy + retry_on accepted")
 
 
+# -- phase 2: should_retry / before_retry, max_time, reset="class" ---------------------------------------------------
+
+PHASE2 = []
+
+
+class Vetoes(RetryPolicy):
+    attempts = 3
+
+    def should_retry(self, error, decision, test):
+        PHASE2.append(("should_retry", type(error).__name__, decision.retry, test.get_function_name()))
+        return decision.retry and "stop" not in str(error)
+
+
+class Forces(RetryPolicy):
+    attempts = 2
+    retry_on = [TimeoutError]
+
+    def should_retry(self, error, decision, test):
+        return True  # even for errors retry_on doesn't list
+
+
+class Prepares(RetryPolicy):
+    attempts = 3
+
+    def before_retry(self, error, decision, test):
+        PHASE2.append(("before_retry", str(error), decision.run, test.get_function_name()))
+
+
+class BrokenPrepare(RetryPolicy):
+    attempts = 3
+
+    def before_retry(self, error, decision, test):
+        raise RuntimeError("token service down")
+
+
+class OutOfTime(RetryPolicy):
+    attempts = 10
+    delay = 0.2
+    max_time = 0.5
+
+
+class Resets(RetryPolicy):
+    attempts = 3
+    reset = "class"
+
+
+class ResetsOn503(RetryPolicy):
+    when = [When(message="503", attempts=2, reset="class"), When(TimeoutError, attempts=2)]
+
+
+@Suite()
+class HookSuite:
+
+    @test(retry=Vetoes)
+    def vetoed(self):
+        _mark("vetoed")
+        raise RuntimeError("stop now")
+
+    @test(retry=Forces)
+    def forced(self):
+        _mark("forced")
+        raise ValueError("not in retry_on")
+
+    @test(retry=Prepares)
+    def prepared(self):
+        if _mark("prepared") < 3:
+            raise RuntimeError("expired")
+
+    @test(retry=BrokenPrepare)
+    def broken_prepare(self):
+        _mark("broken_prepare")
+        assert False
+
+    @test(retry=OutOfTime)
+    def out_of_time(self):
+        _mark("out_of_time")
+        assert False
+
+
+@Suite(parameters=["admin"])
+class ResetSuite:
+
+    @beforeClass()
+    def set_up(self, suite_parameter):
+        PHASE2.append("before_class")
+
+    @afterClass()
+    def tear_down(self):
+        PHASE2.append("after_class")
+
+    @test(retry=Resets)
+    def first(self, suite_parameter):
+        PHASE2.append("first")
+        if _mark("first") < 2:
+            assert False
+
+    @test(retry=Resets)
+    def second(self, suite_parameter):
+        PHASE2.append("second")
+        if _mark("second") < 2:
+            assert False
+
+    @test()
+    def steady(self, suite_parameter):
+        PHASE2.append("steady")
+
+
+SETUPS = []
+
+
+@Suite()
+class ResetSetupFailsSuite:
+
+    @beforeClass()
+    def set_up(self):
+        SETUPS.append("before_class")
+        if len(SETUPS) > 1:
+            raise RuntimeError("environment gone")
+
+    @test(retry=Resets)
+    def needs_setup(self):
+        _mark("needs_setup")
+        assert False
+
+
+@Suite()
+class ResetOnOneConditionSuite:
+
+    @beforeClass()
+    def set_up(self):
+        PHASE2.append("before_class")
+
+    @test(retry=ResetsOn503)
+    def gets_503(self):
+        if _mark("gets_503") < 2:
+            raise RuntimeError("HTTP 503")
+
+    @test(retry=ResetsOn503)
+    def times_out(self):
+        if _mark("times_out") < 2:
+            raise TimeoutError("slow")
+
+
+def _phase2(suites, **kwargs):
+    _reset()
+    del PHASE2[:]
+    del SETUPS[:]
+    Runner(suites).run(quiet=True, **kwargs)
+
+
+def should_retry_has_the_last_word():
+    _phase2([HookSuite])
+    assert COUNTS["vetoed"] == 1, COUNTS
+    assert ("should_retry", "RuntimeError", True, "vetoed") in PHASE2, PHASE2
+    assert COUNTS["forced"] == 2, COUNTS  # ValueError isn't in retry_on, should_retry forced it
+
+
+def before_retry_runs_before_each_retry():
+    _phase2([HookSuite])
+    assert [e for e in PHASE2 if e[0] == "before_retry"] == [("before_retry", "expired", 1, "prepared"),
+                                                               ("before_retry", "expired", 2, "prepared")], PHASE2
+    assert COUNTS["prepared"] == 3
+
+
+def a_raising_before_retry_stops_retrying():
+    _phase2([HookSuite])
+    assert COUNTS["broken_prepare"] == 1, COUNTS
+    test_object, _ = _variant(HookSuite, "broken_prepare")
+    assert any("token service down" in str(r["when"]) for r in test_object.metrics.get_retries(None, None))
+
+
+def max_time_stops_retrying():
+    _phase2([HookSuite])
+    assert 2 <= COUNTS["out_of_time"] <= 3, COUNTS  # 0.2s waits, 0.5s budget
+
+
+def reset_class_sets_up_again_once_for_all_held_retries():
+    _phase2([ResetSuite], test_multithreading_limit=3)
+    first_pass = PHASE2[:PHASE2.index("after_class") + 1]
+    assert sorted(first_pass[1:-1]) == ["first", "second", "steady"], PHASE2
+    rest = PHASE2[len(first_pass):]
+    assert rest[0] == "before_class" and rest[-1] == "after_class", PHASE2
+    assert sorted(rest[1:-1]) == ["first", "second"] and rest.count("before_class") == 1, PHASE2  # one setup, both
+    for name in ("first", "second"):
+        test_object = _variant_param(ResetSuite, name, "admin")
+        assert test_object["status"] == TestCategory.SUCCESS, (name, test_object["status"])
+
+
+def reset_class_setup_failure_ignores_the_held_retry():
+    _phase2([ResetSetupFailsSuite])
+    assert SETUPS == ["before_class", "before_class"], SETUPS
+    _, data = _variant(ResetSetupFailsSuite, "needs_setup")
+    assert data["status"] == TestCategory.IGNORE, data["status"]
+    assert "environment gone" in str(data["exceptions"][-1])
+
+
+def reset_can_be_set_on_one_condition():
+    _phase2([ResetOnOneConditionSuite])
+    assert PHASE2.count("before_class") == 2, PHASE2  # the 503 reset the class, the timeout didn't
+    assert COUNTS == {"gets_503": 2, "times_out": 2}, COUNTS
+
+
+def bad_reset_and_max_time_are_rejected():
+    for body, field in (("reset = 'suite'", "reset"), ("max_time = -1", "max_time")):
+        try:
+            exec("class Bad(RetryPolicy):\n    " + body, {"RetryPolicy": RetryPolicy})
+        except BadParameters as error:
+            assert field in str(error), str(error)
+        else:
+            raise AssertionError("accepted: " + body)
+
+
+def _variant_param(suite_class, name, class_param):
+    suite = Builder.get_execution_roster().get(suite_class)
+    for test_object in suite.get_test_objects():
+        if test_object.get_function_name() == name:
+            return test_object.metrics.get_metrics()[class_param]["None"]
+    raise AssertionError(name)
+
+
 CHECKS = [each_condition_has_its_own_budget, no_retry_on_and_unmatched_failures_run_once,
           delays_are_waited_between_runs, backoff_doubles_up_to_max_delay,
           message_matches_the_raised_error_not_the_truncated_copy, instance_overrides_class_fields,
           chain_and_regex_match, on_retry_and_metrics_record_each_retry,
           suite_policy_applies_unless_the_test_sets_retry, plain_retry_fires_on_retry_without_a_policy,
           cancel_ends_the_wait_and_pool_slots_are_free_meanwhile, no_retry_flag_turns_a_policy_off,
-          reports_show_the_retry, bad_policies_are_rejected_when_defined, mixing_a_policy_with_retry_on_is_rejected]
+          reports_show_the_retry, bad_policies_are_rejected_when_defined, mixing_a_policy_with_retry_on_is_rejected,
+          should_retry_has_the_last_word, before_retry_runs_before_each_retry,
+          a_raising_before_retry_stops_retrying, max_time_stops_retrying,
+          reset_class_sets_up_again_once_for_all_held_retries, reset_class_setup_failure_ignores_the_held_retry,
+          reset_can_be_set_on_one_condition, bad_reset_and_max_time_are_rejected]

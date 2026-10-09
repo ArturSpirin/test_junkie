@@ -46,6 +46,9 @@ _EVENT_HANDLERS = {Event.ON_SUCCESS: "on_success", Event.ON_FAILURE: "on_failure
                    Event.ON_AFTER_GROUP_ERROR: "on_after_group_error",
                    Event.ON_CLASS_COMPLETE: "on_class_complete"}
 _NATIVE_LISTENER = Listener()
+# RetryPolicy reset="class": suite class -> retries held until the suite parameter's other tests are done
+_HELD_RESETS = {}
+_RESET_LOCK = threading.Lock()
 
 
 class _RunContext(object):
@@ -753,6 +756,7 @@ class Runner:
                                                               Runner.__label(suite, test))
                         # only this suite's tests - waiting on every suite's tests here held parallel suites back
                         ParallelProcessor.wait_currently_active_tests_to_finish(suite)
+                        self.__run_class_resets(suite, class_param, context)
                         if state.cancelled:
                             context.console.suite_cleanup(suite, True)
                         with ParallelProcessor.activity(state):
@@ -794,15 +798,18 @@ class Runner:
         return label
 
     @staticmethod
-    def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
+    def __run_test(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False,
+                   resume=None):
         """
         :param cancel: the run's _RunContext, or a BOOLEAN when called outside of run()
+        :param resume: a retry held back by a RetryPolicy with reset="class", now being run (see __run_class_resets)
         """
         context = cancel if isinstance(cancel, _RunContext) else None
         if context is None:
-            return Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error, bool(cancel))
+            return Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error, bool(cancel),
+                                          resume=resume)
         with ParallelProcessor.activity(context.state):  # waits while a parallelized=False test runs alone
-            Runner.__run_test_counted(suite, test, parameter, class_parameter, before_class_error, context)
+            Runner.__run_test_counted(suite, test, parameter, class_parameter, before_class_error, context, resume)
 
     @staticmethod
     def __run_test_holding(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False):
@@ -813,18 +820,22 @@ class Runner:
             ParallelProcessor.release(test)
 
     @staticmethod
-    def __run_test_counted(suite, test, parameter, class_parameter, before_class_error, context):
+    def __run_test_counted(suite, test, parameter, class_parameter, before_class_error, context, resume=None):
         key = unit_key(test, parameter, class_parameter)
         label = Runner.__label(suite, test, parameter, class_parameter)
         context.console.unit_started(key, label)
+        deferred = False
         try:
-            Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error, context.state, context)
+            deferred = Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error,
+                                              context.state, context, resume) == "deferred"
         except (TestInterrupted, KeyboardInterrupt):
             raise
         except BaseException as error:  # e.g. the test called sys.exit()
             Runner.__ignore_unit(None, suite, test, parameter, class_parameter, error, traceback.format_exc())
             raise
         finally:
+            if deferred:  # retried after the class is set up again - its line is printed then
+                return
             recorded = class_parameter if test.accepts_suite_parameters() else None
             data = test.metrics.get_metrics().get(param_key(recorded), {}).get(param_key(parameter), {})
             context.console.unit_done(suite, key, data.get("status"), label,
@@ -835,7 +846,7 @@ class Runner:
 
     @staticmethod
     def __run_test_body(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False,
-                        context=None):
+                        context=None, resume=None):
 
         def run_before_test():
             try:
@@ -906,7 +917,9 @@ class Runner:
 
         cancelled = cancel() if callable(cancel) else cancel
         test_start_time = time.time()
-        if before_class_error is not None or cancelled:
+        if resume is not None:
+            pass  # a held retry: decided already, runs straight away (a failed setup is handled by the caller)
+        elif before_class_error is not None or cancelled:
             if not test.accepts_suite_parameters():
                 if None in test.suite.metrics.get_metrics()[DecoratorType.BEFORE_CLASS]["exceptions"] \
                         and test.get_status(parameter, class_parameter) is not None:
@@ -930,7 +943,7 @@ class Runner:
             return
 
         status = test.get_status(parameter, class_parameter)
-        if not test.accepts_suite_parameters() and status is not None:
+        if resume is None and not test.accepts_suite_parameters() and status is not None:
             """
             making sure that we do not run tests with suite parameters if suite parameters are not accepted in the
             test signature. But we still want to run all other parameters and tests without any params.
@@ -947,22 +960,49 @@ class Runner:
 
         Runner.__process_event(event=Event.ON_IN_PROGRESS, suite=suite, test=test,
                                class_param=class_parameter, param=parameter)
-        run_errors = []  # the error of each failed run in this loop, as raised
+        # the error of each failed run in this loop, as raised (a held retry carries on with its earlier ones)
+        run_errors = list(resume["errors"]) if resume else []
+        first_started = resume["started"] if resume else time.monotonic()  # for max_time
         policy = test.get_retry_policy() if test.retry_override != 1 else None
+        first_attempt = len(run_errors) + 1 if resume else 1
+        deferred = False
         try:
-            for retry_attempt in range(1, test.get_retry_limit() + 1):
+            for retry_attempt in range(first_attempt, test.get_retry_limit() + 1):
                 if retry_attempt > 1 and callable(cancel) and cancel():
                     break  # cancelled: keep the result it has, no more retries
                 if retry_attempt > 1 and policy is not None:
-                    decision = policy.decide(run_errors)
-                    if not decision:
-                        break
+                    if resume is not None and retry_attempt == first_attempt:
+                        decision = resume["decision"]  # decided before the class was set up again
+                    else:
+                        decision = policy.decide(run_errors, time.monotonic() - first_started)
+                        decision.retry = bool(policy.should_retry(run_errors[-1] if run_errors else None, decision,
+                                                                  TestView(test)))
+                        if decision.retry and decision.when is None:  # should_retry forced a retry nothing matched
+                            decision.delay = 0.0
+                        if not decision:
+                            break
+                        if context is not None and policy.resets(decision):
+                            Runner.__hold_for_reset(suite, test, parameter, class_parameter,
+                                                    {"errors": list(run_errors), "decision": decision,
+                                                     "started": first_started})
+                            deferred = True
+                            return "deferred"
+                    label = decision.when.label() if decision.when is not None else "should_retry"
                     if not Runner.__before_retry(suite, test, parameter, class_parameter, cancel,
-                                                 policy.name(), decision.when.label(), decision.delay):
+                                                 policy.name(), label, decision.delay):
                         break  # cancelled while waiting
+                    try:
+                        policy.before_retry(run_errors[-1] if run_errors else None, decision, TestView(test))
+                    except Exception as hook_error:  # the failure stands; noted where reports show retries
+                        LogJunkie.error("{}.before_retry raised: {!r}".format(policy.name(), hook_error))
+                        test.metrics.record_retry(parameter, class_parameter, retry_attempt - 1, policy.name(),
+                                                  "before_retry raised {!r}".format(hook_error), 0)
+                        break
                 elif retry_attempt > 1 and test.is_qualified_for_retry(parameter, class_param=class_parameter):
                     Runner.__before_retry(suite, test, parameter, class_parameter, cancel, None, None, 0)
-                if test.is_qualified_for_retry(parameter, class_param=class_parameter):
+                # a policy already decided to run again (should_retry may retry what its conditions don't match)
+                decided = retry_attempt > 1 and policy is not None
+                if decided or test.is_qualified_for_retry(parameter, class_param=class_parameter):
                     LogJunkie.debug("\n===============Running test==================\n"
                                     "Test Case: {}\n"
                                     "Test Suite: {}\n"
@@ -1042,8 +1082,68 @@ class Runner:
                             test.metrics.record_output(parameter, class_parameter, retry_attempt,
                                                        capture.output(), capture.log)
         finally:
-            Runner.__process_event(event=Event.ON_COMPLETE, suite=suite, test=test,
-                                   class_param=class_parameter, param=parameter)
+            if not deferred:  # a held retry completes when it's finally run
+                Runner.__process_event(event=Event.ON_COMPLETE, suite=suite, test=test,
+                                       class_param=class_parameter, param=parameter)
+
+    @staticmethod
+    def __hold_for_reset(suite, test, parameter, class_parameter, resume):
+        """A RetryPolicy with reset="class" wants this retry after @afterClass + @beforeClass: keep it until then"""
+        with _RESET_LOCK:
+            _HELD_RESETS.setdefault(suite.get_class_object(), []).append(
+                {"test": test, "parameter": parameter, "class_parameter": class_parameter, "resume": resume})
+
+    def __run_class_resets(self, suite, class_param, context):
+        """
+        Runs the retries held by reset="class" policies once the suite parameter's other tests are done: @afterClass
+        and @beforeClass once for all of them, then each retry. A retry that fails again and wants another reset is
+        held for the next round. If @beforeClass fails, the held tests are ignored with its error.
+        """
+        state = context.state
+        while not state.cancelled:
+            with _RESET_LOCK:
+                held = _HELD_RESETS.pop(suite.get_class_object(), [])
+            if not held:
+                return
+            context.console.note("{}: setting up again for {} retr{} (reset=\"class\")".format(
+                suite.get_class_name(), len(held), "y" if len(held) == 1 else "ies"))
+            with ParallelProcessor.activity(state):
+                Runner.__run_after_class(suite, class_param)
+            with ParallelProcessor.activity(state):
+                before_class_error = Runner.__run_before_class(suite, class_param)
+            for item in held:
+                test, parameter, class_parameter = item["test"], item["parameter"], item["class_parameter"]
+                if before_class_error is not None:  # set up again and failed: the held retry is ignored
+                    recorded = class_parameter if test.accepts_suite_parameters() else None
+                    test.metrics.update_metrics(status=TestCategory.IGNORE, start_time=time.time(), param=parameter,
+                                                class_param=recorded, exception=before_class_error["exception"],
+                                                formatted_traceback=before_class_error["traceback"])
+                    Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test, class_param=recorded,
+                                           param=parameter, error=before_class_error["exception"],
+                                           formatted_traceback=before_class_error["traceback"])
+                    Runner.__process_event(event=Event.ON_COMPLETE, suite=suite, test=test, class_param=recorded,
+                                           param=parameter)
+                    context.console.unit_done(suite, unit_key(test, parameter, class_parameter), TestCategory.IGNORE,
+                                              Runner.__label(suite, test, parameter, class_parameter))
+                    continue
+                waited, blockers = ParallelProcessor.reserve(test, state)
+                try:
+                    Runner.__run_test(suite=suite, test=test, parameter=parameter, class_parameter=class_parameter,
+                                      before_class_error=None, cancel=context, resume=item["resume"])
+                finally:
+                    ParallelProcessor.release(test)
+            ParallelProcessor.wait_currently_active_tests_to_finish(suite)
+            if before_class_error is not None:
+                return
+        with _RESET_LOCK:  # cancelled: what's still held keeps the failure it has
+            for item in _HELD_RESETS.pop(suite.get_class_object(), []):
+                recorded = item["class_parameter"] if item["test"].accepts_suite_parameters() else None
+                data = item["test"].metrics.get_metrics().get(param_key(recorded), {}).get(
+                    param_key(item["parameter"]), {})
+                context.console.unit_done(suite, unit_key(item["test"], item["parameter"], item["class_parameter"]),
+                                          data.get("status"), Runner.__label(suite, item["test"], item["parameter"],
+                                                                             item["class_parameter"]),
+                                          runs=len(data.get("statuses", [])))
 
     @staticmethod
     def __before_retry(suite, test, parameter, class_parameter, cancel, policy, when, delay):

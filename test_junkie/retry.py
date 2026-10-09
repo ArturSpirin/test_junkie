@@ -60,6 +60,12 @@ def _check_number(owner, field, value, minimum, allow_none=True, integer=False):
     return value
 
 
+def _check_reset(owner, value):
+    if value not in (None, "class"):
+        raise BadParameters('{}.reset must be None or "class", got {!r}'.format(owner, value))
+    return value
+
+
 def _chain(error):
     """The error, then whatever caused it (__cause__, then __context__), without looping."""
     seen = set()
@@ -76,7 +82,7 @@ class When(object):
     """
 
     def __init__(self, *exceptions, message=None, attempts=None, delay=None, backoff=None, max_delay=None,
-                 jitter=None, name=None):
+                 jitter=None, name=None, reset=None):
         owner = "When"
         self.exceptions = _check_exceptions(owner, "exceptions", list(exceptions))
         self.messages = _check_messages(owner, "message", message)
@@ -88,6 +94,7 @@ class When(object):
         if name is not None and not isinstance(name, str):
             raise BadParameters("When.name must be text, got {!r}".format(name))
         self.name = name
+        self.reset = _check_reset(owner, reset)
 
     def matches(self, error, chain=False):
         candidates = list(_chain(error)) if chain else [error]
@@ -141,7 +148,7 @@ class Decision(object):
 
 
 _FIELDS = ("attempts", "retry_on", "no_retry_on", "message", "delay", "backoff", "max_delay", "jitter", "chain",
-           "when")
+           "when", "max_time", "reset")
 
 
 class RetryPolicy(object):
@@ -159,6 +166,13 @@ class RetryPolicy(object):
     chain:       also look at what caused the error (`raise ... from ...` and errors raised while handling another).
     when:        a list of When(...) for different kinds of failure. The first one that matches decides, and each
                  has its own budget of attempts.
+    max_time:    seconds from the start of the first run after which nothing is retried (a wait that would end past
+                 it isn't started).
+    reset:       "class" runs @afterClass and @beforeClass before retrying: retries are held until that suite
+                 parameter's other tests are done, then run together after one fresh setup.
+
+    Override should_retry(error, decision, test) to have the last word, and before_retry(error, decision, test) to
+    do something right before a retry (refresh a token, clear a cache). `test` is a read-only view of the test.
     """
 
     attempts = None
@@ -171,6 +185,8 @@ class RetryPolicy(object):
     jitter = 0
     chain = False
     when = ()
+    max_time = None
+    reset = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -195,6 +211,8 @@ class RetryPolicy(object):
         backoff = _check_number(owner, "backoff", target.backoff, 1, allow_none=False)
         max_delay = _check_number(owner, "max_delay", target.max_delay, 0)
         jitter = _check_number(owner, "jitter", target.jitter, 0, allow_none=False)
+        max_time = _check_number(owner, "max_time", target.max_time, 0)
+        reset = _check_reset(owner, target.reset)
         if not isinstance(target.chain, bool):
             raise BadParameters("{}.chain must be True or False, got {!r}".format(owner, target.chain))
         whens = _as_list(target.when)
@@ -213,6 +231,7 @@ class RetryPolicy(object):
         target._attempts = attempts
         target._no_retry_on = no_retry_on
         target._delay, target._backoff, target._max_delay, target._jitter = delay, backoff, max_delay, jitter
+        target._max_time, target._reset = max_time, reset
 
     # -- the decision -------------------------------------------------------------------------------------------
 
@@ -239,9 +258,21 @@ class RetryPolicy(object):
         """Whether this error is worth retrying at all (used to pick tests for a suite's retry pass)."""
         return error is not None and not self._excluded(error) and self._match(error) is not None
 
-    def decide(self, errors):
+    def should_retry(self, error, decision, test):
+        """Override to have the last word: return True to retry, False not to. `decision` is what the policy decided."""
+        return decision.retry
+
+    def before_retry(self, error, decision, test):
+        """Override to act right before a retry runs, after the wait. If it raises, the test isn't retried."""
+
+    def resets(self, decision):
+        """Whether this retry first runs @afterClass and @beforeClass again"""
+        return (decision.when.reset if decision.when is not None and decision.when.reset else self._reset) == "class"
+
+    def decide(self, errors, elapsed=None):
         """
         errors: the error of every run so far, oldest first; the last one just failed.
+        elapsed: seconds since the first run started, for max_time.
         Returns a Decision: whether to run again, which When matched and how long to wait first.
         """
         errors = list(errors)
@@ -261,7 +292,10 @@ class RetryPolicy(object):
         matched = sum(1 for past in errors if self._match(past) is when)
         if matched >= allowed or (self._attempts is not None and run >= self._attempts):
             return Decision(False, when=when, run=matched, of=allowed, reason="out of attempts")
-        return Decision(True, when=when, delay=self.wait(when, matched), run=matched, of=allowed)
+        delay = self.wait(when, matched)
+        if self._max_time is not None and elapsed is not None and elapsed + delay > self._max_time:
+            return Decision(False, when=when, run=matched, of=allowed, reason="out of time")
+        return Decision(True, when=when, delay=delay, run=matched, of=allowed)
 
     def wait(self, when, matched):
         """Seconds to wait after the `matched`-th failure that `when` matched."""
