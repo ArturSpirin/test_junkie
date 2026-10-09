@@ -11,14 +11,21 @@ from test_junkie.runner import Runner
 from tests.junkie_suites.ReportFailureSuite import ReportFailureSuite
 
 
+def _unwritable(name):
+    # missing folders are created now, so a bad path needs a folder that can't exist: one under a file
+    blocker = os.path.join(tempfile.mkdtemp(), "blocker")
+    with open(blocker, "w") as f:
+        f.write("not a folder")
+    return os.path.join(blocker, name)
+
+
 @Suite()
 class ReportGenerationFailureTestSuite:
 
     @test()
     def resource_monitor_temp_file_cleaned_up_even_if_html_report_fails(self):
         before = set(glob.glob(os.path.join(Config.get_root_dir(), ".resources_*")))
-        tmp_dir = tempfile.mkdtemp()
-        bad_html_path = os.path.join(tmp_dir, "does", "not", "exist", "report.html")
+        bad_html_path = _unwritable("report.html")
         raised = False
         try:
             Runner([ReportFailureSuite]).run(monitor_resources=True, html_report=bad_html_path)
@@ -31,8 +38,7 @@ class ReportGenerationFailureTestSuite:
     @test()
     def bad_xml_report_path_warns_on_stderr_by_default(self):
         LogJunkie.disable_logging()
-        tmp_dir = tempfile.mkdtemp()
-        bad_xml_path = os.path.join(tmp_dir, "does", "not", "exist", "report.xml")
+        bad_xml_path = _unwritable("report.xml")
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
         try:
