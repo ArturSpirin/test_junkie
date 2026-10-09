@@ -68,6 +68,7 @@ class Event:
     ON_AFTER_GROUP_ERROR = 19
     ON_IN_PROGRESS = 20
     ON_COMPLETE = 21
+    ON_RETRY = 22
 
 
 class DocumentationLinks:

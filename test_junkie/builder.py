@@ -4,6 +4,7 @@ import inspect
 from test_junkie.constants import DocumentationLinks
 from test_junkie.errors import BadParameters, BadSignature
 from test_junkie.listener import Listener
+from test_junkie.retry import RetryPolicy
 from test_junkie.rules import Rules
 
 
@@ -16,10 +17,11 @@ class Builder(object):
     __EXECUTION_ROSTER = {}
     __CURRENT_SUITE_OBJECT = None
     __SUITE_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int], "listener": [Listener], "rules": [Rules],
+                               "retry_policy": [RetryPolicy],
                                "parallelized": [bool], "priority": [int], "feature": [str], "pr": [list],
                                "order": [str], "uses": [str, list], "throttling": [int, float],
                                "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
-    __TEST_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int], "parallelized_parameters": [bool],
+    __TEST_VALIDATION_ARGS = {"owner": [str], "meta": [dict], "retry": [int, RetryPolicy], "parallelized_parameters": [bool],
                               "parallelized": [bool], "priority": [int], "component": [str], "tags": [list],
                               "no_retry_on": [list], "retry_on": [list], "pr": [list], "uses": [str, list],
                               "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
@@ -204,6 +206,11 @@ class Builder(object):
                                     expected=Builder.__fmt_expected_types(data["expected"]),
                                     actual=data["actual"].__name__,
                                     link=DocumentationLinks.TEST_DECORATOR))
+        retry = kwargs.get("retry")
+        is_policy = isinstance(retry, RetryPolicy) or (inspect.isclass(retry) and issubclass(retry, RetryPolicy))
+        if is_policy and ("retry_on" in kwargs or "no_retry_on" in kwargs):
+            raise BadParameters("@test() got a retry policy and retry_on/no_retry_on; set retry_on and no_retry_on "
+                                "on the policy instead. See documentation: {}".format(DocumentationLinks.TEST_DECORATOR))
         if "parameter" not in inspect.getfullargspec(decorated_function).args and kwargs.get("parameters") is not None:
             raise BadSignature("When using \"parameters\" argument for @test() decorator, "
                                "you must accept \"parameter\" in the function's signature. "

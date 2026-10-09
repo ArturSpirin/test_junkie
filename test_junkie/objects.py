@@ -406,7 +406,20 @@ class TestObject(object):
 
         if self.retry_override is not None:
             return self.retry_override
+        policy = self.get_retry_policy()
+        if policy is not None:
+            return policy.total_attempts()
         return self.get_kwargs().get("retry", 1)
+
+    def get_retry_policy(self):
+        """The RetryPolicy this test retries with: @test(retry=Policy), else @Suite(retry_policy=). None for retry=N."""
+        if "_TestObject__retry_policy" not in self.__dict__:
+            from test_junkie.retry import resolve
+            retry = self.get_kwargs().get("retry")
+            if retry is None or isinstance(retry, int):
+                retry = None if "retry" in self.get_kwargs() else self.suite.get_kwargs().get("retry_policy")
+            self.__retry_policy = resolve(retry, "@test(retry=...)")
+        return self.__retry_policy
 
     def get_function_name(self):
 
@@ -504,6 +517,9 @@ class TestObject(object):
         if test["status"] in TestCategory.ALL_UN_SUCCESSFUL:
             # subclasses count: retry_on=[requests.exceptions.Timeout] also retries ReadTimeout
             error = test["exceptions"][-1]
+            policy = self.get_retry_policy()
+            if policy is not None:
+                return policy.qualifies(error)
             if self.get_no_retry_on() and isinstance(error, tuple(self.get_no_retry_on())):
                 return False
             elif self.get_retry_on() and not isinstance(error, tuple(self.get_retry_on())):

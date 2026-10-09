@@ -583,6 +583,8 @@ class Reporter:
                         params_total_str = _fmt_dur(params_total_raw) if raw_perf else "—"
 
                         attempts = []
+                        retried = {r["run"]: r for r in test.metrics.get_retries(pd.get("param"), pd.get("class_param"))
+                                   if r.get("policy")}
                         for i in range(len(raw_perf)):
                             bt_phase = _phase_detail(pd.get(DecoratorType.BEFORE_TEST, {}), i)
                             t_phase = _test_phase_detail(pd, i)
@@ -593,6 +595,7 @@ class Reporter:
                                 "beforeTest": bt_phase,
                                 "test": t_phase,
                                 "afterTest": at_phase,
+                                "retry": retried.get(i + 1),
                             })
 
                         variants.append({

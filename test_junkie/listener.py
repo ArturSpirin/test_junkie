@@ -39,6 +39,10 @@ class Listener(object):
     def on_complete(self, **kwargs):
         Listener.__process_event(**kwargs)
 
+    def on_retry(self, **kwargs):
+        """Before a test runs again. properties["retry"] has run, policy, when and waited (seconds it will wait)."""
+        Listener.__process_event(**kwargs)
+
     def on_before_class_error(self, **kwargs):
         Listener.__process_event(**kwargs)
 

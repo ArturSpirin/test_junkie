@@ -22,6 +22,7 @@ def write_json_report(path, aggregator, runtime, seed=None):
                     if data.get("status") is None:
                         continue
                     exceptions = data.get("exceptions") or []
+                    retried = {r["run"]: r for r in test.metrics.get_retries(data.get("param"), data.get("class_param"))}
                     tests.append({
                         "name": test.get_function_name(),
                         "parameter": None if data.get("param") is None else str(data.get("param")),
@@ -29,7 +30,8 @@ def write_json_report(path, aggregator, runtime, seed=None):
                         "status": data["status"],
                         "runs": [{"status": status,
                                   "runtime": round(runtime_, 4) if runtime_ is not None else None,
-                                  "error": _error(exceptions[index] if index < len(exceptions) else None)}
+                                  "error": _error(exceptions[index] if index < len(exceptions) else None),
+                                  "retry": retried.get(index + 1)}
                                  for index, (status, runtime_) in enumerate(zip(data.get("statuses") or [],
                                                                                 data.get("performance") or []))]})
         suites.append({"name": suite.get_class_name(), "module": suite.get_class_module(),

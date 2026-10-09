@@ -326,7 +326,8 @@ function openPanel(id) {
         </div>
         <div class="variant-body">`;
       (v.attempts || []).forEach((a, ai) => {
-        const hdrExtra = `· @beforeTest <span>${a.beforeTest.status}</span> · @afterTest <span>${a.afterTest.status}</span>`;
+        const retryNote = a.retry ? ` · retried (${escHtml(a.retry.policy)}, when ${escHtml(a.retry.when)}${a.retry.waited ? ', waited ' + a.retry.waited + 's' : ''})` : '';
+        const hdrExtra = `· @beforeTest <span>${a.beforeTest.status}</span> · @afterTest <span>${a.afterTest.status}</span>${retryNote}`;
         html += `<div class="attempt" id="attempt-${id}-${vi}-${ai}">
           <div class="attempt-header" onclick="toggleAttempt('attempt-${id}-${vi}-${ai}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>

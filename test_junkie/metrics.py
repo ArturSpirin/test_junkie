@@ -100,6 +100,8 @@ class TestMetrics(object):
         # (class param, param) -> [(run number, output, log lines), ...] for runs that printed or logged something.
         # Kept out of __stats so its shape stays as is
         self.__outputs = {}
+        # (class param, param) -> [{"run", "policy", "when", "waited"}, ...]: one entry per retry, see record_retry()
+        self.__retries = {}
 
     def __copy__(self):
         return self
@@ -177,6 +179,18 @@ class TestMetrics(object):
         :return: LIST of (run number, output STRING, log lines LIST), oldest first - only runs that had any
         """
         return self.__outputs.get((str(class_param), str(param)), [])
+
+    def record_retry(self, param, class_param, run, policy, when, waited):
+        """
+        A retry of this test: `run` is the run that failed (counting from 1 across the test's runs), `policy` the
+        RetryPolicy name, `when` what matched (a When label, or None for plain retry=N), `waited` seconds slept.
+        """
+        self.__retries.setdefault((str(class_param), str(param)), []).append(
+            {"run": run, "policy": policy, "when": when, "waited": waited})
+
+    def get_retries(self, param, class_param):
+        """:return: LIST of the dicts record_retry() stored, oldest first"""
+        return self.__retries.get((str(class_param), str(param)), [])
 
 
 class Aggregator(object):

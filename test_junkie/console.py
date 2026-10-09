@@ -834,7 +834,7 @@ class Console(object):
         with self.__lock:
             self.__running[key] = (label, time.time())
 
-    def unit_done(self, suite, key, status, label=None, runtime=None, runs=None):
+    def unit_done(self, suite, key, status, label=None, runtime=None, runs=None, retries=None):
         with self.__lock:
             running = self.__running.pop(key, None)
             progress = self.__progress.get(suite)
@@ -850,7 +850,7 @@ class Console(object):
             if self.__per_test and label is not None:
                 prefix = suite.get_class_name() + "."
                 line = self.__test_line(status, label[len(prefix):] if label.startswith(prefix) else label, runtime,
-                                        runs)
+                                        runs, retries)
                 if self.__threaded:
                     progress.lines.append(line)
                     line = None
@@ -861,7 +861,21 @@ class Console(object):
         if line is not None and self.__mode == "normal":
             self.emit([line])
 
-    def __test_line(self, status, label, runtime, runs):
+    @staticmethod
+    def retry_summary(retries):
+        """"Flaky, when "503": waited 20s" for retries made by a RetryPolicy; "" for plain retry=N."""
+        policed = [r for r in retries or [] if r.get("policy")]
+        if not policed:
+            return ""
+        whens = []
+        for r in policed:
+            if r["when"] not in whens:
+                whens.append(r["when"])
+        waited = sum(r["waited"] for r in policed)
+        text = "{}, when {}".format(policed[-1]["policy"], " then ".join(whens))
+        return text + (": waited {:g}s".format(round(waited, 1)) if waited else "")
+
+    def __test_line(self, status, label, runtime, runs, retries=None):
         words = {TestCategory.SUCCESS: "PASSED", TestCategory.FAIL: "FAILED", TestCategory.ERROR: "ERROR",
                  TestCategory.SKIP: "SKIPPED", TestCategory.IGNORE: "IGNORED", TestCategory.CANCEL: "CANCELLED"}
         word = words.get(status, str(status).upper())
@@ -869,6 +883,9 @@ class Console(object):
             word = "RETRIED"
         note = "run {}/{}".format(runs, runs) if runs and runs > 1 and status != TestCategory.SUCCESS else (
             "passed on run {}".format(runs) if runs and runs > 1 else "")
+        summary = self.retry_summary(retries)
+        if summary:
+            note = "{} ({})".format(note, summary)
         done = sum(len(p.done) for p in self.__suites)
         total = max(sum(p.total() for p in self.__all), done, 1)
         return "  {}  {}  {}  {}  {}".format(
@@ -1178,6 +1195,7 @@ class Console(object):
         entry = [head, indent + self.style(detail, "dim")]
         if len(statuses) > 1:
             entry.extend(["", "  " + self.style("Runs", "bold")])
+            retried = {r["run"]: r for r in test.metrics.get_retries(param, class_param) if r.get("policy")}
             for index, run_status in enumerate(statuses):
                 trace = traces[index] if index < len(traces) else None
                 exception = exceptions[index] if index < len(exceptions) else None
@@ -1186,6 +1204,10 @@ class Console(object):
                 entry.append("    #{}  {}  {}  {}".format(
                     index + 1, self.style(str(run_status).upper().ljust(6), _STYLE_OF.get(run_status, "dim")),
                     "{:0.2f}s".format(runtime or 0), self.style(summary, _STYLE_OF.get(run_status, "dim"))))
+                retry = retried.get(index + 1)
+                if retry is not None:
+                    entry[-1] += self.style("  → retry: when {}{}".format(
+                        retry["when"], ", waited {:g}s".format(retry["waited"]) if retry["waited"] else ""), "dim")
         groups = []  # (trace, [run indexes]) in order of first appearance
         for index, trace in enumerate(traces):
             if not trace:

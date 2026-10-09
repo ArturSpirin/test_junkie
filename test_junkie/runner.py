@@ -31,6 +31,7 @@ _EVENT_PROPERTIES_LOCK = threading.Lock()
 _EVENT_HANDLERS = {Event.ON_SUCCESS: "on_success", Event.ON_FAILURE: "on_failure", Event.ON_ERROR: "on_error",
                    Event.ON_SKIP: "on_skip", Event.ON_CANCEL: "on_cancel", Event.ON_IGNORE: "on_ignore",
                    Event.ON_IN_PROGRESS: "on_in_progress", Event.ON_COMPLETE: "on_complete",
+                   Event.ON_RETRY: "on_retry",
                    Event.ON_CLASS_CANCEL: "on_class_cancel", Event.ON_CLASS_SKIP: "on_class_skip",
                    Event.ON_BEFORE_CLASS_ERROR: "on_before_class_error",
                    Event.ON_BEFORE_CLASS_FAIL: "on_before_class_failure",
@@ -743,7 +744,8 @@ class Runner:
             data = test.metrics.get_metrics().get(str(recorded), {}).get(str(parameter), {})
             context.console.unit_done(suite, key, data.get("status"), label,
                                       runtime=sum(t for t in data.get("performance", []) if t),
-                                      runs=len(data.get("statuses", [])))
+                                      runs=len(data.get("statuses", [])),
+                                      retries=test.metrics.get_retries(parameter, recorded))
 
     @staticmethod
     def __run_test_body(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False,
@@ -785,6 +787,7 @@ class Runner:
                                             runtime=_runtime,
                                             decorator=decorator)
                 if decorator is None:
+                    run_errors.append(error)
                     Runner.__process_event(event=__event, suite=suite, test=test, error=error,
                                            class_param=class_parameter, param=parameter, formatted_traceback=trace)
                 else:
@@ -858,10 +861,21 @@ class Runner:
 
         Runner.__process_event(event=Event.ON_IN_PROGRESS, suite=suite, test=test,
                                class_param=class_parameter, param=parameter)
+        run_errors = []  # the error of each failed run in this loop, as raised
+        policy = test.get_retry_policy() if test.retry_override != 1 else None
         try:
             for retry_attempt in range(1, test.get_retry_limit() + 1):
                 if retry_attempt > 1 and callable(cancel) and cancel():
                     break  # cancelled: keep the result it has, no more retries
+                if retry_attempt > 1 and policy is not None:
+                    decision = policy.decide(run_errors)
+                    if not decision:
+                        break
+                    if not Runner.__before_retry(suite, test, parameter, class_parameter, cancel,
+                                                 policy.name(), decision.when.label(), decision.delay):
+                        break  # cancelled while waiting
+                elif retry_attempt > 1 and test.is_qualified_for_retry(parameter, class_param=class_parameter):
+                    Runner.__before_retry(suite, test, parameter, class_parameter, cancel, None, None, 0)
                 if test.is_qualified_for_retry(parameter, class_param=class_parameter):
                     LogJunkie.debug("\n===============Running test==================\n"
                                     "Test Case: {}\n"
@@ -946,6 +960,26 @@ class Runner:
                                    class_param=class_parameter, param=parameter)
 
     @staticmethod
+    def __before_retry(suite, test, parameter, class_parameter, cancel, policy, when, delay):
+        """
+        Records the retry, tells listeners (on_retry) and waits `delay` seconds without holding any pool slot.
+        Returns False if the run was cancelled while waiting.
+        """
+        runs = test.metrics.get_metrics().get(str(class_parameter), {}).get(str(parameter), {}).get("statuses", [])
+        info = {"run": len(runs), "policy": policy, "when": when, "waited": round(delay, 3)}
+        test.metrics.record_retry(parameter, class_parameter, info["run"], policy, when, info["waited"])
+        Runner.__process_event(event=Event.ON_RETRY, suite=suite, test=test, class_param=class_parameter,
+                               param=parameter, extra={"retry": info})
+        deadline = time.monotonic() + delay
+        while True:
+            if callable(cancel) and cancel():
+                return False
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return True
+            time.sleep(min(left, 0.1))
+
+    @staticmethod
     def __run_before_class(suite, class_parameter=None):
         try:
             suite.get_rules().before_class()
@@ -1019,7 +1053,8 @@ class Runner:
                 test.get_function_object()(suite.get_class_instance())
 
     @staticmethod
-    def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None):
+    def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None,
+                        extra=None):
 
         name = _EVENT_HANDLERS[event]
         native_function = getattr(_NATIVE_LISTENER, name)
@@ -1038,6 +1073,8 @@ class Runner:
                 properties["test_meta"].update({"parameter": param})
                 properties["jm"].update({"jto": test})
             properties["suite_meta"].update({"parameter": class_param})
+            if extra:
+                properties.update(extra)
             return properties
         try:
 
