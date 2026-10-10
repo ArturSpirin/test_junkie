@@ -47,13 +47,23 @@ def _run_seconds(size, rules=None):
     return time.perf_counter() - start
 
 
+def _best_seconds(size, rules=None, repeats=5):
+    """Fastest of several runs: noise on a busy CI runner only ever adds time, so the minimum is the real cost"""
+    import gc
+    best = None
+    for _ in range(repeats):
+        gc.collect()
+        seconds = _run_seconds(size, rules)
+        best = seconds if best is None else min(best, seconds)
+    return best
+
+
 def _marginal_ms_per_test(low, high, rules=None):
     """
     Extra time per added test between two suite sizes - fixed per-run costs cancel out
     """
-    # median of 3: one slow moment on a busy machine used to skew a single measurement (flaky in full runs)
-    samples = sorted((_run_seconds(high, rules) - _run_seconds(low, rules)) * 1000 / (high - low) for _ in range(3))
-    return samples[1]
+    # best of 5 per size: the median of 3 differences still let one slow moment through (3.4x on a GitHub runner)
+    return (_best_seconds(high, rules) - _best_seconds(low, rules)) * 1000 / (high - low)
 
 
 def copies_are_cheap_and_independent():
@@ -80,8 +90,8 @@ def runtime_scales_linearly_with_suite_size():
     # the bigger the suite was (O(N^2) per run - 1,000 tests took ~55s). Linear code is ~1x here, the old code ~4.5x
     for rules in (None, TagMutatingRules):
         _run_seconds(20, rules)  # warm-up
-        small = _marginal_ms_per_test(100, 300, rules)
-        large = _marginal_ms_per_test(800, 1000, rules)
+        small = _marginal_ms_per_test(200, 400, rules)
+        large = _marginal_ms_per_test(1600, 2000, rules)  # quadratic code would cost ~6x more per test here
         assert large < max(small, 0.05) * 2.5, \
             "each added test got {:.1f}x more expensive in a bigger suite ({:.3f} -> {:.3f} ms, rules={})".format(
                 large / small if small else float("inf"), small, large, rules)
