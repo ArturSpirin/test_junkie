@@ -791,6 +791,8 @@ class Console(object):
             reports.append("html {}".format(settings.html_report))
         if settings.xml_report:
             reports.append("xml {}".format(settings.xml_report))
+        if settings.json_report:
+            reports.append("json {}".format(settings.json_report))
         if reports:
             row("reports", dot.join(reports))
         filters = []

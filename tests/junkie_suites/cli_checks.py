@@ -691,6 +691,9 @@ def report_folders_and_json_report():
     assert report["totals"]["total"] == 3 and report["totals"]["fail"] == 1 and report["totals"]["success"] == 2, report
     failed = [t for t in report["suites"][0]["tests"] if t["status"] == "fail"][0]
     assert failed["runs"][0]["error"] == "AssertionError: nope", failed
+    # the header's reports line names all three files
+    reports_line = [line for line in out.splitlines() if line.strip().startswith("reports")]
+    assert reports_line and all("report." + ext in reports_line[0] for ext in ("html", "xml", "json")), out
     code, out = run_cli("run", "-s", directory, "--json-report", "report.txt")
     assert code == 120 and "needs a .json file or a folder" in out, out
 

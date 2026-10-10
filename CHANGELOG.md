@@ -9,6 +9,7 @@
 - `Limiter.RAMP_UP` grows the suite and test thread limits from 1 to `-S`/`-T` over that many seconds
 - `@Suite(throttling=N)` gives a suite its own spacing between tests, e.g. 0 to exempt it from `TEST_THROTTLING`
 - Truncation can keep the top, bottom or middle of a message or traceback (`Limiter.TRACEBACK_TRUNCATE`, `EXCEPTION_MESSAGE_TRUNCATE`); middle is the default, so a cut traceback keeps the line that raised
+- The `tj run` header's `reports` line lists the JSON report too; with `--json-report` it showed only the HTML and XML files
 - Every limit can be set for one run (`Runner.run(test_throttling=1, ...)`), from `tj run` (`--test-throttling`, `--suite-throttling`, `--ramp-up`, `--traceback-limit`, `--message-limit`, `--truncate`) or saved with `tj config update`
 - `TEST_THROTTLING` and `SUITE_THROTTLING` are run-wide: each suite thread slept on its own, so parallel suites started tests several times as often as the limit, and the first start waited too
 - `EXCEPTION_MESSAGE_LIMIT` had no effect on Python 3; messages are now cut in the console and reports, and listeners still get the full exception
