@@ -338,6 +338,7 @@ class EvidenceSuite:
         run = _mark("evidence")
         Meta.append("steps", "run {}".format(run))
         Meta.link("Ticket", "https://example.com/T-{}".format(run))
+        Meta.link("Runbook", "https://example.com/runbook")  # the same link every run: listed once
         Meta.attach("page.png", PNG)
         if run == 1:
             source = os.path.join(tempfile.mkdtemp(), "server.log")
@@ -366,7 +367,8 @@ def append_link_and_attach_build_lists_per_attempt():
     values = evidence.get_meta()
     assert values["steps"] == ["declared step", "run 1", "run 2"], values["steps"]
     assert values["links"] == [{"label": "Ticket", "url": "https://example.com/T-1"},
-                               {"label": "Ticket", "url": "https://example.com/T-2"}]
+                               {"label": "Runbook", "url": "https://example.com/runbook"},
+                               {"label": "Ticket", "url": "https://example.com/T-2"}], values["links"]
     attachments = values["attachments"]
     assert [a["name"] for a in attachments] == ["page.png", "server.log", "page.png"]
     png, log = attachments[0], attachments[1]
@@ -377,8 +379,9 @@ def append_link_and_attach_build_lists_per_attempt():
     assert evidence.get_kwargs()["meta"] == {"steps": ["declared step"]}  # declared list not mutated
     by_attempt = {a["attempt"]: a["meta_set"] for a in evidence.get_meta_attempts()}
     assert by_attempt[1]["steps"] == ["run 1"] and by_attempt[2]["steps"] == ["run 2"]
+    assert by_attempt[2]["links"][-1]["label"] == "Runbook"  # each attempt still records what it added
     assert [a["name"] for a in by_attempt[1]["attachments"]] == ["page.png", "server.log"]
-    assert _events("complete", "evidence")[-1]["test_meta"]["links"][1]["url"] == "https://example.com/T-2"
+    assert _events("complete", "evidence")[-1]["test_meta"]["links"][2]["url"] == "https://example.com/T-2"
 
 
 def append_and_attach_reject_bad_input():

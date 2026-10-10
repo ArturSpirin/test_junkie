@@ -289,11 +289,13 @@ class Meta(object):
     def link(label, url):
         """
         Add a link to the running test, shown clickable in the HTML report: Meta.link("Jira", "https://...").
-        Stored in the metadata under "links" as a list of {"label": str, "url": str}.
+        Stored in the metadata under "links" as a list of {"label": str, "url": str}. The same label and URL again
+        (a retry, say) isn't listed twice.
         """
         context = _require_test("Meta.link()")
         context.test.append_meta(context.parameter, context.class_parameter, LINKS_KEY,
-                                 [{"label": str(label), "url": str(url)}], context.attempt, call="Meta.link()")
+                                 [{"label": str(label), "url": str(url)}], context.attempt, call="Meta.link()",
+                                 unique=True)
 
     @staticmethod
     def attach(name, content, mime=None):

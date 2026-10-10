@@ -513,10 +513,12 @@ class TestObject(object):
             self.get_meta(parameter, class_parameter).update(values)
             self.__attempt_record(parameter, class_parameter, attempt).update(values)
 
-    def append_meta(self, parameter, class_parameter, key, items, attempt=None, call="Meta.append()"):
+    def append_meta(self, parameter, class_parameter, key, items, attempt=None, call="Meta.append()", unique=False):
         """
         Add items to the list under one key of a combination's metadata (Meta.append / Meta.link / Meta.attach).
         The attempt's record lists the items added in that attempt.
+        :param unique: leave out of the merged list an item it already has (Meta.link: a retry adding the same link
+                       again shouldn't list it twice); the attempt's record still lists it
         :raises TestJunkieUsageError: the key already holds something other than a list
         """
         from test_junkie.errors import TestJunkieUsageError
@@ -533,7 +535,8 @@ class TestObject(object):
                     "{call} adds to the list under {key!r}, but {key!r} already holds a {kind} ({value!r}). Use "
                     "another key, or Meta.update({key}=[...]) to replace it".format(
                         call=call, key=key, kind=type(current).__name__, value=current))
-            values[key] = current + list(items)  # a new list: the declared meta and earlier copies stay as they were
+            added = [item for item in items if item not in current] if unique else list(items)
+            values[key] = current + added  # a new list: the declared meta and earlier copies stay as they were
             record = self.__attempt_record(parameter, class_parameter, attempt)
             earlier = record.get(key)
             if earlier is None:
