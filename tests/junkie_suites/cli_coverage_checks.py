@@ -192,8 +192,8 @@ def ctrl_c_while_guessing_the_root():
     directory = _write(INTERRUPTED_GUESS_ROOT, "cov_interrupted_guess.py")
     try:
         code, out = run_cli("run", "-s", directory, "--guess-root", cwd=directory)
-        # 120, not 12: the exit(12) is caught by the scan's bare except and reported as an unexpected error
-        assert code in (12, 120) and "Trying again with assumption" in out and "(Ctrl+C) Exiting!" in out, out
+        assert code == 12 and "Trying again with assumption" in out and "(Ctrl+C) Exiting!" in out, out
+        assert "Unexpected error during scan" not in out, out
     finally:
         os.environ.pop("TJ_COV_GUESS_ROOT_RETRY", None)
 

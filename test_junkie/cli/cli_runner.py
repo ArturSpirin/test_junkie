@@ -267,6 +267,8 @@ class CliRunner:
             print("[{status}] {error}.".format(status=CliUtils.format_color_string(value="ERROR", color="red"),
                                                error=err))
             exit(120)
+        except SystemExit:  # an exit code chosen further down (e.g. 12 for Ctrl+C during --guess-root) stands
+            raise
         except:
             print("[{status}] Unexpected error during scan for test suites.".format(
                 status=CliUtils.format_color_string(value="ERROR", color="red")))

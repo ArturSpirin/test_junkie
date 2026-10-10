@@ -35,6 +35,7 @@
 - `html_report` / `xml_report` create missing folders; the `tj run` header lists the JSON report
 - A suite whose `skip=` function raises reports that error instead of an `AttributeError`
 - A `KeyboardInterrupt` raised by a listener or hook reports the unfinished and queued suites as cancelled
+- Ctrl+C while `--guess-root` retries an import exits 12 again, not 120 with an "unexpected error"
 - A test defined in code with no source file no longer shows `None:<line>` as its location
 
 ## 0.9a7
