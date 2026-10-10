@@ -37,7 +37,7 @@
 - A `KeyboardInterrupt` raised by a listener or hook reports the unfinished and queued suites as cancelled
 - Ctrl+C while `--guess-root` retries an import exits 12 again, not 120 with an "unexpected error"
 - A `KeyboardInterrupt` from a hook or listener in a suite or test thread cancels the run like Ctrl+C: the test is counted as cancelled and the HTML/JSON reports are written (the HTML report crashed on a test with no run time)
-- A type where a value is expected (`@test(skip=bool)`, `parameters=list`, `owner=str`) is rejected at decoration with `BadParameters` instead of getting through (`skip=bool` failed only once the run started); classes are still taken for `listener=`, `rules=` and retry policies
+- A type where a value is expected (`@test(skip=bool)`, `parameters=list`, `owner=str`) is rejected at decoration with `BadParameters` instead of getting through (`skip=bool` failed only once the run started); classes are still taken for `listener=`, `rules=` and retry policies, and a class that isn't the right subclass is named as such
 - A test defined in code with no source file no longer shows `None:<line>` as its location
 
 ## 0.9a7

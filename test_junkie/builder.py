@@ -176,11 +176,22 @@ class Builder(object):
                     if failed:
                         failed = validation_failed(kwargs.get(arg), expected_type)
                 if failed:
-                    value = kwargs.get(arg)
-                    actual = ("the type {} instead of a value".format(value.__name__) if inspect.isclass(value)
-                              else type(value).__name__)
-                    return {"expected": expected_types, "actual": actual, "arg": arg}
+                    return {"expected": expected_types, "actual": Builder.__describe(kwargs.get(arg), expected_types),
+                            "arg": arg}
         return False
+
+    @staticmethod
+    def __describe(value, expected_types):
+        """
+        :return: STRING, what was passed, for the error message
+        """
+        if not inspect.isclass(value):
+            return type(value).__name__
+        class_valued = [t for t in expected_types if t in Builder.__CLASS_VALUED]
+        if class_valued and value not in expected_types:  # e.g. listener=NotAListener, not retry=int
+            return "the class {}, which is not a {} subclass".format(
+                value.__name__, " or ".join(t.__name__ for t in class_valued))
+        return "the type {} instead of a value".format(value.__name__)
 
     @staticmethod
     def __fmt_expected_types(types):

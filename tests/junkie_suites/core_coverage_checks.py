@@ -305,6 +305,33 @@ def a_type_where_a_value_is_expected_is_rejected():
         assert "in @Suite() decorator" in message and "the type" in message, message
 
 
+def a_wrong_class_where_a_class_is_expected_is_named_as_such():
+    # not "the type NotAListener instead of a value": a class is right there, just not the right one
+
+    class NotAListener:
+        pass
+
+    for kwargs, expected in (({"listener": NotAListener}, "Listener"), ({"rules": NotAListener}, "Rules"),
+                             ({"retry_policy": NotAListener}, "RetryPolicy")):
+        def make_suite():
+            @Suite(**kwargs)
+            class CoreCovWrongClass:
+                @test()
+                def t(self):
+                    pass
+        message = _decoration_error(make_suite)
+        assert "but got the class NotAListener, which is not a {} subclass".format(expected) in message, message
+
+    def make_test():
+        @Suite()
+        class CoreCovWrongRetryClass:
+            @test(retry=NotAListener)
+            def t(self):
+                pass
+    message = _decoration_error(make_test)
+    assert "but got the class NotAListener, which is not a RetryPolicy subclass" in message, message
+
+
 def a_class_is_still_taken_where_one_is_expected():
     from test_junkie.listener import Listener
     from test_junkie.rules import Rules
@@ -664,7 +691,8 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           old_style_get_meta_outside_a_test_returns_none, meta_append_onto_a_tuple,
           aggregator_percentage_and_console_summary, resource_monitor_cleanup_warns_when_the_file_is_gone,
           suppressed_stdout_off_leaves_output_alone, a_type_where_a_value_is_expected_is_rejected,
-          a_class_is_still_taken_where_one_is_expected, skip_of_an_unsupported_type_fails_at_run_time,
+          a_class_is_still_taken_where_one_is_expected, a_wrong_class_where_a_class_is_expected_is_named_as_such,
+          skip_of_an_unsupported_type_fails_at_run_time,
           exception_messages_that_cannot_be_truncated_are_kept, limits_off_means_no_test_throttling,
           wait_turn_stops_on_cancel, pools_listed_acquired_and_released, uses_with_a_non_name_is_rejected,
           unknown_limit_is_rejected, suite_retry_pass_asks_the_test_policy, when_and_decision_details,
