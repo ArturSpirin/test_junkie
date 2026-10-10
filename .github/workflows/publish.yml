@@ -80,7 +80,8 @@ jobs:
           # straight from TestPyPI's JSON API: no index search, no sdist build, just this version's exact files
           for attempt in $(seq 1 20); do
             python - "$VERSION" <<'PY' && break
-          import json, os, sys, urllib.request
+          import json, os, socket, sys, urllib.request
+          socket.setdefaulttimeout(60)  # a stalled connection fails this attempt instead of hanging the job
           v = sys.argv[1]
           files = json.load(urllib.request.urlopen(f"https://test.pypi.org/pypi/test-junkie/{v}/json"))["urls"]
           kinds = {f["packagetype"] for f in files}
