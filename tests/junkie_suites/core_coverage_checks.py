@@ -10,7 +10,7 @@ import shutil
 import tempfile
 from xml.etree.ElementTree import parse
 
-from test_junkie.decorators import Suite, test, beforeTest, afterTest
+from test_junkie.decorators import Suite, test, beforeClass, beforeTest, afterTest
 from test_junkie.errors import BadParameters, TestJunkieUsageError
 from test_junkie.meta import Meta
 from test_junkie.objects import Limiter
@@ -553,43 +553,80 @@ class AfterInterruptQueuedSuite:
         pass
 
 
-def _reports_after_an_interrupt_in_after_test(**threads):
-    """a KeyboardInterrupt from @afterTest: the run ends as cancelled, every report is written, nothing is left out"""
+@Suite(parallelized=False)
+class AfterInterruptLastSuite:  # runs alone, so with -S 2 it's still queued when the interrupt comes
+
+    @test()
+    def last(self):
+        pass
+
+
+@Suite()
+class InterruptedBeforeClassSuite:
+
+    @beforeClass()
+    def before(self):
+        raise KeyboardInterrupt()
+
+    @test()
+    def t(self):
+        pass
+
+
+def _interrupted_run(first, **threads):
+    """
+    a KeyboardInterrupt from a hook of the first suite: the run ends as cancelled with exit code 12, every report is
+    written and nothing is left out
+    :return: DICT, the JSON report
+    """
     from test_junkie.runner import Runner
     folder = tempfile.mkdtemp(prefix="tj_core_interrupt_")
     try:
         paths = {kind: os.path.join(folder, "r." + kind) for kind in ("html", "xml", "json")}
-        runner = Runner([InterruptedAfterTestSuite, AfterInterruptQueuedSuite], quiet=True, xml_report=paths["xml"],
-                        html_report=paths["html"])
+        suites = [first, AfterInterruptQueuedSuite, AfterInterruptLastSuite]
+        runner = Runner(suites, quiet=True, xml_report=paths["xml"], html_report=paths["html"])
         try:
             runner.run(json_report=paths["json"], **threads)
-        except KeyboardInterrupt:
-            pass
+        except KeyboardInterrupt as error:
+            interrupt = error
         else:
             raise AssertionError("the KeyboardInterrupt was swallowed")
+        # reported as a cancel, not a KeyboardInterrupt that escaped the run
+        assert getattr(interrupt, "tj_reported", False) and runner.exit_code == 12, runner.exit_code
         with open(paths["json"], encoding="utf-8") as doc:
             report = json.load(doc)
         tests = {(suite["name"], unit["name"]): unit["status"] for suite in report["suites"] for unit in suite["tests"]}
-        assert tests[("InterruptedAfterTestSuite", "t")] == "cancel", tests
+        assert tests.get((first.__name__, "t")) == "cancel", tests
         assert None not in tests.values() and report["totals"]["total"] == len(tests), (tests, report["totals"])
-        assert [suite["name"] for suite in report["suites"]] == ["InterruptedAfterTestSuite",
-                                                                 "AfterInterruptQueuedSuite"], report["suites"]
+        assert [suite["name"] for suite in report["suites"]] == [suite.__name__ for suite in suites], report["suites"]
+        assert _suite_status(report, "AfterInterruptLastSuite") == "cancel", report["suites"]  # never started
         assert os.path.getsize(paths["html"]) > 0
         parse(paths["xml"])
+        return report
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def _suite_status(report, name):
+    return next(suite["status"] for suite in report["suites"] if suite["name"] == name)
+
+
 def reports_after_an_interrupt_in_after_test():
-    _reports_after_an_interrupt_in_after_test()
+    _interrupted_run(InterruptedAfterTestSuite)
 
 
 def reports_after_an_interrupt_in_after_test_in_a_test_thread():
-    _reports_after_an_interrupt_in_after_test(test_multithreading_limit=2)
+    _interrupted_run(InterruptedAfterTestSuite, test_multithreading_limit=2)
 
 
 def reports_after_an_interrupt_in_after_test_in_a_suite_thread():
-    _reports_after_an_interrupt_in_after_test(suite_multithreading_limit=2)
+    report = _interrupted_run(InterruptedAfterTestSuite, suite_multithreading_limit=2)
+    assert _suite_status(report, "InterruptedAfterTestSuite") == "cancel", report["suites"]
+
+
+def reports_after_an_interrupt_in_before_class_in_a_suite_thread():
+    report = _interrupted_run(InterruptedBeforeClassSuite, suite_multithreading_limit=2)
+    assert _suite_status(report, "InterruptedBeforeClassSuite") == "cancel", report["suites"]
 
 
 @Suite()
@@ -634,4 +671,6 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           jitter_adds_a_bounded_random_wait, retry_policy_option_must_name_a_policy,
           reports_cover_skips_broken_hooks_and_lost_attachments, reports_after_an_interrupt_in_after_test,
           reports_after_an_interrupt_in_after_test_in_a_test_thread,
-          reports_after_an_interrupt_in_after_test_in_a_suite_thread, average_test_runtime_skips_tests_with_no_time]
+          reports_after_an_interrupt_in_after_test_in_a_suite_thread,
+          reports_after_an_interrupt_in_before_class_in_a_suite_thread,
+          average_test_runtime_skips_tests_with_no_time]
