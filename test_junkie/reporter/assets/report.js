@@ -325,6 +325,7 @@ function openPanel(id) {
           <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
         <div class="variant-body">`;
+      html += metaBlock('Metadata', v.meta, v.attempts || []);
       (v.attempts || []).forEach((a, ai) => {
         const retryNote = a.retry ? ` · retried (${escHtml(a.retry.policy)}, when ${escHtml(a.retry.when)}${a.retry.waited ? ', waited ' + a.retry.waited + 's' : ''})` : '';
         const hdrExtra = `· @beforeTest <span>${a.beforeTest.status}</span> · @afterTest <span>${a.afterTest.status}</span>${retryNote}`;
@@ -350,6 +351,7 @@ function openPanel(id) {
             <div class="trace-runtime">${p.data.dur}</div>
           </div>`;
         });
+        html += metaBlock('Metadata set in attempt ' + a.n, a.meta, null);
         html += `</div></div>`;
       });
       html += `</div></div>`;
@@ -361,6 +363,24 @@ function openPanel(id) {
   document.getElementById('panel-body').innerHTML = html;
   document.getElementById('detail-panel').classList.add('open');
   document.getElementById('overlay').classList.add('show');
+}
+
+// Metadata panel: final values, keys set while running highlighted with the attempt that last set them.
+// Called with attempts=null for one attempt's own values.
+function metaBlock(title, values, attempts) {
+  const keys = Object.keys(values || {});
+  if (!keys.length) return '';
+  const setIn = {};
+  (attempts || []).forEach(a => Object.keys(a.meta || {}).forEach(k => { setIn[k] = a.n; }));
+  const fmt = v => typeof v === 'string' ? v : JSON.stringify(v);
+  let rows = '';
+  keys.forEach(k => {
+    const note = attempts ? (setIn[k] ? `set in attempt ${setIn[k]}` : 'declared') : '';
+    rows += `<div class="meta-row${attempts && setIn[k] ? ' set' : ''}">
+      <span class="meta-key">${escHtml(k)}</span><span class="meta-val">${escHtml(fmt(values[k]))}</span>
+      ${note ? `<span class="meta-note">${note}</span>` : ''}</div>`;
+  });
+  return `<div class="meta-block"><div class="meta-title">${escHtml(title)}</div>${rows}</div>`;
 }
 
 function toggleVariant(id) { document.getElementById(id).classList.toggle('expanded'); }

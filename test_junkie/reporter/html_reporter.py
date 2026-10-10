@@ -12,6 +12,7 @@ from statistics import mean, median
 
 from test_junkie.constants import TestCategory, DecoratorType
 from test_junkie.debugger import LogJunkie
+from test_junkie.meta import report_value
 from test_junkie.metrics import Aggregator
 from test_junkie.reporter.analyzer import Analyzer
 from test_junkie.reporter.html_template import ReportTemplate
@@ -586,6 +587,8 @@ class Reporter:
                         attempts = []
                         retried = {r["run"]: r for r in test.metrics.get_retries(pd.get("param"), pd.get("class_param"))
                                    if r.get("policy")}
+                        meta_set = {a["attempt"]: report_value(a["meta_set"], 500)
+                                    for a in test.get_meta_attempts(pd.get("param"), pd.get("class_param"))}
                         for i in range(len(raw_perf)):
                             bt_phase = _phase_detail(pd.get(DecoratorType.BEFORE_TEST, {}), i)
                             t_phase = _test_phase_detail(pd, i)
@@ -597,6 +600,7 @@ class Reporter:
                                 "test": t_phase,
                                 "afterTest": at_phase,
                                 "retry": retried.get(i + 1),
+                                "meta": meta_set.get(i + 1, {}),
                             })
 
                         variants.append({
@@ -605,6 +609,8 @@ class Reporter:
                             "status": v_status,
                             "totalDuration": params_total_str,
                             "attempts": attempts,
+                            "meta": report_value(test.get_meta(pd.get("param"), pd.get("class_param"),
+                                                               copy_of_meta=True), 500),
                         })
 
                 if not all_statuses:

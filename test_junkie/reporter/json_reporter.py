@@ -3,6 +3,7 @@ import os
 
 import test_junkie
 from test_junkie.constants import TestCategory
+from test_junkie.meta import report_value
 from test_junkie.metrics import is_flaky
 from test_junkie.params import param_key
 
@@ -25,16 +26,21 @@ def write_json_report(path, aggregator, runtime, seed=None):
                         continue
                     exceptions = data.get("exceptions") or []
                     retried = {r["run"]: r for r in test.metrics.get_retries(data.get("param"), data.get("class_param"))}
+                    meta_set = {a["attempt"]: a["meta_set"]
+                                for a in test.get_meta_attempts(data.get("param"), data.get("class_param"))}
                     entry = {
                         "name": test.get_function_name(),
                         "parameter": None if data.get("param") is None else param_key(data.get("param")),
                         "suite_parameter": None if data.get("class_param") is None else param_key(data.get("class_param")),
                         "status": data["status"],
                         "flaky": is_flaky(data),
+                        "meta": report_value(test.get_meta(data.get("param"), data.get("class_param"),
+                                                           copy_of_meta=True)),
                         "runs": [{"status": status,
                                   "runtime": round(runtime_, 4) if runtime_ is not None else None,
                                   "error": _error(exceptions[index] if index < len(exceptions) else None),
-                                  "retry": retried.get(index + 1)}
+                                  "retry": retried.get(index + 1),
+                                  "meta_set": report_value(meta_set.get(index + 1, {}))}
                                  for index, (status, runtime_) in enumerate(zip(data.get("statuses") or [],
                                                                                 data.get("performance") or []))]}
                     waits = test.metrics.get_conflict_waits(data.get("class_param"))

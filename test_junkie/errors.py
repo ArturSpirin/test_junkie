@@ -34,6 +34,16 @@ class BadSignature(Exception):
         Exception.__init__(self, message)
 
 
+class TestJunkieUsageError(Exception):
+    """
+    A Test Junkie API used where it can't work, e.g. Meta.update() with no running test. Not a
+    TestJunkieExecutionError: raised in a test it fails that test (as an error) instead of stopping the run.
+    """
+
+    def __init__(self, message):
+        Exception.__init__(self, message)
+
+
 class SkipTest(Exception):
 
     def __init__(self, reason=None):

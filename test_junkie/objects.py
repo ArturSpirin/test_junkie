@@ -11,6 +11,7 @@ from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
 from test_junkie.params import param_key, register as register_ids
 
+_DECLARED = object()  # SuiteObject.get_meta(): no suite parameter given, the declared meta only
 
 
 @functools.lru_cache(maxsize=None)
@@ -258,12 +259,27 @@ class SuiteObject(object):
 
         return self.__listener
 
-    def get_meta(self, copy_of_meta=False):
+    def get_meta(self, copy_of_meta=False, class_parameter=_DECLARED):
+        """
+        :param class_parameter: leave out for the declared @Suite(meta=...) only; pass a suite parameter (None
+                                included) for the declared meta plus what Meta.suite.update() set for it
+        """
+        declared = self.__suite_definition.get("class_meta", {})
+        if class_parameter is _DECLARED:
+            return copy.deepcopy(declared) if copy_of_meta else declared
+        from test_junkie.views import META_LOCK
+        with META_LOCK:
+            merged = copy.deepcopy(declared) if copy_of_meta else dict(declared)
+            merged.update(copy.deepcopy(self.__dict__.get("_SuiteObject__runtime_meta", {})
+                                        .get(param_key(class_parameter), {})))
+            return merged
 
-        if copy_of_meta:
-            return copy.deepcopy(self.__suite_definition.get("class_meta", {}))
-        else:
-            return self.__suite_definition.get("class_meta", {})
+    def update_runtime_meta(self, class_parameter, values):
+        """Meta.suite.update(): suite-level values for one suite parameter."""
+        from test_junkie.views import META_LOCK
+        with META_LOCK:
+            self.__dict__.setdefault("_SuiteObject__runtime_meta", {}) \
+                .setdefault(param_key(class_parameter), {}).update(values)
 
     def get_unsuccessful_tests(self):
 
@@ -359,6 +375,10 @@ class TestObject(object):
         self.__test_definition = test_definition
         self.suite = suite
         self.metrics = TestMetrics()
+        # run-time metadata, kept apart from the declared @test(meta=...): the live values per suite parameter /
+        # parameter (declared + updates, carried across retries), and what each attempt set (latest per key)
+        self.__meta_slots = {}
+        self.__meta_attempts = {}
 
     def __repr__(self):
         return "<{}.{}>".format(self.suite.get_class_name(), self.get_function_name())
@@ -375,6 +395,8 @@ class TestObject(object):
         clone.__test_definition = copy.deepcopy(self.__test_definition, memo)
         clone.suite = memo.get(id(self.suite), self.suite)
         clone.metrics = self.metrics
+        clone.__meta_slots = copy.deepcopy(self.__meta_slots, memo)
+        clone.__meta_attempts = copy.deepcopy(self.__meta_attempts, memo)
         return clone
 
     def get_test_id(self):
@@ -469,26 +491,42 @@ class TestObject(object):
         return self.get_kwargs().get("tags", [])
 
     def get_meta(self, parameter=None, class_parameter=None, copy_of_meta=False):
+        """
+        :return: DICT, the metadata of one parameter / suite parameter combination: the declared @test(meta=...)
+                 plus everything Meta.update() set so far (across retries). The live dict unless copy_of_meta
+        """
+        from test_junkie.views import META_LOCK
+        with META_LOCK:
+            by_param = self.__meta_slots.setdefault(param_key(class_parameter), {})
+            key = param_key(parameter)
+            if key not in by_param:
+                by_param[key] = copy.deepcopy(self.get_kwargs().get("meta") or {})
+            return copy.deepcopy(by_param[key]) if copy_of_meta else by_param[key]
 
-        string_param = param_key(parameter)
-        string_class_param = param_key(class_parameter)
+    def set_meta(self, parameter, class_parameter, values, attempt=None):
+        """
+        Update one combination's metadata, and record the values against the attempt that set them.
+        :param attempt: INT, 1-based run of that combination; None works it out from the runs recorded so far
+        """
+        from test_junkie.views import META_LOCK
+        with META_LOCK:
+            self.get_meta(parameter, class_parameter).update(values)
+            if attempt is None:
+                data = self.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {})
+                attempt = len(data.get("statuses") or []) + 1
+            by_attempt = self.__meta_attempts.setdefault(param_key(class_parameter), {}) \
+                .setdefault(param_key(parameter), {})
+            by_attempt.setdefault(attempt, {}).update(values)
 
-        if not self.get_kwargs().get("meta", {}):  # does not require meta to be defined in order to Meta.update it
-            self.get_kwargs().update({"meta": {}})
-        meta = self.get_kwargs()["meta"]
-
-        if "original" not in meta:
-            meta.update({"original": copy.deepcopy(meta)})
-
-        if string_class_param not in meta:
-            meta.update({string_class_param: {string_param: copy.deepcopy(meta["original"])}})
-
-        if string_param not in meta[string_class_param]:
-            meta[string_class_param].update({string_param: copy.deepcopy(meta["original"])})
-        if copy_of_meta:
-            return copy.deepcopy(meta[string_class_param][string_param])
-        else:
-            return meta[string_class_param][string_param]
+    def get_meta_attempts(self, parameter=None, class_parameter=None):
+        """
+        :return: LIST of {"attempt": INT, "meta_set": DICT}, oldest first: what Meta.update() set in each run of
+                 that combination (the latest value per key). Runs that set nothing aren't listed
+        """
+        from test_junkie.views import META_LOCK
+        with META_LOCK:
+            by_attempt = self.__meta_attempts.get(param_key(class_parameter), {}).get(param_key(parameter), {})
+            return [{"attempt": n, "meta_set": copy.deepcopy(values)} for n, values in sorted(by_attempt.items())]
 
     def get_kwargs(self):
 

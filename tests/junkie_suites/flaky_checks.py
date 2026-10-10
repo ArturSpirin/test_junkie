@@ -123,7 +123,7 @@ def _xml_cases(**kwargs):
     _run([FlakyTests], xml_report=path, **kwargs)
     cases = {}
     for case in parse(path).getroot().iter("testcase"):
-        cases.setdefault(case.get("name"), []).append(case)
+        cases.setdefault(case.get("name").split("[")[0], []).append(case)  # names carry parameters: x[admin]
     return cases
 
 

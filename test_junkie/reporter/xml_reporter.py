@@ -4,9 +4,21 @@ import traceback
 
 from test_junkie.constants import TestCategory
 from test_junkie.debugger import LogJunkie
+from test_junkie.meta import report_text
+from test_junkie.params import param_key
 
 
 class XmlReporter:
+
+    @staticmethod
+    def __case_name(test_name, data):
+        """The test's name with its parameters, like the console: login[suite: admin, 2]"""
+        parts = []
+        if data.get("class_param") is not None:
+            parts.append("suite: {}".format(param_key(data["class_param"])))
+        if data.get("param") is not None:
+            parts.append(param_key(data["param"]))
+        return "{}[{}]".format(test_name, ", ".join(parts)) if parts else str(test_name)
 
     @staticmethod
     def __error_attrs(error):
@@ -96,7 +108,18 @@ class XmlReporter:
                                                        tests="0", passed="0", failures="0")
                                     suites_by_name[test_suite] = suite
                                 __update_tag_stats(suite, test_status)
-                                test = SubElement(suite, "testcase", name=str(test_name), status=str(test_status))
+                                test = SubElement(suite, "testcase", name=XmlReporter.__case_name(test_name, param_data),
+                                                  classname=str(test_suite), status=str(test_status))
+                                runtimes = param_data.get("performance") or []
+                                if runtimes:  # Surefire: the first run's time for a failure, else the last run's
+                                    seconds = runtimes[0] if test_status == "failure" else runtimes[-1]
+                                    test.set("time", "{:.3f}".format(seconds or 0))
+                                values = test_object.get_meta(param_data.get("param"), param_data.get("class_param"),
+                                                              copy_of_meta=True)
+                                if values:
+                                    properties = SubElement(test, "properties")
+                                    for key, value in values.items():
+                                        SubElement(properties, "property", name=str(key), value=report_text(value))
                                 XmlReporter.__add_runs(test, test_status, param_data)
                 os.makedirs(os.path.dirname(os.path.abspath(write_file)), exist_ok=True)
                 ElementTree(root).write(write_file)

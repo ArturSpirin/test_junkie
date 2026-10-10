@@ -231,4 +231,11 @@ body.light .tag-chip{background:color-mix(in srgb,var(--brand) 12%,#fff);color:v
 .theme-toggle:hover{background:var(--surface-raised);color:var(--ink)}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}.meta-block{margin:10px 0;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.meta-title{padding:6px 12px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-family:'IBM Plex Mono',monospace;color:var(--brand);border-bottom:1px solid var(--border)}
+.meta-row{display:flex;gap:12px;padding:5px 12px;font-size:12px;border-top:1px solid var(--border)}
+.meta-row:first-of-type{border-top:none}
+.meta-key{flex:none;min-width:120px;font-family:'IBM Plex Mono',monospace;color:var(--ink-muted)}
+.meta-val{flex:1;min-width:0;font-family:'IBM Plex Mono',monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.meta-row.set .meta-key{color:var(--brand)}
+.meta-note{flex:none;font-size:10px;color:var(--ink-faint)}

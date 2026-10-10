@@ -12,6 +12,7 @@ from test_junkie.debugger import LogJunkie
 from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
 from test_junkie.listener import Listener
+from test_junkie.meta import RunContext, enter_context, leave_context
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.objects import Limiter, arg_names, _FuncEval
 from test_junkie.parallels import ParallelProcessor
@@ -1033,6 +1034,11 @@ class Runner:
                     capture = Capture()
                     attempt = capturing(context.router if context is not None else None, capture)
                     attempt.__enter__()
+                    # this thread's run context for Meta.update(): the run number counts every run of this
+                    # combination, suite retry passes included, so it lines up with the reports' runs
+                    _slot = test.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {})
+                    meta_previous = enter_context(RunContext(suite, test, parameter, class_parameter,
+                                                             len(_slot.get("statuses") or []) + 1))
                     try:
                         try:
                             start_time = time.time()  # before test start time
@@ -1085,6 +1091,7 @@ class Runner:
                                                        class_param=class_parameter, param=parameter)
                                 return
                     finally:
+                        leave_context(meta_previous)
                         Limiter.release(pools)
                         attempt.__exit__(None, None, None)
                         if context is not None:
@@ -1226,22 +1233,29 @@ class Runner:
         start_time = time.time()
         if DecoratorType.TEST_CASE != decorator_type:
             functions_list = suite.get_decorated_definition(decorator_type)
-            for func in functions_list:
-                try:
-                    names = arg_names(func["decorated_function"])
-                    kwargs = {}
-                    if "suite_parameter" in names:
-                        kwargs["suite_parameter"] = class_parameter
-                    if "test" in names and test is not None:  # per-test hooks only: a read-only view
-                        kwargs["test"] = TestView(test)
-                    func["decorated_function"](suite.get_class_instance(), **kwargs)
-                except Exception as decorator_error:
-                    trace = traceback.format_exc()
-                    update_metrics(decorator_type, decorator_error, trace)
-                    if DecoratorType.BEFORE_TEST == decorator_type:  # if before test fails, after test wont run
-                        if suite.get_decorated_definition(DecoratorType.AFTER_TEST):
-                            update_metrics(DecoratorType.AFTER_TEST, None, "N/A")  # but we need to keep list synced
-                    return AssertionError(trace) if isinstance(decorator_error, AssertionError) else Exception(trace)
+            # @beforeClass / @afterClass: a suite-level run context, so Meta.suite.update() knows the suite parameter
+            class_hook = decorator_type in (DecoratorType.BEFORE_CLASS, DecoratorType.AFTER_CLASS)
+            meta_previous = enter_context(RunContext(suite, None, None, class_parameter)) if class_hook else None
+            try:
+                for func in functions_list:
+                    try:
+                        names = arg_names(func["decorated_function"])
+                        kwargs = {}
+                        if "suite_parameter" in names:
+                            kwargs["suite_parameter"] = class_parameter
+                        if "test" in names and test is not None:  # per-test hooks only: a read-only view
+                            kwargs["test"] = TestView(test)
+                        func["decorated_function"](suite.get_class_instance(), **kwargs)
+                    except Exception as decorator_error:
+                        trace = traceback.format_exc()
+                        update_metrics(decorator_type, decorator_error, trace)
+                        if DecoratorType.BEFORE_TEST == decorator_type:  # if before test fails, after test wont run
+                            if suite.get_decorated_definition(DecoratorType.AFTER_TEST):
+                                update_metrics(DecoratorType.AFTER_TEST, None, "N/A")  # but we need to keep list synced
+                        return AssertionError(trace) if isinstance(decorator_error, AssertionError) else Exception(trace)
+            finally:
+                if class_hook:
+                    leave_context(meta_previous)
             if functions_list:  # will updated only if we had decorated function(s)
                 update_metrics(decorator_type)
         else:
@@ -1269,8 +1283,9 @@ class Runner:
 
         @synchronized(_EVENT_PROPERTIES_LOCK)
         def __create_properties():
-            properties = {"suite_meta": suite.get_meta(copy_of_meta=True),
+            properties = {"suite_meta": suite.get_meta(copy_of_meta=True, class_parameter=class_param),
                           "test_meta": test.get_meta(param, class_param, copy_of_meta=True) if test else None,
+                          "meta_attempts": test.get_meta_attempts(param, class_param) if test else None,
                           "jm": {"jso": suite}}
             if test:
                 properties["test_meta"].update({"parameter": param})
