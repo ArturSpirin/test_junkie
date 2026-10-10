@@ -8,6 +8,7 @@ import time
 from test_junkie.constants import TestOrder
 from test_junkie.decorators import Suite, test, beforeClass
 from test_junkie.errors import BadParameters
+from test_junkie.retry import RetryPolicy
 from test_junkie.runner import Runner
 
 SPANS = []  # (name, start, end)
@@ -115,6 +116,35 @@ class ParameterSuite:
         _work("another")
 
 
+class ResetOnce(RetryPolicy):
+    attempts = 2
+    reset = "class"
+
+
+@Suite()
+class ResetAloneSuite:
+    runs = []
+
+    @test(parallelized=False, retry=ResetOnce)
+    def alone(self):
+        ResetAloneSuite.runs.append(1)
+        _work("alone:run{}".format(len(ResetAloneSuite.runs)))
+        assert len(ResetAloneSuite.runs) > 1, "fails the first time"
+
+
+@Suite()
+class ManyShortSuite:
+    pass
+
+
+for _index in range(15):
+    def _short(self, _name="short{}".format(_index)):
+        _work(_name)
+    _short.__name__ = "short{}".format(_index)
+    setattr(ManyShortSuite, _short.__name__, test()(_short))
+ManyShortSuite = Suite()(ManyShortSuite)
+
+
 def _run(suites, **kwargs):
     del SPANS[:]
     Runner(suites).run(quiet=True, **kwargs)
@@ -159,8 +189,17 @@ def parallelized_parameters_contradicts_parallelized_false():
         raise AssertionError("parallelized=False with parallelized_parameters=True was accepted")
 
 
+def a_reset_retry_of_an_exclusive_test_runs_alone_too():
+    # the retry held by reset="class" ran without the exclusive lock, so other suites' tests overlapped it
+    ResetAloneSuite.runs = []
+    _run([ResetAloneSuite, ManyShortSuite], test_multithreading_limit=4, suite_multithreading_limit=2)
+    assert len(ResetAloneSuite.runs) == 2, ResetAloneSuite.runs
+    assert not _overlaps("alone"), _overlaps("alone")
+
+
 CHECKS = [alone_within_one_suite, alone_with_alphabetical_order, alone_across_parallel_suites,
-          nothing_slips_in_between_its_parameters, parallelized_parameters_contradicts_parallelized_false]
+          nothing_slips_in_between_its_parameters, parallelized_parameters_contradicts_parallelized_false,
+          a_reset_retry_of_an_exclusive_test_runs_alone_too]
 
 
 if __name__ == "__main__":

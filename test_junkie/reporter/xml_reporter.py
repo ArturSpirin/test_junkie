@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import traceback
 
@@ -6,6 +7,14 @@ from test_junkie.constants import TestCategory
 from test_junkie.debugger import LogJunkie
 from test_junkie.meta import report_text
 from test_junkie.params import param_key
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_NOT_XML = re.compile("[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
+
+
+def _xml_safe(text):
+    """Drops color codes and the characters XML 1.0 can't hold, so a colored assertion can't make the file invalid"""
+    return _NOT_XML.sub("", _ANSI.sub("", str(text)))
 
 
 class XmlReporter:
@@ -24,7 +33,7 @@ class XmlReporter:
     def __error_attrs(error):
         if not isinstance(error, BaseException):
             return {}
-        return {"type": type(error).__name__, "message": str(error).split("\n")[0]}
+        return {"type": type(error).__name__, "message": _xml_safe(str(error).split("\n")[0])}
 
     @staticmethod
     def __add_runs(test, test_status, data):
@@ -43,7 +52,7 @@ class XmlReporter:
             element = SubElement(test, tag, **XmlReporter.__error_attrs(errors[index] if index < len(errors) else None))
             trace = traces[index] if index < len(traces) else None
             if trace:
-                SubElement(element, "stackTrace").text = str(trace)
+                SubElement(element, "stackTrace").text = _xml_safe(trace)
             return element
 
         if test_status != "failure":
@@ -104,12 +113,12 @@ class XmlReporter:
 
                                 suite = suites_by_name.get(test_suite)
                                 if suite is None:
-                                    suite = SubElement(root, "testsuite", name=test_suite,
+                                    suite = SubElement(root, "testsuite", name=_xml_safe(test_suite),
                                                        tests="0", passed="0", failures="0")
                                     suites_by_name[test_suite] = suite
                                 __update_tag_stats(suite, test_status)
-                                test = SubElement(suite, "testcase", name=XmlReporter.__case_name(test_name, param_data),
-                                                  classname=str(test_suite), status=str(test_status))
+                                test = SubElement(suite, "testcase", name=_xml_safe(XmlReporter.__case_name(test_name, param_data)),
+                                                  classname=_xml_safe(test_suite), status=str(test_status))
                                 runtimes = param_data.get("performance") or []
                                 if runtimes:  # Surefire: the first run's time for a failure, else the last run's
                                     seconds = runtimes[0] if test_status == "failure" else runtimes[-1]
@@ -119,7 +128,7 @@ class XmlReporter:
                                 if values:
                                     properties = SubElement(test, "properties")
                                     for key, value in values.items():
-                                        SubElement(properties, "property", name=str(key), value=report_text(value))
+                                        SubElement(properties, "property", name=_xml_safe(key), value=_xml_safe(report_text(value)))
                                 XmlReporter.__add_runs(test, test_status, param_data)
                 os.makedirs(os.path.dirname(os.path.abspath(write_file)), exist_ok=True)
                 ElementTree(root).write(write_file)

@@ -107,6 +107,19 @@ class OldStyleSuite:
         assert Meta.get_meta(self)["expected"] == "5 rows"
 
 
+@Suite()
+class KeywordSuiteSuite:
+
+    @test()
+    def keyword(self):
+        Meta.update(suite=self, expected="x")  # 0.9a7's keyword form of the old call
+        assert Meta.get_meta(suite=self)["expected"] == "x"
+
+    @test()
+    def plain_key(self):
+        Meta.update(suite="checkout")  # a plain "suite" value is just a key
+
+
 @Suite(parameters=["eu", "us"], listener=Capture, meta=meta(team="core"))
 class ClassHookSuite:
 
@@ -404,6 +417,15 @@ def html_report_embeds_small_attachments_and_links_big_ones():
     assert "run_files/" + os.path.basename(log["path"]) in page
 
 
+def keyword_suite_is_the_old_call_not_a_meta_key():
+    # Meta.update(suite=self, ...) used to store the suite instance itself under "suite"
+    _run([KeywordSuiteSuite])
+    keyword = _test(KeywordSuiteSuite, "keyword")
+    assert keyword.get_status(None, None) == "success", keyword.get_status(None, None)
+    assert keyword.get_meta() == {"expected": "x"}, keyword.get_meta()
+    assert _test(KeywordSuiteSuite, "plain_key").get_meta() == {"suite": "checkout"}
+
+
 CHECKS = [update_reaches_the_running_test_from_test_helpers_and_hooks, declared_meta_is_left_alone,
           bind_carries_the_test_into_threads, old_style_writes_exactly_the_slot_it_names,
           outside_a_test_old_style_warns_once_new_style_raises, class_hooks_write_suite_meta,
@@ -411,4 +433,4 @@ CHECKS = [update_reaches_the_running_test_from_test_helpers_and_hooks, declared_
           json_report_has_meta_and_what_each_run_set, xml_report_has_properties_parameters_and_time,
           html_report_shows_meta_per_attempt, rerun_ignores_the_new_fields,
           append_link_and_attach_build_lists_per_attempt, append_and_attach_reject_bad_input,
-          html_report_embeds_small_attachments_and_links_big_ones]
+          html_report_embeds_small_attachments_and_links_big_ones, keyword_suite_is_the_old_call_not_a_meta_key]

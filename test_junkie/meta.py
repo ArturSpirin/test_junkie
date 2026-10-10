@@ -202,6 +202,18 @@ def _find_test(suite):
     return None
 
 
+def _is_suite_instance(value):
+    """True for an instance of a @Suite class, so Meta.update(suite=self, ...) (0.9a7's keyword form) is the old call"""
+    if value is None or isinstance(value, (str, bytes, int, float, bool, list, tuple, dict, set)):
+        return False
+    context = current_context()
+    if context is not None and context.suite is not None and value.__class__ is context.suite.get_class_object():
+        return True
+    from test_junkie.builder import Builder
+    return any(value.__class__ == suite_object.get_class_object()
+               for suite_object in Builder.get_execution_roster().values())
+
+
 def _slot_label(parameter, class_parameter):
     return "parameter {}, suite parameter {}".format(
         "None" if parameter is None else param_key(parameter),
@@ -243,6 +255,8 @@ class Meta(object):
         parameter / suite parameter slot of the test (it doesn't fill in missing ones) and warns, once per call
         site, when that isn't the slot the test is running as, or when no running test was found.
         """
+        if not args and _is_suite_instance(values.get("suite")):  # Meta.update(suite=self, ...)
+            args = (values.pop("suite"),)
         if args:
             suite = args[0]
             parameter = args[1] if len(args) > 1 else values.pop("parameter", None)
@@ -334,6 +348,8 @@ class Meta(object):
                 return Meta.get(args[0])
             except TestJunkieUsageError:
                 return None
+        if not args and _is_suite_instance(kwargs.get("suite")):  # Meta.get_meta(suite=self, ...)
+            args = (kwargs["suite"],)
         if not args:
             return Meta.get()
         suite = args[0]

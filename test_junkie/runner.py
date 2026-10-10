@@ -842,15 +842,16 @@ class Runner:
             Runner.__ignore_unit(None, suite, test, parameter, class_parameter, error, traceback.format_exc())
             raise
         finally:
-            if deferred:  # retried after the class is set up again - its line is printed then
-                return
-            recorded = class_parameter if test.accepts_suite_parameters() else None
-            data = test.metrics.get_metrics().get(param_key(recorded), {}).get(param_key(parameter), {})
-            context.console.unit_done(suite, key, data.get("status"), label,
-                                      runtime=sum(t for t in data.get("performance", []) if t),
-                                      runs=len(data.get("statuses", [])),
-                                      retries=test.metrics.get_retries(parameter, recorded),
-                                      waits=test.metrics.get_conflict_waits(recorded))
+            # a deferred test is retried after the class is set up again - its line is printed then. No `return`
+            # here: Python 3.14 warns about return in finally (PEP 765)
+            if not deferred:
+                recorded = class_parameter if test.accepts_suite_parameters() else None
+                data = test.metrics.get_metrics().get(param_key(recorded), {}).get(param_key(parameter), {})
+                context.console.unit_done(suite, key, data.get("status"), label,
+                                          runtime=sum(t for t in data.get("performance", []) if t),
+                                          runs=len(data.get("statuses", [])),
+                                          retries=test.metrics.get_retries(parameter, recorded),
+                                          waits=test.metrics.get_conflict_waits(recorded))
 
     @staticmethod
     def __run_test_body(suite, test, parameter=None, class_parameter=None, before_class_error=None, cancel=False,
@@ -1151,10 +1152,19 @@ class Runner:
                                               Runner.__label(suite, test, parameter, class_parameter))
                     continue
                 waited, blockers = ParallelProcessor.reserve(test, state)
+                exclusive = not test.is_parallelized()  # parallelized=False: its retry runs alone too
+                if exclusive:
+                    try:
+                        ParallelProcessor.acquire_exclusive(state)
+                    except BaseException:
+                        ParallelProcessor.release(test)
+                        raise
                 try:
                     Runner.__run_test(suite=suite, test=test, parameter=parameter, class_parameter=class_parameter,
                                       before_class_error=None, cancel=context, resume=item["resume"])
                 finally:
+                    if exclusive:
+                        ParallelProcessor.release_exclusive()
                     ParallelProcessor.release(test)
             ParallelProcessor.wait_currently_active_tests_to_finish(suite)
             if before_class_error is not None:

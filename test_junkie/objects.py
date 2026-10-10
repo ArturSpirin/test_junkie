@@ -1074,16 +1074,21 @@ class GroupRulesObject(object):
                     state["started"] = True
             if owner:
                 failure = None
-                for func in list(definition["rules"][rule_type]):
-                    try:
-                        func["decorated_function"]()
-                    except Exception as error:  # the rest of the group's hooks are skipped
-                        failure = {"trace": traceback.format_exc(), "exception": error, "definition": definition}
-                        break
-                with self.__lock:
-                    state["failure"] = failure
-                    state["before"] = self._FAILED if failure else self._DONE
-                state["finished"].set()
+                try:
+                    for func in list(definition["rules"][rule_type]):
+                        try:
+                            func["decorated_function"]()
+                        except Exception as error:  # the rest of the group's hooks are skipped
+                            failure = {"trace": traceback.format_exc(), "exception": error, "definition": definition}
+                            break
+                except BaseException as error:  # sys.exit() etc.: fail the group for the waiters, then re-raise
+                    failure = {"trace": traceback.format_exc(), "exception": error, "definition": definition}
+                    raise
+                finally:
+                    with self.__lock:
+                        state["failure"] = failure
+                        state["before"] = self._FAILED if failure else self._DONE
+                    state["finished"].set()
                 if failure:
                     return {group: dict(failure, first=True)}
             else:

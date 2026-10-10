@@ -3,6 +3,7 @@
 tests/pytest/predeploy_tests/before_class/test_group_rules_checks.py and
 tests/test_junkie/predeploy_tests/test_group_rules_checks.py
 """
+import sys
 import threading
 import time
 
@@ -172,6 +173,40 @@ class FirstFailsB:
     @test()
     def b(self):
         _log("test:b")
+
+
+
+class ExitGroupRules(Rules):
+
+    @GroupRules()
+    def group_rules(self):
+
+        @beforeGroup([ExitA, ExitB, ExitC])
+        def set_up():
+            _log("before:start")
+            time.sleep(0.3)
+            sys.exit(3)
+
+
+@Suite(rules=ExitGroupRules)
+class ExitA:
+    @test()
+    def a(self):
+        _log("test:a")
+
+
+@Suite(rules=ExitGroupRules)
+class ExitB:
+    @test()
+    def b(self):
+        _log("test:b")
+
+
+@Suite(rules=ExitGroupRules)
+class ExitC:
+    @test()
+    def c(self):
+        _log("test:c")
 
 
 def _run(suites, threads=1):
@@ -419,12 +454,30 @@ def after_group_runs_after_a_cancel():
     assert _statuses([CancelB])["CancelB"] == TestCategory.CANCEL
 
 
+def sys_exit_in_before_group_does_not_hang_parallel_suites():
+    # the suite thread running the hook used to die without releasing the others, and run() never returned
+    del LOG[:]
+    done = threading.Event()
+
+    def go():
+        try:
+            Runner([ExitA, ExitB, ExitC]).run(quiet=True, suite_multithreading_limit=3)
+        except BaseException:  # SystemExit(3) reaching run() is fine; hanging is not
+            pass
+        finally:
+            done.set()
+
+    threading.Thread(target=go, daemon=True).start()
+    assert done.wait(10), "the run hung"
+    assert not [n for n in _names() if n.startswith("test:")], _names()
+
+
 CHECKS = [before_group_runs_once_for_parallel_suites, tests_wait_until_before_group_has_finished,
           failed_before_group_ignores_every_member_once, failed_before_group_sequentially,
           several_before_group_hooks_run_in_order, a_failing_hook_stops_the_rest_and_ignores_the_group,
           a_skipped_member_still_lets_after_group_run, a_skipped_suite_evaluates_nothing,
           no_after_group_when_before_group_never_ran, after_group_runs_after_a_failed_before_group,
-          after_group_runs_after_a_cancel]
+          after_group_runs_after_a_cancel, sys_exit_in_before_group_does_not_hang_parallel_suites]
 
 
 if __name__ == "__main__":

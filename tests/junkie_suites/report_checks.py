@@ -66,6 +66,16 @@ class SkippedSuite:
         pass
 
 
+@Suite()
+class ColoredFailureSuite:
+
+    @test()
+    def colored_assert(self):
+        from test_junkie.meta import Meta
+        Meta.update(note="bell\x07here")
+        assert False, "\x1b[31mexpected 200\x1b[0m got 500"
+
+
 def _report(*suites, **run_kwargs):
     from test_junkie.runner import Runner
     path = os.path.join(tempfile.mkdtemp(), "report.html")
@@ -160,6 +170,24 @@ def reports_into_folders_that_dont_exist_yet():
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def xml_report_stays_valid_with_control_characters():
+    """
+    A colored assertion message (ANSI codes) or a control character in meta made report.xml invalid, and every
+    later run into the same file then failed to write it
+    """
+    from test_junkie.runner import Runner
+    from xml.etree.ElementTree import parse
+    path = os.path.join(tempfile.mkdtemp(), "report.xml")
+    for _ in range(2):  # the second run merges into the file the first one wrote
+        Runner([ColoredFailureSuite], xml_report=path).run(quiet=True)
+        root = parse(path).getroot()
+    failures = [f for f in root.iter("failure")]
+    assert len(failures) == 2 and failures[0].get("message") == "expected 200 got 500", [f.attrib for f in failures]
+    notes = [p.get("value") for p in root.iter("property") if p.get("name") == "note"]
+    assert notes == ["bellhere", "bellhere"], notes
+
+
 CHECKS = [report_keeps_tests_with_uncopyable_exceptions, report_variants_and_parameters,
           report_handles_a_suite_that_never_ran, report_resource_data_and_long_runtimes,
-          report_inlines_its_assets, reports_into_folders_that_dont_exist_yet]
+          report_inlines_its_assets, reports_into_folders_that_dont_exist_yet,
+          xml_report_stays_valid_with_control_characters]

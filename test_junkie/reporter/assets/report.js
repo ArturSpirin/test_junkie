@@ -393,7 +393,7 @@ function metaValue(key, value, fmt) {
   if (key === 'attachments' && isList && value.every(e => 'path' in e)) {
     return value.map(e => {
       const href = ATTACHMENTS[e.path];
-      const size = e.size >= 1048576 ? (e.size / 1048576).toFixed(1) + ' MB' : e.size >= 1024 ? Math.round(e.size / 1024) + ' KB' : e.size + ' B';
+      const size = typeof e.size !== 'number' ? escHtml(String(e.size ?? '')) : e.size >= 1048576 ? (e.size / 1048576).toFixed(1) + ' MB' : e.size >= 1024 ? Math.round(e.size / 1024) + ' KB' : e.size + ' B';
       const label = `${escHtml(String(e.name))} <span class="meta-note">${size} · ${escHtml(String(e.mime || ''))}</span>`;
       if (!href) return `${label} <span class="meta-note">(not in this report)</span>`;
       const img = String(e.mime || '').startsWith('image/') ? `<br><img class="meta-thumb" src="${escHtml(href)}" alt="${escHtml(String(e.name))}">` : '';
