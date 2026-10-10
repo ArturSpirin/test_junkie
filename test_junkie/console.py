@@ -880,8 +880,9 @@ class Console(object):
         words = {TestCategory.SUCCESS: "PASSED", TestCategory.FAIL: "FAILED", TestCategory.ERROR: "ERROR",
                  TestCategory.SKIP: "SKIPPED", TestCategory.IGNORE: "IGNORED", TestCategory.CANCEL: "CANCELLED"}
         word = words.get(status, str(status).upper())
-        if status == TestCategory.SUCCESS and runs and runs > 1:
-            word = "RETRIED"
+        style = _STYLE_OF.get(status, "dim")
+        if status == TestCategory.SUCCESS and runs and runs > 1 and self.__flag_flaky():
+            word, style = "FLAKY", "warn"  # only with --flag-flaky / --fail-on-flaky; otherwise it's a pass
         note = "run {}/{}".format(runs, runs) if runs and runs > 1 and status != TestCategory.SUCCESS else (
             "passed on run {}".format(runs) if runs and runs > 1 else "")
         summary = self.retry_summary(retries)
@@ -897,7 +898,7 @@ class Console(object):
         done = sum(len(p.done) for p in self.__suites)
         total = max(sum(p.total() for p in self.__all), done, 1)
         return "  {}  {}  {}  {}  {}".format(
-            self.style(word.ljust(9), _STYLE_OF.get(status, "dim")), label.ljust(44), self.style(note.ljust(18), "dim"),
+            self.style(word.ljust(9), style), label.ljust(44), self.style(note.ljust(18), "dim"),
             "{:0.2f}s".format(runtime).rjust(6) if runtime is not None else "      ",
             self.style("[{}%]".format(str(int(100.0 * done / total)).rjust(3)), "dim"))
 

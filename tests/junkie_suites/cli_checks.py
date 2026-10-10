@@ -664,6 +664,15 @@ def flaky_flags():
     assert "ShakySuite.steady" not in out, out
     code, out = run_cli("run", "-s", directory, "--fail-on-flaky")
     assert code == 1 and "1 flaky test (--fail-on-flaky)" in out and "ShakySuite.recovers" in out, (code, out)
+    # -p: a test that passed on a retry is a plain PASSED; it's marked FLAKY only when a flaky flag asks for it
+    code, out = run_cli("run", "-s", directory, "-p")
+    assert code is None and re.search(r"^  PASSED +recovers +passed on run 2", out, re.M), out
+    assert "FLAKY" not in out and "RETRIED" not in out, out
+    code, out = run_cli("run", "-s", directory, "-p", "--flag-flaky")
+    assert code is None and re.search(r"^  FLAKY +recovers +passed on run 2", out, re.M), out
+    assert re.search(r"^  PASSED +steady", out, re.M), out
+    code, out = run_cli("run", "-s", directory, "-p", "--fail-on-flaky")
+    assert code == 1 and re.search(r"^  FLAKY +recovers", out, re.M), (code, out)
 
 
 def report_folders_and_json_report():
