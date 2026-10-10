@@ -11,16 +11,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # sample of the versions setup.py supports (latest release + the five prior minors): both
-        # boundaries plus two in between. Move the boundaries when the supported range changes.
+        # sample of the versions setup.py supports (3.9 through the latest release): both
+        # boundaries plus two in between. Move the upper boundary when a new Python is released.
         # 3.13 also uploads coverage, see below
-        python-version: ["3.9", "3.11", "3.13", "3.14"]
+        python-version: ["3.9", "3.11", "3.13", "3.15"]
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          # 3.15.0 (2026-10-09) isn't in setup-python's list yet: this takes rc3 until it is, then the final release
+          allow-prereleases: true
 
       - run: pip install -r requirements.txt
       - run: pip install -e .

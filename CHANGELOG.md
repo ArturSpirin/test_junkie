@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.9a8
+- Supports Python 3.9 through 3.15
 - A listener that raises no longer ends its suite; the error is listed under Problems and the run fails at the end
 - Tests a suite never reached (it ended early, e.g. `sys.exit()`) are reported as ignored
 - Logs from loggers with `propagate = False` are captured again
