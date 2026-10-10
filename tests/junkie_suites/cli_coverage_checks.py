@@ -65,6 +65,22 @@ class CovGuessRootInterrupted:
         pass
 '''
 
+# a test module that ends the process while it's imported
+EXITS_AT_IMPORT = '''
+import sys
+sys.exit(0)
+
+from test_junkie.decorators import Suite, test
+
+
+@Suite()
+class CovExitsAtImport:
+
+    @test()
+    def never(self):
+        pass
+'''
+
 NOT_A_SUITE = '''raise RuntimeError("a file that doesn't mention the framework must not be imported by the scan")
 '''
 
@@ -198,6 +214,12 @@ def ctrl_c_while_guessing_the_root():
         os.environ.pop("TJ_COV_GUESS_ROOT_RETRY", None)
 
 
+def sys_exit_while_importing_a_test_module_is_an_error():
+    # exit 0 with no output would turn a CI run green without running anything
+    code, out = run_cli("run", "-s", _write(EXITS_AT_IMPORT, "cov_exits_at_import.py"))
+    assert code == 120 and "Unexpected error during scan" in out and "SystemExit" in out, out
+
+
 def ctrl_c_before_the_run_reports_it():
     import test_junkie.cli.cli_runner as cli_runner
 
@@ -312,5 +334,6 @@ Undefined_ = object()
 CHECKS = [config_flag_without_a_file_and_config_help, config_rejects_an_unknown_option, cli_module_runs_as_a_script,
           audit_owner_and_component_filters, audit_conflicts_view, interactive_scan_shows_progress_then_clears_it,
           scan_skips_files_that_dont_mention_the_framework, ctrl_c_while_guessing_the_root,
+          sys_exit_while_importing_a_test_module_is_an_error,
           ctrl_c_before_the_run_reports_it, project_root_retry_that_still_fails,
           code_coverage_and_guess_root_from_the_saved_config, pyproject_without_a_toml_reader_or_with_bad_toml]

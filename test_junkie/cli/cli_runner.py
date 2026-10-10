@@ -177,9 +177,6 @@ class CliRunner:
             try:
                 sys.path.insert(0, possibility)
                 return _load_source(_module_name, _file_path)
-            except KeyboardInterrupt:
-                print("(Ctrl+C) Exiting!")
-                exit(12)
             except ImportError as error:
                 if len(possibility.split(os.sep)) > 2:
                     return guess_project_root(possibility, _module_name, error)
@@ -267,8 +264,6 @@ class CliRunner:
             print("[{status}] {error}.".format(status=CliUtils.format_color_string(value="ERROR", color="red"),
                                                error=err))
             exit(120)
-        except SystemExit:  # an exit code chosen further down (e.g. 12 for Ctrl+C during --guess-root) stands
-            raise
         except:
             print("[{status}] Unexpected error during scan for test suites.".format(
                 status=CliUtils.format_color_string(value="ERROR", color="red")))
