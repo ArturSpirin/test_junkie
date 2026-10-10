@@ -1,39 +1,37 @@
 # Changelog
 
 ## 0.9a8
-- A listener that raises no longer ends its suite: the rest of the suite runs, each listener error is listed under Problems and the run still fails at the end with `TestListenerError`
-- Tests a suite never got to, because it ended early (a test calling `sys.exit()`, say), are reported as ignored instead of being left out of the summary and reports
-- Logs from a logger with `propagate = False` are captured again; they were dropped instead of being shown for tests that didn't pass
-- The header shows a test count that includes parameter functions as an estimate, e.g. `16+ tests`
-- Resource pools: `Limiter.pool("grid", max_concurrent=5, min_interval=0.5)` and `@test(uses="grid")` / `@Suite(uses=)` cap how many tests use one resource at once and how often they start
-- `Limiter.RAMP_UP` grows the suite and test thread limits from 1 to `-S`/`-T` over that many seconds
-- `@Suite(throttling=N)` gives a suite its own spacing between tests, e.g. 0 to exempt it from `TEST_THROTTLING`
-- Truncation can keep the top, bottom or middle of a message or traceback (`Limiter.TRACEBACK_TRUNCATE`, `EXCEPTION_MESSAGE_TRUNCATE`); middle is the default, so a cut traceback keeps the line that raised
-- The `tj run` header's `reports` line lists the JSON report too; with `--json-report` it showed only the HTML and XML files
-- Every limit can be set for one run (`Runner.run(test_throttling=1, ...)`), from `tj run` (`--test-throttling`, `--suite-throttling`, `--ramp-up`, `--traceback-limit`, `--message-limit`, `--truncate`) or saved with `tj config update`
-- `TEST_THROTTLING` and `SUITE_THROTTLING` are run-wide: each suite thread slept on its own, so parallel suites started tests several times as often as the limit, and the first start waited too
-- `EXCEPTION_MESSAGE_LIMIT` had no effect on Python 3; messages are now cut in the console and reports, and listeners still get the full exception
-- `pr=` is now `conflicts_with=` (`pr=` keeps working through 1.x with a `DeprecationWarning`; both together is an error). Targets can be names (`"Suite"`, `"Suite.test"`), a test can name a suite and a suite a test, and every target is checked before the run starts. `tj audit conflicts` lists every pair; the console and JSON report (`conflict_waits`) show how long a test waited
-- Conflicting tests could run at the same time: a test run without its own thread wasn't seen, two could both pass the check before either started, and one could start between the other's parameters
-- `@test(parallelized=False)` runs alone: nothing else in the run starts (any suite, hooks included) until it and all of its parameters are done. It used to wait for the running tests and then let new ones start alongside it. `parallelized=False` with `parallelized_parameters=True` is now rejected
-- Two parameters of one test (or two suite parameters) that read the same, e.g. `1` and `"1"`, or objects with the same `__str__`, are rejected: that test or suite is ignored with an error naming them. Their results used to overwrite each other. New `ids=[...]` (or `ids=lambda p: ...`) on `@test()` and `@Suite()` names parameters you can't change; reports and `--rerun` use those names. A list that repeats a value on purpose (`[1, 1]`) is rejected too
-- `@afterGroup` runs after the last suite of its group however it ended (skipped, ignored, cancelled, Ctrl+C) and after a failed `@beforeGroup`; it used to be skipped whenever one suite didn't run. It doesn't run if `@beforeGroup` never ran (e.g. every suite skipped)
-- A skipped suite no longer evaluates its `parameters` or runs `@beforeGroup`; a skipped suite with bad parameters now reports as skipped, not ignored
-- A `parameters` function that raises no longer stops the run: that suite or test is ignored with the traceback, the rest of the run carries on and still fails at the end. `run()` no longer raises `TestJunkieExecutionError` for it. A function that raised isn't called again in the same run
-- `@beforeGroup` runs once when its suites run in parallel (`-S` > 1); the other suites wait for it, and if it fails they're all ignored. It used to run once per suite, at the same time
-- Several `@beforeGroup` / `@afterGroup` hooks on the same suites run in the order they're defined; a second one used to crash with `KeyError`. If one fails, the rest are skipped and the group is ignored
-- Flaky tests are tracked for every test: `test.is_flaky(parameter, suite_parameter)` is True when it passed only after failing or erroring in that run, whatever retried it (`retry=N`, a retry policy, a suite retry pass); `test.get_flaky()` lists each flaky parameter combination with the run it passed on and what failed before. The JSON report adds `"flaky"` to every test. `tj run --flag-flaky` lists them after the summary, `--fail-on-flaky` also fails the run (exit code 1). With `-p`, a test that passed on a retry shows as `PASSED` with `passed on run N`; `--flag-flaky` or `--fail-on-flaky` labels it `FLAKY` instead. With `--fail-on-flaky`, each flaky test also gets a Problems entry like a failure: where it failed, every run, and the traceback of each failed run
-- `Meta.update(**values)` sets metadata on the running test from the test, any helper it calls, `@beforeTest` or `@afterTest`, without passing `self` or parameters: each thread running a test knows which test, parameter, suite parameter and attempt it is. `Meta.get(key)` reads it back, `Meta.bind(fn)` carries it into threads the test starts. `Meta.suite.update(**values)` in `@beforeClass` / `@afterClass` sets suite meta for that suite parameter (listeners get it in `properties["suite_meta"]`). Outside a test these raise `TestJunkieUsageError` with how to fix it
-- The old call `Meta.update(self, parameter=..., suite_parameter=..., ...)` keeps writing to exactly the slot it names, and now warns (`TestJunkieMetaWarning`, once per call site) when that isn't the slot the test runs as, or when it found no running test and the values were dropped, instead of dropping them silently. `Meta.get_meta("key")` returns that key, or None outside a test
-- Metadata set while running is kept per attempt: `test.get_meta_attempts(parameter, suite_parameter)` and `properties["meta_attempts"]` list what each run set (latest value per key); `test.get_meta()` and `properties["test_meta"]` still give the merged values, carried across retries as before. The declared `@test(meta=...)` is no longer changed by updates
-- `Meta.append(key, value)` adds to a list on the running test, `Meta.link(label, url)` adds a link (shown clickable in the HTML report; the same link again, e.g. from a retry, is listed once) and `Meta.attach(name, bytes_or_path)` attaches a file: copied when attached, embedded in the HTML report up to 512 KB, bigger ones saved next to it in `<report>_files/`. Listeners and reports get them in the metadata: `"links"` as `[{"label", "url"}]`, `"attachments"` as `[{"name", "size", "mime", "path", "source"}]`; each attempt's record lists what that attempt added
-- Reports show metadata: the JSON report adds `meta` to each test and `meta_set` to each run; the HTML report has a metadata panel per test variant (keys set while running marked with the attempt that set them) and per attempt; the XML report adds JUnit `<properties>`, `classname`, `time` and the parameters to each test case's name (`login[suite: admin, 2]`). Values are made JSON-safe (bytes decoded, other objects as `str()`) and long ones cut
-- The XML report records retried runs the way Maven Surefire does, which Jenkins, GitLab and flaky-test trackers read: a test that passed after failing gets a `<flakyFailure>`/`<flakyError>` per failed run, a test that never passed gets `<failure>` for its first run and a `<rerunFailure>`/`<rerunError>` per retry, each with the exception's `type`, `message` and `<stackTrace>`
-- Retry policies can set `circuit=N` (after N tests with the policy failed even after retrying, it stops retrying for the rest of the run). `Runner.run(retry_policy=)` / `tj run --retry-policy module:Class` sets one for every test that sets no retry of its own
-- Retry policies can set `max_time` (no retry after that many seconds), `reset="class"` (run `@afterClass` + `@beforeClass` again before retrying; retries are held until the suite parameter's other tests are done, then run together after one fresh setup), and override `should_retry()` (last word) and `before_retry()` (runs right before a retry; if it raises, the test isn't retried)
-- Retry policies: `class Flaky(RetryPolicy)` with `when = [When(TimeoutError, attempts=3, delay=1), When(message="503", attempts=2, delay=20, backoff=2)]`, used as `@test(retry=Flaky)` or `@Suite(retry_policy=Flaky)`. Each condition has its own budget; delays don't hold pool slots and stop on cancel. New `on_retry` listener event; retries show in the console and reports
-- `@beforeTest` / `@afterTest` hooks can take a `test` argument: a read-only view of the test they run around (`test.get_tags()`, `test.get_meta()`, ...). Rules get the same view; changes to it never reach the run
-- `html_report` and `xml_report` create a folder that doesn't exist yet (e.g. `html_report="reports/"`), like `json_report` already did
+- A listener that raises no longer ends its suite; the error is listed under Problems and the run fails at the end
+- Tests a suite never reached (it ended early, e.g. `sys.exit()`) are reported as ignored
+- Logs from loggers with `propagate = False` are captured again
+- The header marks an estimated test count, e.g. `16+ tests`
+- Resource pools: `Limiter.pool()` with `@test(uses=)` / `@Suite(uses=)`
+- `Limiter.RAMP_UP` / `--ramp-up` grows the thread limits from 1 over N seconds
+- `@Suite(throttling=N)`: per-suite spacing between tests
+- Truncation keeps the top, bottom or middle (default) of a message or traceback
+- Every limit can be set per run (`Runner.run()`, `tj run` flags) or saved with `tj config update`
+- `TEST_THROTTLING` / `SUITE_THROTTLING` are run-wide, as documented
+- `EXCEPTION_MESSAGE_LIMIT` works on Python 3
+- `pr=` is now `conflicts_with=` (`pr=` still works with a `DeprecationWarning`); names as targets, checked at run start, `tj audit conflicts`
+- Conflicting tests could run at the same time
+- `@test(parallelized=False)` runs alone across the whole run
+- Parameters that read the same (`1` and `"1"`) are rejected; new `ids=` on `@test()` / `@Suite()`
+- `@afterGroup` runs however its group ended, including after a failed `@beforeGroup`
+- A skipped suite doesn't evaluate its `parameters` or run `@beforeGroup`
+- A `parameters` function that raises ignores that suite or test instead of stopping the run
+- `@beforeGroup` runs once under `-S` > 1; several group hooks on the same suites run in order
+- Flaky tests: `test.is_flaky()`, `get_flaky()`, `"flaky"` in the JSON report, `tj run --flag-flaky` / `--fail-on-flaky`
+- `-p` shows a test that passed on a retry as `PASSED` (`FLAKY` with the flaky flags)
+- `Meta.update(**values)`, `Meta.get()`, `Meta.bind()`, `Meta.suite.update()`: metadata on the running test without passing `self`
+- The old `Meta.update(self, ...)` call warns (`TestJunkieMetaWarning`) when its values miss the running test
+- Metadata is kept per attempt: `test.get_meta_attempts()`, `properties["meta_attempts"]`
+- `Meta.append()`, `Meta.link()`, `Meta.attach()`: lists, links and file attachments in the reports
+- Reports show metadata (JSON `meta`/`meta_set`, HTML panel, XML `<properties>`); XML test names include their parameters
+- The XML report records retries the Surefire way (`flakyFailure`, `rerunFailure`, ...)
+- Retry policies: `RetryPolicy` with `When(...)` conditions, `@test(retry=Policy)`, `@Suite(retry_policy=)`, `on_retry` event
+- Retry policies: `max_time`, `reset="class"`, `should_retry()`, `before_retry()`, `circuit=N`; `tj run --retry-policy`
+- `@beforeTest` / `@afterTest` hooks and rules can take a read-only `test` view
+- `html_report` / `xml_report` create missing folders; the `tj run` header lists the JSON report
 
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way
