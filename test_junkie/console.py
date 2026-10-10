@@ -1139,7 +1139,10 @@ class Console(object):
         if test is not None:
             try:
                 function = test.get_function_object()
-                return "{}:{}".format(_relative(inspect.getsourcefile(function)), function.__code__.co_firstlineno)
+                source = inspect.getsourcefile(function)
+                # code with no file (exec'd from a string): None on some Pythons, an exception on others
+                if source:
+                    return "{}:{}".format(_relative(source), function.__code__.co_firstlineno)
             except Exception:
                 pass
         return ""

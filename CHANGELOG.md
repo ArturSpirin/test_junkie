@@ -35,6 +35,7 @@
 - `html_report` / `xml_report` create missing folders; the `tj run` header lists the JSON report
 - A suite whose `skip=` function raises reports that error instead of an `AttributeError`
 - A `KeyboardInterrupt` raised by a listener or hook reports the unfinished and queued suites as cancelled
+- A test defined in code with no source file no longer shows `None:<line>` as its location
 
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way
