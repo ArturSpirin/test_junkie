@@ -28,6 +28,7 @@ class Builder(object):
                               "ids": [list, "<type 'function'>"], "conflicts_with": [list],
                               "parameters": ["<type 'function'>", list], "skip": ["<type 'function'>", bool]}
 
+    __CLASS_VALUED = (Listener, Rules, RetryPolicy)  # the only expected types a class (subclass) is accepted for
     __GROUP_RULES = []
     __GROUP_RULE_DEFINITIONS = {}
     __REQUESTED_SUITES = None
@@ -159,11 +160,12 @@ class Builder(object):
             if expected == "<type 'function'>":
                 if inspect.isfunction(actual) or inspect.ismethod(actual):
                     return False
-            else:
-                if inspect.isclass(actual) and issubclass(actual, expected):
-                    return False
-                if type(actual) is expected or isinstance(actual, expected):
-                    return False
+            elif inspect.isclass(actual):
+                # a class only where the argument takes one (listener=, rules=, a retry policy). skip=bool or
+                # parameters=list is the type passed where a value was meant
+                return not (expected in Builder.__CLASS_VALUED and issubclass(actual, expected))
+            elif type(actual) is expected or isinstance(actual, expected):
+                return False
             return True
 
         args = Builder.__SUITE_VALIDATION_ARGS if suite else Builder.__TEST_VALIDATION_ARGS
@@ -174,7 +176,10 @@ class Builder(object):
                     if failed:
                         failed = validation_failed(kwargs.get(arg), expected_type)
                 if failed:
-                    return {"expected": expected_types, "actual": type(kwargs.get(arg)), "arg": arg}
+                    value = kwargs.get(arg)
+                    actual = ("the type {} instead of a value".format(value.__name__) if inspect.isclass(value)
+                              else type(value).__name__)
+                    return {"expected": expected_types, "actual": actual, "arg": arg}
         return False
 
     @staticmethod
@@ -198,7 +203,7 @@ class Builder(object):
                                 "but got {actual}. See documentation: {link}".format(
                                     arg=data["arg"],
                                     expected=Builder.__fmt_expected_types(data["expected"]),
-                                    actual=data["actual"].__name__,
+                                    actual=data["actual"],
                                     link=DocumentationLinks.SUITE_DECORATOR))
 
     @staticmethod
@@ -212,7 +217,7 @@ class Builder(object):
                                 "but got {actual}. See documentation: {link}".format(
                                     arg=data["arg"],
                                     expected=Builder.__fmt_expected_types(data["expected"]),
-                                    actual=data["actual"].__name__,
+                                    actual=data["actual"],
                                     link=DocumentationLinks.TEST_DECORATOR))
         if kwargs.get("parallelized") is False and kwargs.get("parallelized_parameters") is True:
             raise BadParameters("@test() got parallelized=False and parallelized_parameters=True: a test that runs "

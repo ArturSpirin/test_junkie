@@ -269,14 +269,87 @@ def suppressed_stdout_off_leaves_output_alone():
 
 # --- objects: skip, Limiter --------------------------------------------------------------------------------------
 
-def skip_given_a_type_fails_at_run_time():
-    # the decorator accepts a subclass of bool, so skip=bool (the type, not a value) gets past it
-    @Suite()
-    class CoreCovSkipType:
-        @test(skip=bool)
-        def t(self):
+def _decoration_error(make):
+    from test_junkie.builder import Builder
+    try:
+        make()
+    except BadParameters as error:
+        return str(error)
+    finally:
+        Builder._Builder__set_current_suite_object_defaults()  # a @test that raised left its suite half-defined
+    raise AssertionError("decoration accepted it")
+
+
+def a_type_where_a_value_is_expected_is_rejected():
+    # skip=bool (the type, not True/False) used to pass decoration and only fail at run time
+    for kwargs in ({"skip": bool}, {"parameters": list}, {"ids": list}, {"tags": list}, {"owner": str},
+                   {"priority": int}, {"retry": int}, {"meta": dict}, {"uses": str}, {"parallelized": bool}):
+        def make_test():
+            @Suite()
+            class CoreCovTypeForValue:
+                @test(**kwargs)
+                def t(self, parameter=None):
+                    pass
+        message = _decoration_error(make_test)
+        name = list(kwargs.values())[0].__name__
+        assert "Argument \"{}\" in @test()".format(list(kwargs)[0]) in message, message
+        assert "but got the type {} instead of a value".format(name) in message, message
+    for kwargs in ({"skip": bool}, {"parameters": list}, {"meta": dict}, {"throttling": float}, {"retry": int}):
+        def make_suite():
+            @Suite(**kwargs)
+            class CoreCovSuiteTypeForValue:
+                @test()
+                def t(self):
+                    pass
+        message = _decoration_error(make_suite)
+        assert "in @Suite() decorator" in message and "the type" in message, message
+
+
+def a_class_is_still_taken_where_one_is_expected():
+    from test_junkie.listener import Listener
+    from test_junkie.rules import Rules
+
+    class CoreCovListener(Listener):
+        pass
+
+    class CoreCovRules(Rules):
+        pass
+
+    class CoreCovPolicy(RetryPolicy):
+        pass
+
+    @Suite(listener=CoreCovListener, rules=CoreCovRules, retry_policy=CoreCovPolicy, skip=False, parameters=[1])
+    class CoreCovClassArgs:
+        @test(retry=CoreCovPolicy, skip=lambda: False, parameters=lambda: [1], tags=["a"])
+        def t(self, parameter):
             pass
-    assert "not a supported type" in _run_error(CoreCovSkipType)
+
+    from test_junkie.builder import Builder
+    assert CoreCovClassArgs in Builder.get_execution_roster()
+
+
+def skip_of_an_unsupported_type_fails_at_run_time():
+    # decoration rejects it now; the run-time check stays for a skip= that got past it
+    from test_junkie.objects import _FuncEval
+
+    class Unchecked:
+        @staticmethod
+        def get_skip():
+            return bool
+
+        @staticmethod
+        def get_function_module():
+            return "core_coverage"
+
+        @staticmethod
+        def get_function_name():
+            return "t"
+    try:
+        _FuncEval.eval_skip(Unchecked())
+    except BadParameters as error:
+        assert "not a supported type" in str(error) and "core_coverage.t" in str(error), str(error)
+    else:
+        raise AssertionError("skip=bool was accepted at run time")
 
 
 class _Final(Exception):
@@ -553,7 +626,8 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           report_value_falls_back_to_repr, suite_meta_outside_a_run_is_a_usage_error,
           old_style_get_meta_outside_a_test_returns_none, meta_append_onto_a_tuple,
           aggregator_percentage_and_console_summary, resource_monitor_cleanup_warns_when_the_file_is_gone,
-          suppressed_stdout_off_leaves_output_alone, skip_given_a_type_fails_at_run_time,
+          suppressed_stdout_off_leaves_output_alone, a_type_where_a_value_is_expected_is_rejected,
+          a_class_is_still_taken_where_one_is_expected, skip_of_an_unsupported_type_fails_at_run_time,
           exception_messages_that_cannot_be_truncated_are_kept, limits_off_means_no_test_throttling,
           wait_turn_stops_on_cancel, pools_listed_acquired_and_released, uses_with_a_non_name_is_rejected,
           unknown_limit_is_rejected, suite_retry_pass_asks_the_test_policy, when_and_decision_details,
