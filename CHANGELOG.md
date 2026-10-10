@@ -36,6 +36,7 @@
 - A suite whose `skip=` function raises reports that error instead of an `AttributeError`
 - A `KeyboardInterrupt` raised by a listener or hook reports the unfinished and queued suites as cancelled
 - Ctrl+C while `--guess-root` retries an import exits 12 again, not 120 with an "unexpected error"
+- A `KeyboardInterrupt` from a hook or listener in a suite or test thread cancels the run like Ctrl+C: the test is counted as cancelled and the HTML/JSON reports are written (the HTML report crashed on a test with no run time)
 - A test defined in code with no source file no longer shows `None:<line>` as its location
 
 ## 0.9a7

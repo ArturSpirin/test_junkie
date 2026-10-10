@@ -114,6 +114,7 @@ class Runner:
         self.__active_suites = []
         self.__before_group_failure_records = {}
         self.__thread_errors = []
+        self.__thread_interrupted = False  # a KeyboardInterrupt ended a suite or test thread
         self.__changed_parameters = set()  # tests a rerun runs with all parameters, already reported
         self.__group_rules = Builder.build_group_definitions(self.__all_suites)
         for suite in self.__all_suites:
@@ -352,6 +353,15 @@ class Runner:
                     self.__suites.remove(suite)
 
             ParallelProcessor.wait_currently_active_suites_to_finish()
+            if self.__thread_interrupted:  # a suite thread it came through never finished its suite
+                for suite_object in self.__executed_suites:
+                    if suite_object.get_status() is None:
+                        try:
+                            self.__ignore_unfinished(suite_object, None, None, time.time(),
+                                                     status=TestCategory.CANCEL)
+                        except KeyboardInterrupt:
+                            pass
+                        console.suite_finished(suite_object)
         except Exception as error:
             # report on what did run before raising - used to exit without the summary or the HTML/XML reports
             run_error = error
@@ -430,6 +440,10 @@ class Runner:
         def target(*args):
             try:
                 func(*args)
+            except KeyboardInterrupt:
+                # a hook or listener raised it in this thread: the run is cancelled, same as Ctrl+C
+                self.__cancel_by_user()
+                self.__thread_interrupted = True
             except BaseException as error:
                 self.__thread_errors.append(error)
         return target
@@ -849,6 +863,12 @@ class Runner:
             deferred = Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error,
                                               context.state, context, resume) == "deferred"
         except (TestInterrupted, KeyboardInterrupt):
+            # raised outside the test's body (a hook or a listener): the test is cancelled, as with Ctrl+C during it
+            context.cancel_by_user()
+            try:
+                Runner.__ignore_unit(None, suite, test, parameter, class_parameter, None, None, TestCategory.CANCEL)
+            except KeyboardInterrupt:
+                pass  # a listener raising it again: the cancel is recorded
             raise
         except BaseException as error:  # e.g. the test called sys.exit()
             Runner.__ignore_unit(None, suite, test, parameter, class_parameter, error, traceback.format_exc())

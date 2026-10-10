@@ -472,24 +472,79 @@ class InterruptedAfterTestSuite:
         pass
 
 
-def reports_after_an_interrupt_in_after_test():
-    # no html_report here: with one, the run currently ends in a StatisticsError instead (reported as a bug)
+@Suite()
+class AfterInterruptQueuedSuite:
+
+    @test()
+    def queued(self):
+        pass
+
+
+def _reports_after_an_interrupt_in_after_test(**threads):
+    """a KeyboardInterrupt from @afterTest: the run ends as cancelled, every report is written, nothing is left out"""
     from test_junkie.runner import Runner
     folder = tempfile.mkdtemp(prefix="tj_core_interrupt_")
     try:
-        paths = {kind: os.path.join(folder, "r." + kind) for kind in ("xml", "json")}
-        runner = Runner([InterruptedAfterTestSuite], quiet=True, xml_report=paths["xml"])
+        paths = {kind: os.path.join(folder, "r." + kind) for kind in ("html", "xml", "json")}
+        runner = Runner([InterruptedAfterTestSuite, AfterInterruptQueuedSuite], quiet=True, xml_report=paths["xml"],
+                        html_report=paths["html"])
         try:
-            runner.run(json_report=paths["json"])
+            runner.run(json_report=paths["json"], **threads)
         except KeyboardInterrupt:
             pass
         else:
             raise AssertionError("the KeyboardInterrupt was swallowed")
         with open(paths["json"], encoding="utf-8") as doc:
-            assert [suite["name"] for suite in json.load(doc)["suites"]] == ["InterruptedAfterTestSuite"]
+            report = json.load(doc)
+        tests = {(suite["name"], unit["name"]): unit["status"] for suite in report["suites"] for unit in suite["tests"]}
+        assert tests[("InterruptedAfterTestSuite", "t")] == "cancel", tests
+        assert None not in tests.values() and report["totals"]["total"] == len(tests), (tests, report["totals"])
+        assert [suite["name"] for suite in report["suites"]] == ["InterruptedAfterTestSuite",
+                                                                 "AfterInterruptQueuedSuite"], report["suites"]
+        assert os.path.getsize(paths["html"]) > 0
         parse(paths["xml"])
     finally:
         shutil.rmtree(folder, ignore_errors=True)
+
+
+def reports_after_an_interrupt_in_after_test():
+    _reports_after_an_interrupt_in_after_test()
+
+
+def reports_after_an_interrupt_in_after_test_in_a_test_thread():
+    _reports_after_an_interrupt_in_after_test(test_multithreading_limit=2)
+
+
+def reports_after_an_interrupt_in_after_test_in_a_suite_thread():
+    _reports_after_an_interrupt_in_after_test(suite_multithreading_limit=2)
+
+
+@Suite()
+class TimedAndUntimedSuite:
+
+    @test()
+    def untimed(self):
+        pass
+
+    @test()
+    def timed(self):
+        pass
+
+
+def average_test_runtime_skips_tests_with_no_time():
+    import time
+    from test_junkie.builder import Builder
+    from test_junkie.constants import DecoratorType
+    from test_junkie.metrics import Aggregator
+    suite = Builder.get_execution_roster()[TimedAndUntimedSuite]
+    untimed, timed = _test_object(TimedAndUntimedSuite, "untimed"), _test_object(TimedAndUntimedSuite, "timed")
+    untimed.metrics.reset()
+    timed.metrics.reset()
+    # a @beforeTest ran, the test never got a result: a row with no time of its own
+    untimed.metrics.update_metrics(status=None, start_time=time.time(), decorator=DecoratorType.BEFORE_TEST)
+    assert Aggregator([suite]).get_average_test_runtime() is None
+    timed.metrics.update_metrics(status="success", start_time=0, runtime=2.0)
+    assert Aggregator([suite]).get_average_test_runtime() == 2.0
 
 
 CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_local_changes,
@@ -503,4 +558,6 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           wait_turn_stops_on_cancel, pools_listed_acquired_and_released, uses_with_a_non_name_is_rejected,
           unknown_limit_is_rejected, suite_retry_pass_asks_the_test_policy, when_and_decision_details,
           jitter_adds_a_bounded_random_wait, retry_policy_option_must_name_a_policy,
-          reports_cover_skips_broken_hooks_and_lost_attachments, reports_after_an_interrupt_in_after_test]
+          reports_cover_skips_broken_hooks_and_lost_attachments, reports_after_an_interrupt_in_after_test,
+          reports_after_an_interrupt_in_after_test_in_a_test_thread,
+          reports_after_an_interrupt_in_after_test_in_a_suite_thread, average_test_runtime_skips_tests_with_no_time]

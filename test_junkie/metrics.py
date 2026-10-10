@@ -408,7 +408,8 @@ class Aggregator(object):
                 test_metrics = test.metrics.get_metrics()
                 for class_param, class_param_data in test_metrics.items():
                     for param, param_data in class_param_data.items():
-                        samples.append(mean(param_data["performance"]))
+                        if param_data["performance"]:  # no time when only a hook ran, e.g. the run was interrupted
+                            samples.append(mean(param_data["performance"]))
         return mean(samples) if samples else None
 
 
