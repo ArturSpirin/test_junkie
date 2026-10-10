@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
+import base64
 import copy
 import html as html_module
 import json
 import math
+import mimetypes
 import os
 import re
+import shutil
 import time
 import traceback
 from datetime import datetime
@@ -12,7 +15,7 @@ from statistics import mean, median
 
 from test_junkie.constants import TestCategory, DecoratorType
 from test_junkie.debugger import LogJunkie
-from test_junkie.meta import report_value
+from test_junkie.meta import report_value, ATTACHMENTS_KEY, ATTACH_EMBED_LIMIT
 from test_junkie.metrics import Aggregator
 from test_junkie.reporter.analyzer import Analyzer
 from test_junkie.reporter.html_template import ReportTemplate
@@ -107,12 +110,48 @@ class Reporter:
             "details_json": json.dumps(table_data["details_data"]),
             "bar_data_json": json.dumps(self.__get_bar_data()),
             "suite_count": len(self.aggregator.executed_suites),
+            "attachments": self.__attachment_links(table_data["details_data"], write_file),
         }
 
         html_content = ReportTemplate.render(template_data)
         os.makedirs(os.path.dirname(os.path.abspath(write_file)), exist_ok=True)  # e.g. html_report="reports/"
         with open(write_file, "w+", encoding="utf8") as output:
             output.write(html_content)
+
+    @staticmethod
+    def __attachment_links(details_data, write_file):
+        """
+        {saved path: href} for every Meta.attach() file in the report: a data: URI up to ATTACH_EMBED_LIMIT bytes, so
+        the report stays one file, else a copy in "<report name>_files/" next to the report, linked relatively
+        """
+        paths = []
+
+        def collect(meta):
+            for entry in (meta or {}).get(ATTACHMENTS_KEY) or []:
+                if isinstance(entry, dict) and isinstance(entry.get("path"), str) and entry["path"] not in paths:
+                    paths.append(entry["path"])
+        for detail in details_data.values():
+            for variant in detail.get("variants") or []:
+                collect(variant.get("meta"))
+                for attempt in variant.get("attempts") or []:
+                    collect(attempt.get("meta"))
+        links = {}
+        folder_name = os.path.splitext(os.path.basename(write_file))[0] + "_files"
+        for path in paths:
+            try:
+                size = os.path.getsize(path)
+                if size <= ATTACH_EMBED_LIMIT:
+                    mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+                    with open(path, "rb") as source:
+                        links[path] = "data:{};base64,{}".format(mime, base64.b64encode(source.read()).decode("ascii"))
+                else:
+                    folder = os.path.join(os.path.dirname(os.path.abspath(write_file)), folder_name)
+                    os.makedirs(folder, exist_ok=True)
+                    shutil.copyfile(path, os.path.join(folder, os.path.basename(path)))
+                    links[path] = "{}/{}".format(folder_name, os.path.basename(path))
+            except OSError as error:
+                LogJunkie.warn("Attachment {} left out of the HTML report: {}".format(path, error))
+        return links
 
     # ── Resource monitoring ───────────────────────────────────────────────────
 

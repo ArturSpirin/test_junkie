@@ -30,6 +30,7 @@ class ReportTemplate:
                        "details_json": ctx["details_json"].replace("</", "<\\/"),
                        "bar_data_json": ctx["bar_data_json"].replace("</", "<\\/"),
                        "threading_json": json.dumps(ctx.get("threading_data")).replace("</", "<\\/"),
+                       "attachments_json": json.dumps(data.get("attachments") or {}).replace("</", "<\\/"),
                        "resources_enabled": "true" if ctx["res_enabled_style"] == "" else "false"})
         # one pass, so a value that happens to contain {{...}} is never substituted again
         return re.sub(r"\{\{(\w+)\}\}", lambda match: values[match.group(1)], _asset("report.html"))

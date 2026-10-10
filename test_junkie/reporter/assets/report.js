@@ -377,10 +377,30 @@ function metaBlock(title, values, attempts) {
   keys.forEach(k => {
     const note = attempts ? (setIn[k] ? `set in attempt ${setIn[k]}` : 'declared') : '';
     rows += `<div class="meta-row${attempts && setIn[k] ? ' set' : ''}">
-      <span class="meta-key">${escHtml(k)}</span><span class="meta-val">${escHtml(fmt(values[k]))}</span>
+      <span class="meta-key">${escHtml(k)}</span><span class="meta-val">${metaValue(k, values[k], fmt)}</span>
       ${note ? `<span class="meta-note">${note}</span>` : ''}</div>`;
   });
   return `<div class="meta-block"><div class="meta-title">${escHtml(title)}</div>${rows}</div>`;
+}
+
+// Meta.link() entries as links, Meta.attach() entries as downloads (images previewed), anything else as text.
+function metaValue(key, value, fmt) {
+  const isList = Array.isArray(value) && value.length && value.every(e => e && typeof e === 'object');
+  const safeUrl = u => /^(https?:|mailto:|data:|[^:]*$)/i.test(u) ? u : '#';
+  if (key === 'links' && isList && value.every(e => 'url' in e)) {
+    return value.map(e => `<a class="meta-link" href="${escHtml(safeUrl(String(e.url)))}" target="_blank" rel="noopener">${escHtml(String(e.label || e.url))}</a>`).join('<br>');
+  }
+  if (key === 'attachments' && isList && value.every(e => 'path' in e)) {
+    return value.map(e => {
+      const href = ATTACHMENTS[e.path];
+      const size = e.size >= 1048576 ? (e.size / 1048576).toFixed(1) + ' MB' : e.size >= 1024 ? Math.round(e.size / 1024) + ' KB' : e.size + ' B';
+      const label = `${escHtml(String(e.name))} <span class="meta-note">${size} · ${escHtml(String(e.mime || ''))}</span>`;
+      if (!href) return `${label} <span class="meta-note">(not in this report)</span>`;
+      const img = String(e.mime || '').startsWith('image/') ? `<br><img class="meta-thumb" src="${escHtml(href)}" alt="${escHtml(String(e.name))}">` : '';
+      return `<a class="meta-link" href="${escHtml(href)}" download="${escHtml(String(e.name))}" target="_blank" rel="noopener">${label}</a>${img}`;
+    }).join('<br>');
+  }
+  return escHtml(fmt(value));
 }
 
 function toggleVariant(id) { document.getElementById(id).classList.toggle('expanded'); }

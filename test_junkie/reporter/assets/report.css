@@ -239,3 +239,5 @@ body.light .tag-chip{background:color-mix(in srgb,var(--brand) 12%,#fff);color:v
 .meta-val{flex:1;min-width:0;font-family:'IBM Plex Mono',monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 .meta-row.set .meta-key{color:var(--brand)}
 .meta-note{flex:none;font-size:10px;color:var(--ink-faint)}
+.meta-link{color:var(--brand);text-decoration:underline;text-underline-offset:2px}
+.meta-thumb{max-width:320px;max-height:200px;margin:4px 0;border:1px solid var(--border);border-radius:4px}

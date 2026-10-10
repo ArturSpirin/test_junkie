@@ -324,9 +324,88 @@ def rerun_ignores_the_new_fields():
     assert _test(VisibilitySuite, "fails").get_status(None, None) == "fail"  # the failed test ran again from the report
 
 
+PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+       b"\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
+BIG = b"z" * (meta_module.ATTACH_EMBED_LIMIT + 1)
+SOURCE = {}
+
+
+@Suite(listener=Capture)
+class EvidenceSuite:
+
+    @test(retry=2, meta=meta(steps=["declared step"]))
+    def evidence(self):
+        run = _mark("evidence")
+        Meta.append("steps", "run {}".format(run))
+        Meta.link("Ticket", "https://example.com/T-{}".format(run))
+        Meta.attach("page.png", PNG)
+        if run == 1:
+            source = os.path.join(tempfile.mkdtemp(), "server.log")
+            with open(source, "wb") as log:
+                log.write(BIG)
+            SOURCE["path"] = source
+            Meta.attach("server.log", source)
+            with open(source, "wb") as log:
+                log.write(b"changed after attach")  # the copy taken at attach time is what's kept
+            assert False, "first run fails"
+
+    @test()
+    def misuse(self):
+        Meta.update(note="plain text")
+        for call in (lambda: Meta.append("note", 1), lambda: Meta.attach("x", 12345),
+                     lambda: Meta.attach("x", os.path.join(tempfile.gettempdir(), "no_such_file_tj.bin"))):
+            try:
+                call()
+            except TestJunkieUsageError as error:
+                ERRORS.append(error)
+
+
+def append_link_and_attach_build_lists_per_attempt():
+    _run([EvidenceSuite])
+    evidence = _test(EvidenceSuite, "evidence")
+    values = evidence.get_meta()
+    assert values["steps"] == ["declared step", "run 1", "run 2"], values["steps"]
+    assert values["links"] == [{"label": "Ticket", "url": "https://example.com/T-1"},
+                               {"label": "Ticket", "url": "https://example.com/T-2"}]
+    attachments = values["attachments"]
+    assert [a["name"] for a in attachments] == ["page.png", "server.log", "page.png"]
+    png, log = attachments[0], attachments[1]
+    assert png["mime"] == "image/png" and png["size"] == len(PNG) and png["source"] is None
+    with open(png["path"], "rb") as saved:
+        assert saved.read() == PNG
+    assert log["source"] == SOURCE["path"] and log["size"] == len(BIG) and log["path"] != log["source"]
+    assert evidence.get_kwargs()["meta"] == {"steps": ["declared step"]}  # declared list not mutated
+    by_attempt = {a["attempt"]: a["meta_set"] for a in evidence.get_meta_attempts()}
+    assert by_attempt[1]["steps"] == ["run 1"] and by_attempt[2]["steps"] == ["run 2"]
+    assert [a["name"] for a in by_attempt[1]["attachments"]] == ["page.png", "server.log"]
+    assert _events("complete", "evidence")[-1]["test_meta"]["links"][1]["url"] == "https://example.com/T-2"
+
+
+def append_and_attach_reject_bad_input():
+    _run([EvidenceSuite])
+    assert len(ERRORS) == 3, ERRORS
+    assert "already holds a str" in str(ERRORS[0]) and "bytes or a file path" in str(ERRORS[1])
+    assert "is not a file" in str(ERRORS[2])
+    assert _test(EvidenceSuite, "misuse").get_meta()["note"] == "plain text"
+
+
+def html_report_embeds_small_attachments_and_links_big_ones():
+    folder = tempfile.mkdtemp()
+    _run([EvidenceSuite], html_report=os.path.join(folder, "run.html"))
+    with open(os.path.join(folder, "run.html"), encoding="utf-8") as doc:
+        page = doc.read()
+    assert "data:image/png;base64," in page and "function metaValue" in page
+    log = _test(EvidenceSuite, "evidence").get_meta()["attachments"][1]
+    copied = os.path.join(folder, "run_files", os.path.basename(log["path"]))
+    assert os.path.getsize(copied) == len(BIG)
+    assert "run_files/" + os.path.basename(log["path"]) in page
+
+
 CHECKS = [update_reaches_the_running_test_from_test_helpers_and_hooks, declared_meta_is_left_alone,
           bind_carries_the_test_into_threads, old_style_writes_exactly_the_slot_it_names,
           outside_a_test_old_style_warns_once_new_style_raises, class_hooks_write_suite_meta,
           retries_carry_forward_and_keep_each_attempt, on_failure_sees_body_values_not_after_test,
           json_report_has_meta_and_what_each_run_set, xml_report_has_properties_parameters_and_time,
-          html_report_shows_meta_per_attempt, rerun_ignores_the_new_fields]
+          html_report_shows_meta_per_attempt, rerun_ignores_the_new_fields,
+          append_link_and_attach_build_lists_per_attempt, append_and_attach_reject_bad_input,
+          html_report_embeds_small_attachments_and_links_big_ones]

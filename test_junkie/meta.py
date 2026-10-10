@@ -14,7 +14,11 @@ stack) and warns instead of failing when it can't land.
 import functools
 import inspect
 import json
+import mimetypes
 import os
+import re
+import shutil
+import tempfile
 import threading
 import warnings
 
@@ -26,6 +30,11 @@ _LOCAL = threading.local()
 _HERE = os.path.normcase(os.path.abspath(__file__))
 _WARNED = set()  # call sites already warned about, one warning each
 VALUE_LIMIT = 2000  # reports cut longer values to this many characters
+LINKS_KEY = "links"  # Meta.link() adds to this list
+ATTACHMENTS_KEY = "attachments"  # Meta.attach() adds to this list
+ATTACH_EMBED_LIMIT = 512 * 1024  # the HTML report embeds attachments up to this size, links bigger ones
+_ATTACH_DIR = None
+_ATTACH_COUNT = 0
 
 
 def meta(**kwargs):
@@ -67,6 +76,47 @@ def enter_context(context):
 
 def leave_context(previous):
     _LOCAL.context = previous
+
+
+def _attachment_dir():
+    """One folder per process for attachment copies, made on first use"""
+    global _ATTACH_DIR
+    with META_LOCK:
+        if _ATTACH_DIR is None or not os.path.isdir(_ATTACH_DIR):
+            _ATTACH_DIR = tempfile.mkdtemp(prefix="test_junkie_attachments_")
+        return _ATTACH_DIR
+
+
+def _save_attachment(name, content, mime=None):
+    global _ATTACH_COUNT
+    name = str(name)
+    source = None
+    if isinstance(content, (bytes, bytearray, memoryview)):
+        data = bytes(content)
+    elif isinstance(content, (str, os.PathLike)):
+        source = os.path.abspath(os.fspath(content))
+        if not os.path.isfile(source):
+            raise TestJunkieUsageError(
+                "Meta.attach({!r}, ...): {} is not a file. Pass bytes for content you have in memory "
+                "(text: \"...\".encode())".format(name, source))
+        data = None
+    else:
+        raise TestJunkieUsageError("Meta.attach({!r}, ...) takes bytes or a file path, got {}"
+                                   .format(name, type(content).__name__))
+    folder = _attachment_dir()
+    with META_LOCK:
+        _ATTACH_COUNT += 1
+        number = _ATTACH_COUNT
+    safe = re.sub(r"[^\w.\-]+", "_", os.path.basename(name)) or "attachment"
+    path = os.path.join(folder, "{:05d}_{}".format(number, safe))
+    if data is None:
+        shutil.copyfile(source, path)
+    else:
+        with open(path, "wb") as target:
+            target.write(data)
+    mime = mime or mimetypes.guess_type(name)[0] or (source and mimetypes.guess_type(source)[0]) \
+        or "application/octet-stream"
+    return {"name": name, "size": os.path.getsize(path), "mime": mime, "path": path, "source": source}
 
 
 def report_value(value, limit=VALUE_LIMIT, _depth=0):
@@ -224,6 +274,42 @@ class Meta(object):
                                .format(_slot_label(parameter, suite_parameter), test,
                                        _slot_label(context.parameter, context.class_parameter)))
             test.set_meta(parameter, suite_parameter, values, attempt)
+
+    @staticmethod
+    def append(key, value):
+        """
+        Add a value to the list under `key` on the running test (created on first use), e.g. one line per step:
+        Meta.append("steps", "opened the cart"). Across retries the list keeps growing; each attempt's record lists
+        what that attempt added. Raises if `key` already holds something that isn't a list.
+        """
+        context = _require_test("Meta.append()")
+        context.test.append_meta(context.parameter, context.class_parameter, key, [value], context.attempt)
+
+    @staticmethod
+    def link(label, url):
+        """
+        Add a link to the running test, shown clickable in the HTML report: Meta.link("Jira", "https://...").
+        Stored in the metadata under "links" as a list of {"label": str, "url": str}.
+        """
+        context = _require_test("Meta.link()")
+        context.test.append_meta(context.parameter, context.class_parameter, LINKS_KEY,
+                                 [{"label": str(label), "url": str(url)}], context.attempt, call="Meta.link()")
+
+    @staticmethod
+    def attach(name, content, mime=None):
+        """
+        Attach a file to the running test: Meta.attach("page.png", driver.get_screenshot_as_png()) or
+        Meta.attach("server.log", "/var/log/app.log"). `content` is bytes (str text: encode it first) or a path to an
+        existing file, which is copied right away, so later changes to it don't matter. The HTML report embeds files
+        up to ATTACH_EMBED_LIMIT bytes and links bigger ones, saved next to it.
+        Stored in the metadata under "attachments" as a list of
+        {"name": str, "size": int (bytes), "mime": str, "path": str (the saved copy), "source": str|None (the path
+        you passed)}.
+        """
+        context = _require_test("Meta.attach()")
+        entry = _save_attachment(name, content, mime)
+        context.test.append_meta(context.parameter, context.class_parameter, ATTACHMENTS_KEY, [entry],
+                                 context.attempt, call="Meta.attach()")
 
     @staticmethod
     def get(key=None):

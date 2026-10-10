@@ -511,12 +511,45 @@ class TestObject(object):
         from test_junkie.views import META_LOCK
         with META_LOCK:
             self.get_meta(parameter, class_parameter).update(values)
-            if attempt is None:
-                data = self.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {})
-                attempt = len(data.get("statuses") or []) + 1
-            by_attempt = self.__meta_attempts.setdefault(param_key(class_parameter), {}) \
-                .setdefault(param_key(parameter), {})
-            by_attempt.setdefault(attempt, {}).update(values)
+            self.__attempt_record(parameter, class_parameter, attempt).update(values)
+
+    def append_meta(self, parameter, class_parameter, key, items, attempt=None, call="Meta.append()"):
+        """
+        Add items to the list under one key of a combination's metadata (Meta.append / Meta.link / Meta.attach).
+        The attempt's record lists the items added in that attempt.
+        :raises TestJunkieUsageError: the key already holds something other than a list
+        """
+        from test_junkie.errors import TestJunkieUsageError
+        from test_junkie.views import META_LOCK
+        with META_LOCK:
+            values = self.get_meta(parameter, class_parameter)
+            current = values.get(key)
+            if current is None:
+                current = []
+            elif isinstance(current, tuple):
+                current = list(current)
+            elif not isinstance(current, list):
+                raise TestJunkieUsageError(
+                    "{call} adds to the list under {key!r}, but {key!r} already holds a {kind} ({value!r}). Use "
+                    "another key, or Meta.update({key}=[...]) to replace it".format(
+                        call=call, key=key, kind=type(current).__name__, value=current))
+            values[key] = current + list(items)  # a new list: the declared meta and earlier copies stay as they were
+            record = self.__attempt_record(parameter, class_parameter, attempt)
+            earlier = record.get(key)
+            if earlier is None:
+                record[key] = list(items)
+            elif isinstance(earlier, list):
+                record[key] = earlier + list(items)
+            else:  # Meta.update() set a non-list there earlier in this attempt: record what the key holds now
+                record[key] = list(values[key])
+
+    def __attempt_record(self, parameter, class_parameter, attempt):
+        """What one attempt set (caller holds META_LOCK). attempt None: the run after the ones recorded so far"""
+        if attempt is None:
+            data = self.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {})
+            attempt = len(data.get("statuses") or []) + 1
+        return self.__meta_attempts.setdefault(param_key(class_parameter), {}) \
+            .setdefault(param_key(parameter), {}).setdefault(attempt, {})
 
     def get_meta_attempts(self, parameter=None, class_parameter=None):
         """
