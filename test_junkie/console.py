@@ -16,6 +16,7 @@ import test_junkie
 from test_junkie.constants import TestCategory, SuiteCategory, TestOrder
 from test_junkie.rerun import parameters_to_run
 from test_junkie.params import param_key
+from test_junkie.metrics import is_flaky
 
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(test_junkie.__file__))
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -1170,6 +1171,9 @@ class Console(object):
                 for class_param, by_param in test.metrics.get_metrics().items():
                     for param, data in by_param.items():
                         status = data.get("status")
+                        if status == TestCategory.SUCCESS and self.__fail_on_flaky() and is_flaky(data):
+                            entries.append(self.__unit_entry(suite, test, data))  # it fails the run, so show why
+                            continue
                         if status not in TestCategory.ALL_UN_SUCCESSFUL:
                             continue
                         traces = data.get("tracebacks", [])
@@ -1221,7 +1225,8 @@ class Console(object):
         exceptions = data.get("exceptions") or []
         times = data.get("performance") or []
         word, style = {TestCategory.FAIL: ("FAIL", "fail"), TestCategory.ERROR: ("ERROR", "err"),
-                       TestCategory.IGNORE: ("IGNORED", "ign")}[status]
+                       TestCategory.IGNORE: ("IGNORED", "ign"),
+                       TestCategory.SUCCESS: ("FLAKY", "warn")}[status]  # SUCCESS: only flaky ones get here
         name = "{}.{}".format(suite.get_class_name(), test.get_function_name())
         head = "{} {}".format(self.badge(word, style), self.style(name, "bold"))
         params = self.__params(test, param, class_param)
@@ -1235,8 +1240,10 @@ class Console(object):
                 detail = "{}{}bad parameters{}not run".format(self.__location(None, test), dot, dot)
         else:
             runs = len(statuses)
-            detail = "{}{}{}{}{:0.2f}s".format(self.__location(last_trace, test), dot,
-                                               "failed all {} runs".format(runs) if runs > 1 else "1 run", dot,
+            outcome = "failed all {} runs".format(runs) if runs > 1 else "1 run"
+            if status == TestCategory.SUCCESS:
+                outcome = "passed on run {} (--fail-on-flaky)".format(runs)
+            detail = "{}{}{}{}{:0.2f}s".format(self.__location(last_trace, test), dot, outcome, dot,
                                                sum(t for t in times if t))
         entry = [head, indent + self.style(detail, "dim")]
         if len(statuses) > 1:
@@ -1248,8 +1255,10 @@ class Console(object):
                 summary = _exception_summary(trace, exception)
                 runtime = times[index] if index < len(times) else 0
                 entry.append("    #{}  {}  {}  {}".format(
-                    index + 1, self.style(str(run_status).upper().ljust(6), _STYLE_OF.get(run_status, "dim")),
-                    "{:0.2f}s".format(runtime or 0), self.style(summary, _STYLE_OF.get(run_status, "dim"))))
+                    index + 1, self.style(("PASS" if run_status == TestCategory.SUCCESS else str(run_status).upper())
+                                          .ljust(6), _STYLE_OF.get(run_status, "dim")),
+                    "{:0.2f}s".format(runtime or 0),
+                    self.style(summary, _STYLE_OF.get(run_status, "dim")) if summary else "").rstrip())
                 retry = retried.get(index + 1)
                 if retry is not None:
                     entry[-1] += self.style("  → retry: when {}{}".format(
@@ -1282,7 +1291,8 @@ class Console(object):
                 exception = exceptions[indexes[-1]] if indexes[-1] < len(exceptions) else None
                 entry.extend(self.__trace_lines(trace, run_status if run_status in _STYLE_OF else status, exception))
         outputs = test.metrics.get_outputs(param, class_param)
-        if outputs and outputs[-1][0] == len(statuses):  # only the last run's - an earlier run's would mislead
+        if status != TestCategory.SUCCESS and outputs and outputs[-1][0] == len(statuses):
+            # only the last run's - an earlier run's would mislead; a flaky test's last run is the one that passed
             run, output, log = outputs[-1]
             entry.extend(self.__captured(output, log, "run #{}".format(run) if len(statuses) > 1 else ""))
         return entry

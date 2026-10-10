@@ -671,8 +671,14 @@ def flaky_flags():
     code, out = run_cli("run", "-s", directory, "-p", "--flag-flaky")
     assert code is None and re.search(r"^  FLAKY +recovers +passed on run 2", out, re.M), out
     assert re.search(r"^  PASSED +steady", out, re.M), out
+    assert "[FLAKY]" not in out, out  # the run passes, so no Problems entry: only the Flaky list
     code, out = run_cli("run", "-s", directory, "-p", "--fail-on-flaky")
     assert code == 1 and re.search(r"^  FLAKY +recovers", out, re.M), (code, out)
+    # it fails the run, so it gets a Problems entry like a failure: where, the runs, the failed run's traceback
+    assert "[FLAKY] ShakySuite.recovers" in out and "passed on run 2 (--fail-on-flaky)" in out, out
+    assert re.search(r"^    #1  FAIL .*AssertionError: odd run$", out, re.M), out
+    assert re.search(r"^    #2  PASS +\d+\.\d+s$", out, re.M), out
+    assert "Run #1" in out and "ShakySuite.steady" not in out.split("Problems")[-1].split("Summary")[0], out
 
 
 def report_folders_and_json_report():
