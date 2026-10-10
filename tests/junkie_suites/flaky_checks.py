@@ -117,5 +117,42 @@ def json_report_marks_flaky():
     assert flaky[("always_fails", None)] is False, flaky
 
 
+def _xml_cases(**kwargs):
+    from xml.etree.ElementTree import parse
+    path = os.path.join(tempfile.mkdtemp(), "report.xml")
+    _run([FlakyTests], xml_report=path, **kwargs)
+    cases = {}
+    for case in parse(path).getroot().iter("testcase"):
+        cases.setdefault(case.get("name"), []).append(case)
+    return cases
+
+
+def xml_report_marks_flaky_runs():
+    # Surefire's layout, which Jenkins, GitLab, CircleCI and flaky-test trackers read: a test that passed after
+    # failing keeps a <flakyFailure>/<flakyError> per failed run, with the error and its stack trace
+    cases = _xml_cases()
+    case = cases["passes_second_time"][0]
+    assert case.get("status") == "success" and case.find("failure") is None
+    flaky = case.findall("flakyFailure")
+    assert len(flaky) == 1 and flaky[0].get("type") == "AssertionError", [c.tag for c in case]
+    assert flaky[0].get("message") == "not yet" and "not yet" in flaky[0].find("stackTrace").text
+    errors = cases["errors_then_passes"][0].findall("flakyError")
+    assert len(errors) == 1 and errors[0].get("type") == "RuntimeError" and errors[0].get("message") == "connection reset"
+    assert list(cases["solid"][0]) == []
+    per_parameter = sorted(len(c.findall("flakyFailure")) for c in cases["per_parameter"])
+    assert per_parameter == [0, 2], per_parameter  # admin failed twice before passing, viewer passed at once
+
+
+def xml_report_marks_reruns_of_failed_tests():
+    # a test that never passed: the first failed run is <failure>, every retry after it is <rerunFailure>/<rerunError>
+    case = _xml_cases()["always_fails"][0]
+    failure = case.find("failure")
+    assert failure is not None and failure.get("type") == "AssertionError" and failure.get("message") == "never"
+    reruns = case.findall("rerunFailure")
+    assert len(reruns) == 1 and "never" in reruns[0].find("stackTrace").text, [c.tag for c in case]
+    assert case.find("flakyFailure") is None
+
+
 CHECKS = [flaky_only_when_a_pass_followed_a_failure, flaky_is_per_parameter, get_flaky_lists_each_combination,
-          every_kind_of_retry_counts, json_report_marks_flaky]
+          every_kind_of_retry_counts, json_report_marks_flaky, xml_report_marks_flaky_runs,
+          xml_report_marks_reruns_of_failed_tests]

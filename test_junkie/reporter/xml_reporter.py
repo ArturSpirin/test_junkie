@@ -9,6 +9,47 @@ from test_junkie.debugger import LogJunkie
 class XmlReporter:
 
     @staticmethod
+    def __error_attrs(error):
+        if not isinstance(error, BaseException):
+            return {}
+        return {"type": type(error).__name__, "message": str(error).split("\n")[0]}
+
+    @staticmethod
+    def __add_runs(test, test_status, data):
+        """
+        Surefire's layout for retried tests, which CI tools and flaky-test trackers read. A test that passed after
+        failing gets a <flakyFailure>/<flakyError> per failed run. A test that never passed gets <failure> for its
+        first run and a <rerunFailure>/<rerunError> for each retry that failed too.
+        """
+        from xml.etree.ElementTree import SubElement
+        statuses = data.get("statuses") or []
+        errors = data.get("exceptions") or []
+        traces = data.get("tracebacks") or []
+        bad = (TestCategory.FAIL, TestCategory.ERROR)
+
+        def run(tag, index):
+            element = SubElement(test, tag, **XmlReporter.__error_attrs(errors[index] if index < len(errors) else None))
+            trace = traces[index] if index < len(traces) else None
+            if trace:
+                SubElement(element, "stackTrace").text = str(trace)
+            return element
+
+        if test_status != "failure":
+            for index, status in enumerate(statuses[:-1]):
+                if status in bad:
+                    run("flakyFailure" if status == TestCategory.FAIL else "flakyError", index)
+            return
+        if statuses:
+            failure = run("failure", 0)
+            if failure.get("type") is None:
+                failure.set("type", "failure")
+            for index, status in enumerate(statuses[1:], 1):
+                if status in bad:
+                    run("rerunFailure" if status == TestCategory.FAIL else "rerunError", index)
+        else:  # never ran (ignored, skipped, cancelled before starting)
+            SubElement(test, "failure", type="failure")
+
+    @staticmethod
     def create_xml_report(write_file, suites):
 
         def __update_tag_stats(tag, status):
@@ -56,8 +97,7 @@ class XmlReporter:
                                     suites_by_name[test_suite] = suite
                                 __update_tag_stats(suite, test_status)
                                 test = SubElement(suite, "testcase", name=str(test_name), status=str(test_status))
-                                if test_status == "failure":
-                                    SubElement(test, "failure", type="failure")
+                                XmlReporter.__add_runs(test, test_status, param_data)
                 os.makedirs(os.path.dirname(os.path.abspath(write_file)), exist_ok=True)
                 ElementTree(root).write(write_file)
             except Exception:
