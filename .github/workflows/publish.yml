@@ -60,25 +60,49 @@ jobs:
     needs: publish-testpypi
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      # no checkout: the smoke test must import the installed package, never a source tree next to the script
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist/
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
-      # pinned to the tag's version - unpinned, pip could fall back to the previous release on prod PyPI
-      # (via --extra-index-url) while TestPyPI is still indexing, and smoke-test the wrong build
-      - name: Install this release from TestPyPI in a clean venv
+      # TestPyPI never replaces a file, and publish-testpypi uses skip-existing, so a version left over from an
+      # earlier attempt would be smoke-tested in place of this build. Fetch both files from TestPyPI, require the
+      # same SHA-256 as this run's build job, and install that exact wheel.
+      - name: Fetch this release from TestPyPI and match it to the build
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           python -m venv smoke-venv
+          # straight from TestPyPI's JSON API: no index search, no sdist build, just this version's exact files
           for attempt in $(seq 1 20); do
-            smoke-venv/bin/pip install --no-cache-dir --extra-index-url https://pypi.org/simple/ \
-              -i https://test.pypi.org/simple/ "test-junkie==$VERSION" && break
-            [ "$attempt" = 20 ] && { echo "test-junkie==$VERSION never showed up on TestPyPI"; exit 1; }
-            echo "Waiting for TestPyPI to index $VERSION (attempt $attempt)"; sleep 15
+            python - "$VERSION" <<'PY' && break
+          import json, os, sys, urllib.request
+          v = sys.argv[1]
+          files = json.load(urllib.request.urlopen(f"https://test.pypi.org/pypi/test-junkie/{v}/json"))["urls"]
+          kinds = {f["packagetype"] for f in files}
+          if not {"bdist_wheel", "sdist"} <= kinds:
+              sys.exit(f"TestPyPI lists only {sorted(kinds)} for {v} so far")
+          os.makedirs("fetched", exist_ok=True)
+          for f in files:
+              urllib.request.urlretrieve(f["url"], os.path.join("fetched", f["filename"]))
+          PY
+            [ "$attempt" = 20 ] && { echo "::error::test-junkie==$VERSION never showed up on TestPyPI"; exit 1; }
+            echo "Waiting for TestPyPI to list $VERSION (attempt $attempt)"; rm -rf fetched; sleep 15
           done
-          smoke-venv/bin/python -c "import importlib.metadata as m; v = m.version('test-junkie'); print('smoke testing', v); assert v == '$VERSION', v"
+          ls -l dist fetched
+          (cd dist && sha256sum * | sort -k2) > built.sha256
+          (cd fetched && sha256sum * | sort -k2) > fetched.sha256
+          cat built.sha256
+          if ! diff built.sha256 fetched.sha256; then
+            echo "::error::TestPyPI's files for $VERSION are not this run's build (an earlier upload of the same version?)"; exit 1
+          fi
+          smoke-venv/bin/pip install --no-cache-dir fetched/*.whl
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/smoke-venv/bin/python" -c "import importlib.metadata as m, test_junkie; v = m.version('test-junkie'); print('smoke testing', v, test_junkie.__file__); assert v == '$VERSION', v; assert 'smoke-venv' in test_junkie.__file__, test_junkie.__file__"
 
       - name: Run the README example
         run: |
