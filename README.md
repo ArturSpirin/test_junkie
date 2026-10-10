@@ -28,7 +28,7 @@ Use it from Python with `Runner` or from the terminal with the `tj` command.
 
 - Decorator-based: `@Suite` and `@test` on plain Python classes — no base class to extend, no config file to maintain
 - Lifecycle hooks: `@beforeClass`, `@afterClass`, `@beforeTest`, `@afterTest` on the class, plus `@beforeGroup` / `@afterGroup` (via `@GroupRules`) that run once around a named set of suites
-- Built-in parallel execution: separate thread limits for suites (`-S` / `suite_multithreading_limit`) and tests (`-T` / `test_multithreading_limit`); `parallelized=False` keeps a suite or test out of the parallel pool, and `pr=[...]` stops specific suites or tests from ever overlapping
+- Built-in parallel execution: separate thread limits for suites (`-S` / `suite_multithreading_limit`) and tests (`-T` / `test_multithreading_limit`); `parallelized=False` keeps a suite or test out of the parallel pool, and `conflicts_with=[...]` stops specific suites or tests from ever overlapping
 - Retries: `retry=N` on a suite or a test — only the failing parameter variants re-run; `retry_on=[ConnectionError]` retries just infrastructure noise (subclasses included), `no_retry_on=[AssertionError]` makes real bugs surface immediately; `tj run --retry N` / `--no-retry` override retries for one run
 - Rerun: `tj run --rerun report.json` runs again only what didn't pass in an earlier run, down to the failing parameter and suite parameter
 - Multi-layer parametrization: `@Suite(parameters=[...])` × `@test(parameters=[...])` = every combination, each variant tracked and retried on its own; parameters can be a function that builds the list at run time
