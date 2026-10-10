@@ -337,9 +337,19 @@ class Runner:
                     if self.__suites and not state.cancelled:  # the rest wait on running suites
                         ParallelProcessor.wait_for_change(generation)
             except KeyboardInterrupt:
-                # raised outside of a test (no Ctrl+C handler on this thread, or a hook raised it): suites that
-                # didn't start are counted as cancelled
+                # raised outside of a test (no Ctrl+C handler on this thread, or a listener or hook raised it): the
+                # suite it came through and the suites that didn't start are counted as cancelled
                 self.__cancel_by_user()
+                for suite in list(self.__suites):
+                    suite_object = Builder.get_execution_roster()[suite]
+                    if suite_object not in self.__executed_suites:
+                        self.__executed_suites.append(suite_object)
+                    try:
+                        self.__ignore_unfinished(suite_object, None, None, time.time(), status=TestCategory.CANCEL)
+                    except KeyboardInterrupt:
+                        pass  # a listener raising it again: what got recorded stays recorded
+                    self.__context.console.suite_finished(suite_object)
+                    self.__suites.remove(suite)
 
             ParallelProcessor.wait_currently_active_suites_to_finish()
         except Exception as error:
@@ -559,10 +569,10 @@ class Runner:
                 suite.metrics.record_output(capture.output(), capture.log)
         context.console.suite_finished(suite)
 
-    def __ignore_unfinished(self, suite, error, trace, start_time):
+    def __ignore_unfinished(self, suite, error, trace, start_time, status=TestCategory.IGNORE):
         """
         Records every test of the suite that would have run but has no result yet as ignored, with the error that
-        ended the suite
+        ended the suite (or as cancelled, with no error, when the run was interrupted)
         """
         ParallelProcessor.wait_currently_active_tests_to_finish(suite)
         try:
@@ -586,25 +596,27 @@ class Runner:
                 if not isinstance(parameters, list):
                     continue
                 for param in parameters:
-                    Runner.__ignore_unit(self.__context, suite, test, param, class_param, error, trace)
+                    Runner.__ignore_unit(self.__context, suite, test, param, class_param, error, trace, status)
         if suite.metrics.get_metrics()["status"] is None:
-            suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL, start_time=start_time)
+            suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL if status == TestCategory.CANCEL
+                                               else SuiteCategory.FAIL, start_time=start_time)
 
     @staticmethod
-    def __ignore_unit(context, suite, test, param, class_param, error, trace):
+    def __ignore_unit(context, suite, test, param, class_param, error, trace, status=TestCategory.IGNORE):
         """
-        Records one test run that never got a result as ignored
+        Records one test run that never got a result as ignored (or as cancelled)
         :param context: the run's _RunContext to update the console, None if the caller does that itself
         """
         recorded = class_param if test.accepts_suite_parameters() else None
         if test.get_status(param, recorded) is not None:
             return
-        test.metrics.update_metrics(status=TestCategory.IGNORE, start_time=time.time(), param=param,
+        test.metrics.update_metrics(status=status, start_time=time.time(), param=param,
                                     class_param=recorded, exception=error, formatted_traceback=trace)
-        Runner.__process_event(event=Event.ON_IGNORE, suite=suite, test=test, class_param=recorded, param=param,
+        Runner.__process_event(event=Event.ON_CANCEL if status == TestCategory.CANCEL else Event.ON_IGNORE,
+                               suite=suite, test=test, class_param=recorded, param=param,
                                error=error, formatted_traceback=trace)
         if context is not None:
-            context.console.unit_done(suite, unit_key(test, param, class_param), TestCategory.IGNORE,
+            context.console.unit_done(suite, unit_key(test, param, class_param), status,
                                       Runner.__label(suite, test, param, class_param))
 
     def __run_suite_body(self, suite, context):

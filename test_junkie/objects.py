@@ -31,6 +31,13 @@ def arg_names(func):
 class _FuncEval:
 
     @staticmethod
+    def _where(obj):
+        # skip= is evaluated for tests and for suites: a suite has a class, not a function
+        if hasattr(obj, "get_function_name"):
+            return "{}.{}".format(obj.get_function_module(), obj.get_function_name())
+        return "{}.{}".format(obj.get_class_module(), obj.get_class_name())
+
+    @staticmethod
     def eval_skip(obj):
 
         val = obj.get_skip()
@@ -40,10 +47,9 @@ class _FuncEval:
                     val = val(meta=obj.get_meta()) if "meta" in arg_names(val) else val()
                 except Exception as e:
                     raise TestJunkieExecutionError(
-                        "skip function '{name}' in {mod}.{test} raised an unexpected error: {err}. "
+                        "skip function '{name}' in {where} raised an unexpected error: {err}. "
                         "See documentation: {link}".format(
-                            name=val.__name__, mod=obj.get_function_module(),
-                            test=obj.get_function_name(), err=e, link=DocumentationLinks.SKIP)) from e
+                            name=val.__name__, where=_FuncEval._where(obj), err=e, link=DocumentationLinks.SKIP)) from e
             elif inspect.ismethod(val):
                 try:
                     val = getattr(val.__self__, val.__name__)(meta=obj.get_meta()) \
@@ -51,22 +57,19 @@ class _FuncEval:
                         else getattr(val.__self__, val.__name__)()
                 except Exception as e:
                     raise TestJunkieExecutionError(
-                        "skip method '{name}' in {mod}.{test} raised an unexpected error: {err}. "
+                        "skip method '{name}' in {where} raised an unexpected error: {err}. "
                         "See documentation: {link}".format(
-                            name=val.__name__, mod=obj.get_function_module(),
-                            test=obj.get_function_name(), err=e, link=DocumentationLinks.SKIP)) from e
+                            name=val.__name__, where=_FuncEval._where(obj), err=e, link=DocumentationLinks.SKIP)) from e
             else:
                 raise BadParameters(
-                    "skip= in {mod}.{test} received {got}, which is not a supported type. "
+                    "skip= in {where} received {got}, which is not a supported type. "
                     "Expected: bool, a function, or a bound method. See documentation: {link}".format(
-                        mod=obj.get_function_module(), test=obj.get_function_name(),
-                        got=type(val).__name__, link=DocumentationLinks.SKIP))
+                        where=_FuncEval._where(obj), got=type(val).__name__, link=DocumentationLinks.SKIP))
             if not isinstance(val, bool):
                 raise TestJunkieExecutionError(
-                    "skip function for {mod}.{test} must return bool but returned {got}. "
+                    "skip function for {where} must return bool but returned {got}. "
                     "See documentation: {link}".format(
-                        mod=obj.get_function_module(), test=obj.get_function_name(),
-                        got=type(val).__name__, link=DocumentationLinks.SKIP))
+                        where=_FuncEval._where(obj), got=type(val).__name__, link=DocumentationLinks.SKIP))
         return val
 
     # parameter functions that raised during this run -> the error to raise again: a provider that timed out isn't
