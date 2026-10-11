@@ -32,10 +32,13 @@ class CancelSuiteTests:
         QualityManager.check_class_metrics(metrics, expected_retry_count=0, expected_status="cancel")
 
     @test()
-    def cancel_tests_have_no_metrics(self):
+    def cancel_tests_are_listed_as_cancelled(self):
+        # Runner.cancel() came before the suite started: its tests are listed once each as cancelled, as with Ctrl+C
         assert CancelSuiteTests._results[0].get_test_objects()
         for t in CancelSuiteTests._results[0].get_test_objects():
-            assert len(t.metrics.get_metrics()) == 0
+            properties = t.metrics.get_metrics()
+            assert list(properties) == ["None"] and list(properties["None"]) == ["None"], properties
+            assert properties["None"]["None"]["status"] == "cancel" and properties["None"]["None"]["retry"] == 1
 
 
 @Suite()

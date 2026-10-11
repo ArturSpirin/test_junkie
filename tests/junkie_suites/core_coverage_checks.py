@@ -686,6 +686,58 @@ def never_started_suites_list_their_tests_as_cancelled_with_test_threads():
     assert report["totals"]["total"] == report["totals"]["cancel"] == 3, report["totals"]
 
 
+_CANCELLING_RUNNER = []
+
+
+@Suite()
+class CancelsTheRunSuite:
+
+    @test()
+    def t(self):  # Runner.cancel() during the run, as a listener or a watchdog thread would call it
+        _CANCELLING_RUNNER[0].cancel()
+
+
+def _cancelled_run(**threads):
+    """
+    Runner.cancel() from the first suite's test: the suites it never started list their tests as cancel, as Ctrl+C
+    does, so the JSON report's totals match the console's (they used to list none)
+    :return: DICT, {(suite, test): status} from the JSON report
+    """
+    from test_junkie.runner import Runner
+    folder = tempfile.mkdtemp(prefix="tj_core_cancel_")
+    try:
+        path = os.path.join(folder, "r.json")
+        runner = Runner([CancelsTheRunSuite, AfterInterruptQueuedSuite, AfterInterruptLastSuite], quiet=True)
+        _CANCELLING_RUNNER[:] = [runner]
+        runner.run(json_report=path, **threads)
+        with open(path, encoding="utf-8") as doc:
+            report = json.load(doc)
+        tests = {(suite["name"], unit["name"]): unit["status"] for suite in report["suites"] for unit in suite["tests"]}
+        assert set(tests) == {("CancelsTheRunSuite", "t"), ("AfterInterruptQueuedSuite", "queued"),
+                              ("AfterInterruptLastSuite", "last")}, tests
+        assert report["totals"]["total"] == 3 and tests[("CancelsTheRunSuite", "t")] == "success", report["totals"]
+        assert tests[("AfterInterruptLastSuite", "last")] == "cancel", tests  # never started
+        assert _suite_status(report, "AfterInterruptLastSuite") == "cancel", report["suites"]
+        return tests
+    finally:
+        _CANCELLING_RUNNER[:] = []
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def runner_cancel_lists_the_tests_of_suites_it_came_before():
+    assert _cancelled_run()[("AfterInterruptQueuedSuite", "queued")] == "cancel"
+
+
+def runner_cancel_lists_the_tests_of_suites_it_came_before_with_suite_threads():
+    # the second suite runs next to the first one and may finish before the cancel
+    assert _cancelled_run(suite_multithreading_limit=2)[("AfterInterruptQueuedSuite", "queued")] in ("cancel",
+                                                                                                    "success")
+
+
+def runner_cancel_lists_the_tests_of_suites_it_came_before_with_test_threads():
+    assert _cancelled_run(test_multithreading_limit=2)[("AfterInterruptQueuedSuite", "queued")] == "cancel"
+
+
 # a suite with a cancelled test is cancel, not success (a cancelled test still isn't an unsuccessful one)
 
 def _ran_one_pass(suite_class):
@@ -946,6 +998,9 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           never_started_suites_list_their_tests_as_cancelled,
           never_started_suites_list_their_tests_as_cancelled_with_suite_threads,
           never_started_suites_list_their_tests_as_cancelled_with_test_threads,
+          runner_cancel_lists_the_tests_of_suites_it_came_before,
+          runner_cancel_lists_the_tests_of_suites_it_came_before_with_suite_threads,
+          runner_cancel_lists_the_tests_of_suites_it_came_before_with_test_threads,
           a_suite_with_a_cancelled_test_is_cancelled, a_suite_with_a_cancelled_test_is_cancelled_with_suite_threads,
           a_suite_with_a_cancelled_test_is_cancelled_with_test_threads, a_failed_test_outranks_a_cancelled_one,
           a_failed_test_outranks_a_cancelled_one_with_suite_threads,

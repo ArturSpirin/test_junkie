@@ -29,8 +29,11 @@ def test_class_metrics():
 
 def test_test_metrics():
 
+    # Runner.cancel() came before the suite started: its tests are listed as cancelled, once each, as Ctrl+C lists
+    # them (they used to have no record, so the JSON/HTML totals left them out while the console counted them)
     assert results[0].get_test_objects()
     for test in results[0].get_test_objects():
 
         properties = test.metrics.get_metrics()
-        assert len(properties) == 0
+        assert list(properties) == ["None"] and list(properties["None"]) == ["None"], properties
+        assert properties["None"]["None"]["status"] == "cancel" and properties["None"]["None"]["retry"] == 1

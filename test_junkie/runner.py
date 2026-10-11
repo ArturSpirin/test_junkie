@@ -631,7 +631,8 @@ class Runner:
         if not known_class_params:
             class_params = [None]
         for test in suite.get_test_objects():
-            if self.__positive_skip_condition(test=test) or                     not Runner.__runnable_tags(test=test, tag_config=self.__settings.tags):
+            if self.__positive_skip_condition(test=test) or \
+                    not Runner.__runnable_tags(test=test, tag_config=self.__settings.tags):
                 continue
             if rerun is not None and not rerun.includes_test(suite.get_class_name(), test.get_function_name()):
                 continue
@@ -831,8 +832,8 @@ class Runner:
                                                        ran=True)
             Runner.__process_event(event=Event.ON_CLASS_COMPLETE, suite=suite)
         elif state.cancelled:
-            if not skipped and state.by_user:  # listed like a suite Ctrl+C interrupted, in every mode
-                self.__cancel_unstarted(suite)  # (Runner.cancel() still lists none, as it always has)
+            if not skipped:  # listed like a suite Ctrl+C interrupted, in every mode, for Runner.cancel() too
+                self.__cancel_unstarted(suite)
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_CANCEL, suite=suite)
         elif exception:
