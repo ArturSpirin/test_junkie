@@ -615,6 +615,33 @@ class Runner:
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL if status == TestCategory.CANCEL
                                                else SuiteCategory.FAIL, start_time=start_time)
 
+    def __cancel_unstarted(self, suite):
+        """
+        Records the tests of a suite the cancel came before as cancelled. Parameters given as functions aren't
+        evaluated for it: such a test is listed once, as the console counts it
+        """
+        rerun = self.__settings.rerun
+        class_params = suite.get_parameters()
+        known_class_params = isinstance(class_params, list) and bool(class_params)
+        if not known_class_params:
+            class_params = [None]
+        for test in suite.get_test_objects():
+            if self.__positive_skip_condition(test=test) or                     not Runner.__runnable_tags(test=test, tag_config=self.__settings.tags):
+                continue
+            if rerun is not None and not rerun.includes_test(suite.get_class_name(), test.get_function_name()):
+                continue
+            parameters = test.get_parameters()
+            known = isinstance(parameters, list) and bool(parameters)
+            if not known:
+                parameters = [None]
+            for class_param in class_params if test.accepts_suite_parameters() else class_params[:1]:
+                chosen = None
+                if rerun is not None and known and known_class_params:
+                    chosen = parameters_to_run(rerun, test, parameters, class_params, class_param)
+                for param in parameters if chosen is None else chosen:
+                    Runner.__ignore_unit(self.__context, suite, test, param, class_param, None, None,
+                                         TestCategory.CANCEL)
+
     @staticmethod
     def __ignore_unit(context, suite, test, param, class_param, error, trace, status=TestCategory.IGNORE):
         """
@@ -800,6 +827,8 @@ class Runner:
                                                        start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_COMPLETE, suite=suite)
         elif state.cancelled:
+            if not skipped and state.by_user:  # listed like a suite Ctrl+C interrupted, in every mode
+                self.__cancel_unstarted(suite)  # (Runner.cancel() still lists none, as it always has)
             suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL, start_time=suite_start_time)
             Runner.__process_event(event=Event.ON_CLASS_CANCEL, suite=suite)
         elif exception:

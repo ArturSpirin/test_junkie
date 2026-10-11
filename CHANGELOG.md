@@ -39,6 +39,7 @@
 - A `KeyboardInterrupt` from a hook or listener in a suite or test thread cancels the run like Ctrl+C: the test is counted as cancelled and the HTML/JSON reports are written (the HTML report crashed on a test with no run time)
 - A type where a value is expected (`@test(skip=bool)`, `parameters=list`, `owner=str`) is rejected at decoration with `BadParameters` instead of getting through (`skip=bool` failed only once the run started); classes are still taken for `listener=`, `rules=` and retry policies, and a class that isn't the right subclass is named as such
 - A test defined in code with no source file no longer shows `None:<line>` as its location
+- After Ctrl+C or a `KeyboardInterrupt`, suites that never started list their tests as cancelled in the reports with `-S`/`-T` too, so the totals are the same in every mode
 
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way

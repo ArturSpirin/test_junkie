@@ -625,6 +625,9 @@ def _interrupted_run(first, **threads):
         tests = {(suite["name"], unit["name"]): unit["status"] for suite in report["suites"] for unit in suite["tests"]}
         assert tests.get((first.__name__, "t")) == "cancel", tests
         assert None not in tests.values() and report["totals"]["total"] == len(tests), (tests, report["totals"])
+        # the suites it never started list their tests too, in every mode (-S/-T used to list none of them)
+        assert set(tests) == {(first.__name__, "t"), ("AfterInterruptQueuedSuite", "queued"),
+                              ("AfterInterruptLastSuite", "last")}, tests
         assert [suite["name"] for suite in report["suites"]] == [suite.__name__ for suite in suites], report["suites"]
         assert _suite_status(report, "AfterInterruptLastSuite") == "cancel", report["suites"]  # never started
         assert os.path.getsize(paths["html"]) > 0
@@ -654,6 +657,30 @@ def reports_after_an_interrupt_in_after_test_in_a_suite_thread():
 def reports_after_an_interrupt_in_before_class_in_a_suite_thread():
     report = _interrupted_run(InterruptedBeforeClassSuite, suite_multithreading_limit=2)
     assert _suite_status(report, "InterruptedBeforeClassSuite") == "cancel", report["suites"]
+
+
+@Suite()
+class InterruptedTestSuite:
+
+    @test()
+    def t(self):  # like Ctrl+C during the test
+        raise KeyboardInterrupt()
+
+
+def never_started_suites_list_their_tests_as_cancelled():
+    report = _interrupted_run(InterruptedTestSuite)
+    assert report["totals"]["total"] == report["totals"]["cancel"] == 3, report["totals"]
+
+
+def never_started_suites_list_their_tests_as_cancelled_with_suite_threads():
+    report = _interrupted_run(InterruptedTestSuite, suite_multithreading_limit=2)
+    # the second suite runs next to the first one and may finish before the interrupt
+    assert report["totals"]["total"] == 3 and report["totals"]["cancel"] >= 2, report["totals"]
+
+
+def never_started_suites_list_their_tests_as_cancelled_with_test_threads():
+    report = _interrupted_run(InterruptedTestSuite, test_multithreading_limit=2)
+    assert report["totals"]["total"] == report["totals"]["cancel"] == 3, report["totals"]
 
 
 @Suite()
@@ -701,4 +728,7 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           reports_after_an_interrupt_in_after_test_in_a_test_thread,
           reports_after_an_interrupt_in_after_test_in_a_suite_thread,
           reports_after_an_interrupt_in_before_class_in_a_suite_thread,
+          never_started_suites_list_their_tests_as_cancelled,
+          never_started_suites_list_their_tests_as_cancelled_with_suite_threads,
+          never_started_suites_list_their_tests_as_cancelled_with_test_threads,
           average_test_runtime_skips_tests_with_no_time]
