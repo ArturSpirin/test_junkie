@@ -861,6 +861,94 @@ def a_failed_test_outranks_a_cancel_from_a_listener_with_suite_threads():
     _failed_then_listener_interrupt(suite_multithreading_limit=2)
 
 
+# Runner.cancel() ends the run as Ctrl+C does: [CANCELLED] and exit code 12, never [PASSED] / 0 or "no tests ran" / 1
+# (owner, 2026-10-10). Only Ctrl+C (or a KeyboardInterrupt) raises KeyboardInterrupt out of run() afterwards
+
+@Suite()
+class FailedThenRunnerCancelSuite:
+
+    @test(priority=1)
+    def fails(self):
+        FAILED_FIRST["event"].set()
+        assert False, "failed before the cancel"
+
+    @test(priority=2)
+    def cancels(self):
+        FAILED_FIRST["event"].wait(10)
+        _CANCELLING_RUNNER[0].cancel()
+
+    @test(priority=3)
+    def never_runs(self):
+        pass
+
+
+def _ended(suites, cancel=None, **threads):
+    """
+    Runs the suites with the console on. cancel: "before" calls Runner.cancel() before run(), "during" lets a test
+    call it, None leaves it to a KeyboardInterrupt in a test (the Ctrl+C equivalent)
+    :return: TUPLE, (exit code, the verdict's badge, the verdict line)
+    """
+    import threading
+    from test_junkie.runner import Runner
+    FAILED_FIRST["event"] = threading.Event()
+    runner = Runner(suites)
+    if cancel == "before":
+        runner.cancel()
+    _CANCELLING_RUNNER[:] = [runner]
+    out = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out):
+            try:
+                runner.run(**threads)
+            except KeyboardInterrupt as error:
+                assert cancel is None and getattr(error, "tj_reported", False), "Runner.cancel() raised it"
+            else:
+                assert cancel is not None, "the KeyboardInterrupt was swallowed"
+    finally:
+        _CANCELLING_RUNNER[:] = []
+    verdict = [line for line in out.getvalue().splitlines() if line.strip()][-1]
+    return runner.exit_code, verdict.split()[0], verdict
+
+
+def _runner_cancel_check(name, mode):
+
+    def before():
+        code, badge, verdict = _ended([AfterInterruptQueuedSuite, AfterInterruptLastSuite], "before", **_MODES[mode])
+        assert (code, badge) == (12, "[CANCELLED]") and "by Runner.cancel()" in verdict, (code, verdict)
+
+    def after_passes():
+        from test_junkie.builder import Builder
+        ctrl_c = _ended([InterruptedTestSuite, AfterInterruptQueuedSuite, AfterInterruptLastSuite], **_MODES[mode])
+        cancel = _ended([CancelsTheRunSuite, AfterInterruptQueuedSuite, AfterInterruptLastSuite], "during",
+                        **_MODES[mode])
+        assert ctrl_c[:2] == cancel[:2] == (12, "[CANCELLED]"), (ctrl_c, cancel)
+        assert "by Runner.cancel()" in cancel[2], cancel
+        # a cancelled test still isn't an unsuccessful one: the suites are cancel (or success), never fail
+        for suite_class in (CancelsTheRunSuite, AfterInterruptQueuedSuite, AfterInterruptLastSuite):
+            suite = Builder.get_execution_roster()[suite_class]
+            assert not suite.has_unsuccessful_tests() and suite.get_status() in ("cancel", "success"), \
+                (suite_class.__name__, suite.get_status())
+
+    def after_a_failure():
+        from test_junkie.builder import Builder
+        ctrl_c = _ended([FailedThenInterruptedSuite], **_MODES[mode])
+        cancel = _ended([FailedThenRunnerCancelSuite], "during", **_MODES[mode])
+        assert ctrl_c[:2] == cancel[:2] == (12, "[CANCELLED]"), (ctrl_c, cancel)  # 12 even though a test failed
+        suite = Builder.get_execution_roster()[FailedThenRunnerCancelSuite]
+        assert suite.get_status() == "fail", suite.get_status()  # the failure still outranks the cancel
+
+    check = {"before": before, "after_passes": after_passes, "after_a_failure": after_a_failure}[name]
+    check.__name__ = check.__qualname__ = {"before": "runner_cancel_before_any_test_ends_cancelled_with_exit_code_12",
+                                           "after_passes": "runner_cancel_mid_run_ends_as_ctrl_c_does",
+                                           "after_a_failure": "runner_cancel_after_a_failure_ends_as_ctrl_c_does"}[
+        name] + mode
+    return check
+
+
+RUNNER_CANCEL_CHECKS = [_runner_cancel_check(name, mode) for name in ("before", "after_passes", "after_a_failure")
+                        for mode in ("", "_with_suite_threads", "_with_test_threads")]
+
+
 TEARDOWN = {"hook": None, "log": []}
 
 
@@ -1007,4 +1095,4 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           a_failed_test_outranks_a_cancelled_one_with_test_threads,
           a_failed_test_outranks_a_cancel_from_a_listener,
           a_failed_test_outranks_a_cancel_from_a_listener_with_suite_threads,
-          average_test_runtime_skips_tests_with_no_time] + TEARDOWN_CHECKS
+          average_test_runtime_skips_tests_with_no_time] + TEARDOWN_CHECKS + RUNNER_CANCEL_CHECKS

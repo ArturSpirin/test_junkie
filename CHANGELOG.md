@@ -43,6 +43,7 @@
 - A suite with a cancelled test is `cancel` instead of `success`, in every mode; one with a failed, errored or ignored test stays `fail`. A cancelled test still doesn't count as unsuccessful
 - `@afterClass` and `@afterGroup` run when a hook raises `KeyboardInterrupt`, in the main thread and under `-S` as they already did under `-T` and after Ctrl+C; the suite's other tests are cancelled and the run still exits 12
 - `Runner.cancel()` lists the tests of suites it came before as cancelled, as Ctrl+C does, so the JSON/HTML totals match the console
+- A run cancelled with `Runner.cancel()` ends `[CANCELLED]` with exit code 12, as with Ctrl+C, even after a failure (it ended `[PASSED]`/0 or `[FAILED]`/1)
 
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way

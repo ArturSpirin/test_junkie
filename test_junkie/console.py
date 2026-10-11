@@ -1031,7 +1031,7 @@ class Console(object):
     def exit_code(self, counts, aggregator, errors):
         if errors:
             return 120
-        if self.__state.cancelled and self.__state.by_user:
+        if self.__state.cancelled:  # Ctrl+C or Runner.cancel(), even after a test failed
             return 12
         bad = counts[TestCategory.FAIL] + counts[TestCategory.ERROR] + counts[TestCategory.IGNORE]
         if bad or (aggregator.get_basic_report()["tests"]["total"] == 0 and not self.__nothing_to_rerun()):
@@ -1377,8 +1377,9 @@ class Console(object):
             text = "{}  {} listener call{} failed".format(self.badge("FAILED", "err"), calls, "" if calls == 1 else "s")
         elif errors:
             text = "{}  {}".format(self.badge("FAILED", "err"), "run stopped by {}".format(type(errors[0]).__name__))
-        elif self.__state.cancelled and self.__state.by_user:
-            text = "{}  {}".format(self.badge("CANCELLED", "canc"), self.style("by Ctrl+C", "dim"))
+        elif self.__state.cancelled:
+            text = "{}  {}".format(self.badge("CANCELLED", "canc"),
+                                   self.style("by Ctrl+C" if self.__state.by_user else "by Runner.cancel()", "dim"))
         elif code:
             text = self.badge("FAILED", "err")
             if not (counts[TestCategory.FAIL] or counts[TestCategory.ERROR] or counts[TestCategory.IGNORE]):
@@ -1401,7 +1402,7 @@ class Console(object):
             groups.append("{:0.2f}s".format(runtime))
             text += "  " + dot.join(groups)
         if cli:
-            joined = self.__mode == "cli-quiet" or (self.__state.cancelled and self.__state.by_user)
+            joined = self.__mode == "cli-quiet" or self.__state.cancelled
             text += (dot if joined else "  ") + self.style("exit code {}".format(code), "dim")
         return text
 

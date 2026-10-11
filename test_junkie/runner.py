@@ -219,7 +219,8 @@ class Runner:
     def cancel(self):
         """
         Flips the switch to cancel the execution of tests: nothing new starts and nothing is retried, tests already
-        running finish
+        running finish. The run ends as with Ctrl+C - [CANCELLED] and exit_code 12, even if a test failed - but run()
+        returns normally instead of raising KeyboardInterrupt
         :return: None
         """
         self.__cancel = True
