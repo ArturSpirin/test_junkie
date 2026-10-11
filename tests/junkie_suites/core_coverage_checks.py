@@ -12,6 +12,7 @@ from xml.etree.ElementTree import parse
 
 from test_junkie.decorators import Suite, test, beforeClass, beforeTest, afterTest
 from test_junkie.errors import BadParameters, TestJunkieUsageError
+from test_junkie.listener import Listener
 from test_junkie.meta import Meta
 from test_junkie.objects import Limiter
 from test_junkie.retry import RetryPolicy, When
@@ -683,6 +684,129 @@ def never_started_suites_list_their_tests_as_cancelled_with_test_threads():
     assert report["totals"]["total"] == report["totals"]["cancel"] == 3, report["totals"]
 
 
+# a suite with a cancelled test is cancel, not success (a cancelled test still isn't an unsuccessful one)
+
+def _ran_one_pass(suite_class):
+    from test_junkie.builder import Builder
+    suite = Builder.get_execution_roster()[suite_class]
+    assert suite.get_number_of_actual_retries() == 1, suite.get_number_of_actual_retries()  # its pass still counts
+
+
+def a_suite_with_a_cancelled_test_is_cancelled():
+    report = _interrupted_run(InterruptedTestSuite)
+    assert _suite_status(report, "InterruptedTestSuite") == "cancel", report["suites"]
+    _ran_one_pass(InterruptedTestSuite)
+
+
+def a_suite_with_a_cancelled_test_is_cancelled_with_suite_threads():
+    report = _interrupted_run(InterruptedTestSuite, suite_multithreading_limit=2)
+    assert _suite_status(report, "InterruptedTestSuite") == "cancel", report["suites"]
+    # the second suite runs next to the first one: it's cancel if the interrupt came before its test, else success
+    for suite in report["suites"]:
+        statuses = {unit["status"] for unit in suite["tests"]}
+        assert suite["status"] == ("cancel" if "cancel" in statuses else "success"), report["suites"]
+
+
+def a_suite_with_a_cancelled_test_is_cancelled_with_test_threads():
+    report = _interrupted_run(InterruptedTestSuite, test_multithreading_limit=2)
+    assert _suite_status(report, "InterruptedTestSuite") == "cancel", report["suites"]
+    _ran_one_pass(InterruptedTestSuite)
+
+
+FAILED_FIRST = {}
+
+
+@Suite()
+class FailedThenInterruptedSuite:
+
+    @test(priority=1)
+    def fails(self):
+        FAILED_FIRST["event"].set()
+        assert False, "failed before the interrupt"
+
+    @test(priority=2)
+    def interrupted(self):
+        FAILED_FIRST["event"].wait(10)
+        raise KeyboardInterrupt()
+
+    @test(priority=3)
+    def never_runs(self):
+        pass
+
+
+def _failed_and_cancelled(**threads):
+    import threading
+    from test_junkie.builder import Builder
+    from test_junkie.runner import Runner
+    FAILED_FIRST["event"] = threading.Event()
+    runner = Runner([FailedThenInterruptedSuite], quiet=True)
+    try:
+        runner.run(**threads)
+    except KeyboardInterrupt:
+        pass
+    assert runner.exit_code == 12, runner.exit_code
+    suite = Builder.get_execution_roster()[FailedThenInterruptedSuite]
+    statuses = {test.get_function_name(): test.get_status(None, None) for test in suite.get_test_objects()}
+    assert statuses == {"fails": "fail", "interrupted": "cancel", "never_runs": "cancel"}, statuses
+    assert suite.get_status() == "fail", suite.get_status()  # a failure outranks a cancel
+
+
+def a_failed_test_outranks_a_cancelled_one():
+    _failed_and_cancelled()
+
+
+def a_failed_test_outranks_a_cancelled_one_with_suite_threads():
+    _failed_and_cancelled(suite_multithreading_limit=2)
+
+
+def a_failed_test_outranks_a_cancelled_one_with_test_threads():
+    _failed_and_cancelled(test_multithreading_limit=2)
+
+
+class _InterruptOnSecondTest(Listener):
+
+    def on_in_progress(self, **kwargs):
+        if kwargs["properties"]["jm"]["jto"].get_function_name() == "interrupted":
+            raise KeyboardInterrupt()
+
+
+@Suite(listener=_InterruptOnSecondTest)
+class FailedThenListenerInterruptSuite:
+
+    @test(priority=1)
+    def fails(self):
+        assert False, "failed before the interrupt"
+
+    @test(priority=2)
+    def interrupted(self):
+        pass
+
+    @test(priority=3)
+    def never_runs(self):
+        pass
+
+
+def _failed_then_listener_interrupt(**threads):
+    from test_junkie.builder import Builder
+    from test_junkie.runner import Runner
+    runner = Runner([FailedThenListenerInterruptSuite], quiet=True)
+    try:
+        runner.run(**threads)
+    except KeyboardInterrupt:
+        pass
+    assert runner.exit_code == 12, runner.exit_code
+    suite = Builder.get_execution_roster()[FailedThenListenerInterruptSuite]
+    assert suite.get_status() == "fail", suite.get_status()
+
+
+def a_failed_test_outranks_a_cancel_from_a_listener():
+    _failed_then_listener_interrupt()
+
+
+def a_failed_test_outranks_a_cancel_from_a_listener_with_suite_threads():
+    _failed_then_listener_interrupt(suite_multithreading_limit=2)
+
+
 @Suite()
 class TimedAndUntimedSuite:
 
@@ -731,4 +855,10 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           never_started_suites_list_their_tests_as_cancelled,
           never_started_suites_list_their_tests_as_cancelled_with_suite_threads,
           never_started_suites_list_their_tests_as_cancelled_with_test_threads,
+          a_suite_with_a_cancelled_test_is_cancelled, a_suite_with_a_cancelled_test_is_cancelled_with_suite_threads,
+          a_suite_with_a_cancelled_test_is_cancelled_with_test_threads, a_failed_test_outranks_a_cancelled_one,
+          a_failed_test_outranks_a_cancelled_one_with_suite_threads,
+          a_failed_test_outranks_a_cancelled_one_with_test_threads,
+          a_failed_test_outranks_a_cancel_from_a_listener,
+          a_failed_test_outranks_a_cancel_from_a_listener_with_suite_threads,
           average_test_runtime_skips_tests_with_no_time]

@@ -41,10 +41,13 @@ class ClassMetrics(object):
         self.__stats[decorator]["exceptions"].append(Limiter.parse_exception_object(exception))
         self.__stats[decorator]["tracebacks"].append(Limiter.parse_traceback(trace))
 
-    def update_suite_metrics(self, status, start_time, initiation_error=None):
-
+    def update_suite_metrics(self, status, start_time, initiation_error=None, ran=None):
+        """
+        :param ran: BOOLEAN, the suite ran a pass, which counts toward its retries. None: decided by the status - a
+                    suite cancelled, skipped or ignored as a whole didn't
+        """
         self.__stats["status"] = status
-        if status not in [SuiteCategory.CANCEL, SuiteCategory.SKIP, SuiteCategory.IGNORE]:
+        if ran if ran is not None else status not in [SuiteCategory.CANCEL, SuiteCategory.SKIP, SuiteCategory.IGNORE]:
             self.__stats["retry"] += 1
         self.__stats["start"] = start_time
         self.__stats["end"] = time.time()

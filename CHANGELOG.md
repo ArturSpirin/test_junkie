@@ -40,6 +40,7 @@
 - A type where a value is expected (`@test(skip=bool)`, `parameters=list`, `owner=str`) is rejected at decoration with `BadParameters` instead of getting through (`skip=bool` failed only once the run started); classes are still taken for `listener=`, `rules=` and retry policies, and a class that isn't the right subclass is named as such
 - A test defined in code with no source file no longer shows `None:<line>` as its location
 - After Ctrl+C or a `KeyboardInterrupt`, suites that never started list their tests as cancelled in the reports with `-S`/`-T` too, so the totals are the same in every mode
+- A suite with a cancelled test is `cancel` instead of `success`, in every mode; one with a failed, errored or ignored test stays `fail`. A cancelled test still doesn't count as unsuccessful
 
 ## 0.9a7
 - `tj run --rerun FILE` runs again only what didn't pass in a `--json-report`, down to the parameter. `Runner.run(rerun=...)` takes the report or a `Rerun`, which can be subclassed to match parameters another way

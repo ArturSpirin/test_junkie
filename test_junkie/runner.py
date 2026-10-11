@@ -612,8 +612,10 @@ class Runner:
                 for param in parameters:
                     Runner.__ignore_unit(self.__context, suite, test, param, class_param, error, trace, status)
         if suite.metrics.get_metrics()["status"] is None:
-            suite.metrics.update_suite_metrics(status=SuiteCategory.CANCEL if status == TestCategory.CANCEL
-                                               else SuiteCategory.FAIL, start_time=start_time)
+            # interrupted: cancel, unless a test didn't succeed - the same order as get_outcome()
+            failed = status != TestCategory.CANCEL or suite.has_unsuccessful_tests()
+            suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL if failed else SuiteCategory.CANCEL,
+                                               start_time=start_time)
 
     def __cancel_unstarted(self, suite):
         """
@@ -822,9 +824,9 @@ class Runner:
                             context.console.suite_cleanup(suite, True)
                         with ParallelProcessor.activity(state):
                             Runner.__run_after_class(suite, class_param)
-                    suite.metrics.update_suite_metrics(status=SuiteCategory.FAIL
-                                                       if suite.has_unsuccessful_tests() else SuiteCategory.SUCCESS,
-                                                       start_time=suite_start_time)
+                    # a cancelled test makes the suite cancel, unless another one didn't succeed (see get_outcome)
+                    suite.metrics.update_suite_metrics(status=suite.get_outcome(), start_time=suite_start_time,
+                                                       ran=True)
             Runner.__process_event(event=Event.ON_CLASS_COMPLETE, suite=suite)
         elif state.cancelled:
             if not skipped and state.by_user:  # listed like a suite Ctrl+C interrupted, in every mode

@@ -6,7 +6,7 @@ import threading
 import time
 import traceback
 from test_junkie.decorators import DecoratorType
-from test_junkie.constants import DocumentationLinks, TestCategory
+from test_junkie.constants import DocumentationLinks, TestCategory, SuiteCategory
 from test_junkie.errors import TestJunkieExecutionError, BadParameters
 from test_junkie.metrics import ClassMetrics, TestMetrics, Aggregator
 from test_junkie.params import param_key, register as register_ids
@@ -303,6 +303,24 @@ class SuiteObject(object):
                     if value["status"] in TestCategory.ALL_UN_SUCCESSFUL:
                         return True
         return False
+
+    def has_cancelled_tests(self):
+
+        for test in self.get_test_objects():
+            for metrics in test.metrics.get_metrics().values():
+                for value in metrics.values():
+                    if value["status"] == TestCategory.CANCEL:
+                        return True
+        return False
+
+    def get_outcome(self):
+        """
+        :return: the status of a suite that ran: FAIL if a test didn't succeed (fail, error, ignore), else CANCEL if a
+                 test was cancelled, else SUCCESS. A cancelled test doesn't count as unsuccessful
+        """
+        if self.has_unsuccessful_tests():
+            return SuiteCategory.FAIL
+        return SuiteCategory.CANCEL if self.has_cancelled_tests() else SuiteCategory.SUCCESS
 
     def get_status(self):
 
