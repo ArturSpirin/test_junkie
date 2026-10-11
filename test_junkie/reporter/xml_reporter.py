@@ -52,7 +52,10 @@ class XmlReporter:
             element = SubElement(test, tag, **XmlReporter.__error_attrs(errors[index] if index < len(errors) else None))
             trace = traces[index] if index < len(traces) else None
             if trace:
-                SubElement(element, "stackTrace").text = _xml_safe(trace)
+                if tag == "failure":  # Surefire: <failure> holds the trace as text, <stackTrace> is for flaky*/rerun*
+                    element.text = _xml_safe(trace)
+                else:
+                    SubElement(element, "stackTrace").text = _xml_safe(trace)
             return element
 
         if test_status != "failure":

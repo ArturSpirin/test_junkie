@@ -127,7 +127,7 @@ class ConflictMap(object):
                 suite_conflicts.setdefault(other, set()).add(key)
         if old_name:
             warnings.warn("pr= is now called conflicts_with= ({}); pr= keeps working through 1.x and goes no earlier "
-                          "than 2.0".format(", ".join(sorted(set(old_name))[:5])), DeprecationWarning, stacklevel=3)
+                          "than 2.0".format(", ".join(sorted(set(old_name))[:5])), FutureWarning, stacklevel=3)
         return ConflictMap(tests, conflicts, suite_conflicts)
 
 

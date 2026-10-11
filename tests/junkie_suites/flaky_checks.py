@@ -148,6 +148,7 @@ def xml_report_marks_reruns_of_failed_tests():
     case = _xml_cases()["always_fails"][0]
     failure = case.find("failure")
     assert failure is not None and failure.get("type") == "AssertionError" and failure.get("message") == "never"
+    assert failure.find("stackTrace") is None and "never" in (failure.text or ""), [c.tag for c in failure]
     reruns = case.findall("rerunFailure")
     assert len(reruns) == 1 and "never" in reruns[0].find("stackTrace").text, [c.tag for c in case]
     assert case.find("flakyFailure") is None

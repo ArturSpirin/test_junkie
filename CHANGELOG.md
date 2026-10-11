@@ -13,7 +13,7 @@
 - Every limit can be set per run (`Runner.run()`, `tj run` flags) or saved with `tj config update`
 - `TEST_THROTTLING` / `SUITE_THROTTLING` are run-wide, as documented
 - `EXCEPTION_MESSAGE_LIMIT` works on Python 3
-- `pr=` is now `conflicts_with=` (`pr=` still works with a `DeprecationWarning`); names as targets, checked at run start, `tj audit conflicts`
+- `pr=` is now `conflicts_with=` (`pr=` still works with a `FutureWarning`); names as targets, checked at run start, `tj audit conflicts`
 - Conflicting tests could run at the same time
 - `@test(parallelized=False)` runs alone across the whole run
 - Parameters that read the same (`1` and `"1"`) are rejected; new `ids=` on `@test()` / `@Suite()`
@@ -28,7 +28,7 @@
 - Metadata is kept per attempt: `test.get_meta_attempts()`, `properties["meta_attempts"]`
 - `Meta.append()`, `Meta.link()`, `Meta.attach()`: lists, links and file attachments in the reports
 - Reports show metadata (JSON `meta`/`meta_set`, HTML panel, XML `<properties>`); XML test names include their parameters
-- The XML report records retries the Surefire way (`flakyFailure`, `rerunFailure`, ...)
+- The XML report records retries the Surefire way (`flakyFailure`, `rerunFailure`, ...); `<failure>` carries the exception type (was always `failure`) with the traceback as its text, and test cases get `classname`/`time`
 - Retry policies: `RetryPolicy` with `When(...)` conditions, `@test(retry=Policy)`, `@Suite(retry_policy=)`, `on_retry` event
 - Retry policies: `max_time`, `reset="class"`, `should_retry()`, `before_retry()`, `circuit=N`; `tj run --retry-policy`
 - `@beforeTest` / `@afterTest` hooks and rules can take a read-only `test` view
@@ -39,10 +39,10 @@
 - A `KeyboardInterrupt` from a hook or listener in a suite or test thread cancels the run like Ctrl+C: the test is counted as cancelled and the HTML/JSON reports are written (the HTML report crashed on a test with no run time)
 - A type where a value is expected (`@test(skip=bool)`, `parameters=list`, `owner=str`) is rejected at decoration with `BadParameters` instead of getting through (`skip=bool` failed only once the run started); classes are still taken for `listener=`, `rules=` and retry policies, and a class that isn't the right subclass is named as such
 - A test defined in code with no source file no longer shows `None:<line>` as its location
-- After Ctrl+C or a `KeyboardInterrupt`, suites that never started list their tests as cancelled in the reports with `-S`/`-T` too, so the totals are the same in every mode
+- After Ctrl+C or a `KeyboardInterrupt`, suites that never started list their tests as cancelled in the reports with `-S`/`-T` too, and listeners get `on_cancel` for them, so the totals are the same in every mode
 - A suite with a cancelled test is `cancel` instead of `success`, in every mode; one with a failed, errored or ignored test stays `fail`. A cancelled test still doesn't count as unsuccessful
 - `@afterClass` and `@afterGroup` run when a hook raises `KeyboardInterrupt`, in the main thread and under `-S` as they already did under `-T` and after Ctrl+C; the suite's other tests are cancelled and the run still exits 12
-- `Runner.cancel()` lists the tests of suites it came before as cancelled, as Ctrl+C does, so the JSON/HTML totals match the console
+- `Runner.cancel()` lists the tests of suites it came before as cancelled (listeners get `on_cancel` for them), as Ctrl+C does, so the JSON/HTML totals match the console
 - A run cancelled with `Runner.cancel()` ends `[CANCELLED]` with exit code 12, as with Ctrl+C, even after a failure (it ended `[PASSED]`/0 or `[FAILED]`/1)
 
 ## 0.9a7

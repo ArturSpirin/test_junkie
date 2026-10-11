@@ -139,7 +139,7 @@ def pr_still_works_and_warns_once():
         warnings.simplefilter("always")
         _run([OldName, InventoryReader], suite_multithreading_limit=2)
     assert not _overlap("old", "reader"), _overlap("old", "reader")
-    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning) and "conflicts_with" in str(w.message)]
+    deprecations = [w for w in caught if issubclass(w.category, FutureWarning) and "conflicts_with" in str(w.message)]
     assert len(deprecations) == 1, [str(w.message) for w in caught]
 
 
