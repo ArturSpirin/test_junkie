@@ -10,12 +10,14 @@ import shutil
 import tempfile
 from xml.etree.ElementTree import parse
 
-from test_junkie.decorators import Suite, test, beforeClass, beforeTest, afterTest
+from test_junkie.decorators import Suite, test, beforeClass, afterClass, beforeTest, afterTest, GroupRules, \
+    beforeGroup, afterGroup
 from test_junkie.errors import BadParameters, TestJunkieUsageError
 from test_junkie.listener import Listener
 from test_junkie.meta import Meta
 from test_junkie.objects import Limiter
 from test_junkie.retry import RetryPolicy, When
+from test_junkie.rules import Rules
 
 
 def _run(suites, **run_kwargs):
@@ -807,6 +809,95 @@ def a_failed_test_outranks_a_cancel_from_a_listener_with_suite_threads():
     _failed_then_listener_interrupt(suite_multithreading_limit=2)
 
 
+TEARDOWN = {"hook": None, "log": []}
+
+
+def _teardown_hook(name):
+    TEARDOWN["log"].append(name)
+    if TEARDOWN["hook"] == name:
+        raise KeyboardInterrupt()
+
+
+class TeardownGroupRules(Rules):
+
+    @GroupRules()
+    def group_rules(self):
+
+        @beforeGroup([TeardownFirstSuite, TeardownLastSuite])
+        def before_group():
+            _teardown_hook("before_group")
+
+        @afterGroup([TeardownFirstSuite, TeardownLastSuite])
+        def after_group():
+            _teardown_hook("after_group")
+
+
+class TeardownListener(Listener):
+
+    def on_class_in_progress(self, **kwargs):
+        _teardown_hook("class_in_progress")
+
+
+@Suite(rules=TeardownGroupRules, listener=TeardownListener)
+class TeardownFirstSuite:
+
+    @beforeClass()
+    def before_class(self):
+        _teardown_hook("before_class")
+
+    @afterTest()
+    def after_test(self):
+        _teardown_hook("after_test")
+
+    @afterClass()
+    def after_class(self):
+        _teardown_hook("after_class")
+
+    @test()
+    def t(self):
+        pass
+
+
+@Suite(rules=TeardownGroupRules, parallelized=False)
+class TeardownLastSuite:  # never starts: the group's last member reports in as cancelled
+
+    @test()
+    def last(self):
+        pass
+
+
+# what still has to run after a KeyboardInterrupt from each hook, as after Ctrl+C (QATitan closes browsers there)
+_TEARDOWN_AFTER = {"before_class": ["after_class", "after_group"], "after_test": ["after_class", "after_group"],
+                   "after_class": ["after_group"], "before_group": ["after_group"],
+                   "class_in_progress": ["after_group"]}  # a listener: the suites it never started still report in
+_MODES = {"": {}, "_with_suite_threads": {"suite_multithreading_limit": 2},
+          "_with_test_threads": {"test_multithreading_limit": 2}}
+
+
+def _teardown_check(hook, mode):
+
+    def check():
+        from test_junkie.runner import Runner
+        TEARDOWN["hook"], TEARDOWN["log"] = hook, []
+        runner = Runner([TeardownFirstSuite, TeardownLastSuite], quiet=True)
+        try:
+            runner.run(**_MODES[mode])
+        except KeyboardInterrupt as error:
+            assert getattr(error, "tj_reported", False) and runner.exit_code == 12, runner.exit_code
+        else:
+            raise AssertionError("the KeyboardInterrupt was swallowed")
+        log = TEARDOWN["log"]
+        assert hook in log, log
+        missing = [name for name in _TEARDOWN_AFTER[hook] if name not in log[log.index(hook) + 1:]]
+        assert not missing, "{} didn't run after the interrupt: {}".format(missing, log)
+
+    check.__name__ = check.__qualname__ = "teardown_runs_after_an_interrupt_in_{}{}".format(hook, mode)
+    return check
+
+
+TEARDOWN_CHECKS = [_teardown_check(hook, mode) for hook in _TEARDOWN_AFTER for mode in _MODES]
+
+
 @Suite()
 class TimedAndUntimedSuite:
 
@@ -861,4 +952,4 @@ CHECKS = [view_copy_falls_back_to_a_shallow_copy, read_only_test_view_keeps_loca
           a_failed_test_outranks_a_cancelled_one_with_test_threads,
           a_failed_test_outranks_a_cancel_from_a_listener,
           a_failed_test_outranks_a_cancel_from_a_listener_with_suite_threads,
-          average_test_runtime_skips_tests_with_no_time]
+          average_test_runtime_skips_tests_with_no_time] + TEARDOWN_CHECKS

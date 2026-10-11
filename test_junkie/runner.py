@@ -343,13 +343,16 @@ class Runner:
                 self.__cancel_by_user()
                 for suite in list(self.__suites):
                     suite_object = Builder.get_execution_roster()[suite]
-                    if suite_object not in self.__executed_suites:
-                        self.__executed_suites.append(suite_object)
                     try:
-                        self.__ignore_unfinished(suite_object, None, None, time.time(), status=TestCategory.CANCEL)
+                        if suite_object not in self.__executed_suites:  # never started: cancelled as a whole, and
+                            self.__executed_suites.append(suite_object)  # it reports in to its groups
+                            self.__run_suite(suite_object)
+                        else:
+                            self.__ignore_unfinished(suite_object, None, None, time.time(),
+                                                     status=TestCategory.CANCEL)
+                            self.__context.console.suite_finished(suite_object)
                     except KeyboardInterrupt:
                         pass  # a listener raising it again: what got recorded stays recorded
-                    self.__context.console.suite_finished(suite_object)
                     self.__suites.remove(suite)
 
             ParallelProcessor.wait_currently_active_suites_to_finish()
@@ -736,8 +739,8 @@ class Runner:
                                 if not tests:
                                     continue
 
-                        with ParallelProcessor.activity(state):
-                            before_class_error = Runner.__run_before_class(suite, class_param)
+                        before_class_error = Runner.__class_hook(Runner.__run_before_class, suite, class_param,
+                                                                 context)
 
                         while tests:
                             for test in list(tests):
@@ -822,8 +825,7 @@ class Runner:
                         self.__run_class_resets(suite, class_param, context)
                         if state.cancelled:
                             context.console.suite_cleanup(suite, True)
-                        with ParallelProcessor.activity(state):
-                            Runner.__run_after_class(suite, class_param)
+                        Runner.__class_hook(Runner.__run_after_class, suite, class_param, context)
                     # a cancelled test makes the suite cancel, unless another one didn't succeed (see get_outcome)
                     suite.metrics.update_suite_metrics(status=suite.get_outcome(), start_time=suite_start_time,
                                                        ran=True)
@@ -894,13 +896,13 @@ class Runner:
             deferred = Runner.__run_test_body(suite, test, parameter, class_parameter, before_class_error,
                                               context.state, context, resume) == "deferred"
         except (TestInterrupted, KeyboardInterrupt):
-            # raised outside the test's body (a hook or a listener): the test is cancelled, as with Ctrl+C during it
+            # raised outside the test's body (a hook or a listener): the test is cancelled, as with Ctrl+C during it,
+            # and the suite carries on the same way - its other tests are cancelled and @afterClass still runs
             context.cancel_by_user()
             try:
                 Runner.__ignore_unit(None, suite, test, parameter, class_parameter, None, None, TestCategory.CANCEL)
             except KeyboardInterrupt:
                 pass  # a listener raising it again: the cancel is recorded
-            raise
         except BaseException as error:  # e.g. the test called sys.exit()
             Runner.__ignore_unit(None, suite, test, parameter, class_parameter, error, traceback.format_exc())
             raise
@@ -1195,10 +1197,8 @@ class Runner:
                 return
             context.console.note("{}: setting up again for {} retr{} (reset=\"class\")".format(
                 suite.get_class_name(), len(held), "y" if len(held) == 1 else "ies"))
-            with ParallelProcessor.activity(state):
-                Runner.__run_after_class(suite, class_param)
-            with ParallelProcessor.activity(state):
-                before_class_error = Runner.__run_before_class(suite, class_param)
+            Runner.__class_hook(Runner.__run_after_class, suite, class_param, context)
+            before_class_error = Runner.__class_hook(Runner.__run_before_class, suite, class_param, context)
             for item in held:
                 test, parameter, class_parameter = item["test"], item["parameter"], item["class_parameter"]
                 if before_class_error is not None:  # set up again and failed: the held retry is ignored
@@ -1261,6 +1261,18 @@ class Runner:
             if left <= 0:
                 return True
             time.sleep(min(left, 0.1))
+
+    @staticmethod
+    def __class_hook(hook, suite, class_parameter, context):
+        """
+        Runs @beforeClass or @afterClass. A KeyboardInterrupt from it cancels the run like Ctrl+C would, and the
+        suite carries on: its tests are cancelled and @afterClass still runs
+        """
+        with ParallelProcessor.activity(context.state):
+            try:
+                return hook(suite, class_parameter)
+            except KeyboardInterrupt:
+                context.cancel_by_user()
 
     @staticmethod
     def __run_before_class(suite, class_parameter=None):
