@@ -41,20 +41,27 @@ def _suite_of(size, rules=None):
 
 def _calls(size, rules=None):
     """
-    Function calls (Python and builtin) one run of a `size`-test suite makes, counted by cProfile in this thread.
-    A count, not a time: it comes out the same on a busy CI runner as on an idle machine
+    Function calls (Python and builtin) one run of a `size`-test suite makes in this thread, counted by a
+    `sys.setprofile` hook. A count, not a time: it comes out the same on a busy CI runner as on an idle machine.
+    Not cProfile: on 3.12+ it is built on sys.monitoring, which sees every thread, so the live console thread's calls
+    (as many as it gets ticks in, i.e. clock-dependent) would leak into the count
     """
-    import cProfile
-    import pstats
+    import sys
     from test_junkie.runner import Runner
     suite = _suite_of(size, rules)
-    profiler = cProfile.Profile()
-    profiler.enable()
+    counted = [0]
+
+    def count(frame, event, arg):
+        if event == "call" or event == "c_call":
+            counted[0] += 1
+
+    previous = sys.getprofile()
+    sys.setprofile(count)
     try:
         Runner([suite], quiet=True).run()
     finally:
-        profiler.disable()
-    return pstats.Stats(profiler).total_calls
+        sys.setprofile(previous)
+    return counted[0]
 
 
 def _calls_per_added_test(low, high, rules=None):
@@ -83,7 +90,12 @@ def rules_still_get_independent_copies():
     assert "added_by_rule" not in tags, tags
 
 
-def runtime_scales_linearly_with_suite_size():
+def calls_scale_linearly_with_suite_size():
+    """
+    The calls each added test costs stay the same as the suite grows. Catches per-test work done through Python
+    calls (the pre-0.9a5 suite deep-copy below); does NOT catch O(N) work inside a single C call (list.index, `in` on
+    a list, sorted() of the whole roster once per test), which is one call however long it takes
+    """
     # before 0.9a5 every test deep-copied the whole suite twice for the Rules hooks, so each added test cost more
     # the bigger the suite was (O(N^2) per run - 1,000 tests took ~55s). Counted in calls, not timed: a wall-clock
     # ratio failed on GitHub runners even as the best of 5 runs (3.4x), and the quadratic code is only ~6x here.
@@ -148,4 +160,4 @@ def runner_import_stays_lean():
 
 
 CHECKS = [copies_are_cheap_and_independent, rules_still_get_independent_copies,
-          runtime_scales_linearly_with_suite_size, scheduler_waits_without_polling, runner_import_stays_lean]
+          calls_scale_linearly_with_suite_size, scheduler_waits_without_polling, runner_import_stays_lean]
