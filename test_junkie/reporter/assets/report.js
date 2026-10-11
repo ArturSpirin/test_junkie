@@ -274,7 +274,8 @@ function traceClass(status) {
 }
 
 function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');  // also used inside quoted attributes
 }
 
 function openPanel(id) {
@@ -386,7 +387,7 @@ function metaBlock(title, values, attempts) {
 // Meta.link() entries as links, Meta.attach() entries as downloads (images previewed), anything else as text.
 function metaValue(key, value, fmt) {
   const isList = Array.isArray(value) && value.length && value.every(e => e && typeof e === 'object');
-  const safeUrl = u => /^(https?:|mailto:|data:|[^:]*$)/i.test(u) ? u : '#';
+  const safeUrl = u => /^(https?:|mailto:|[^:]*$)/i.test(u) ? u : '#';
   if (key === 'links' && isList && value.every(e => 'url' in e)) {
     return value.map(e => `<a class="meta-link" href="${escHtml(safeUrl(String(e.url)))}" target="_blank" rel="noopener">${escHtml(String(e.label || e.url))}</a>`).join('<br>');
   }

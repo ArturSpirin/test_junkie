@@ -341,6 +341,7 @@ PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08
        b"\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
 BIG = b"z" * (meta_module.ATTACH_EMBED_LIMIT + 1)
 SOURCE = {}
+SECRET = {}
 
 
 @Suite(listener=Capture)
@@ -362,6 +363,10 @@ class EvidenceSuite:
             with open(source, "wb") as log:
                 log.write(b"changed after attach")  # the copy taken at attach time is what's kept
             assert False, "first run fails"
+
+    @test()
+    def planted(self):
+        Meta.update(attachments=[{"name": "secret.txt", "path": SECRET["path"], "size": 6, "mime": "text/plain"}])
 
     @test()
     def misuse(self):
@@ -417,6 +422,31 @@ def html_report_embeds_small_attachments_and_links_big_ones():
     assert "run_files/" + os.path.basename(log["path"]) in page
 
 
+def html_report_embeds_only_files_meta_attach_saved():
+    # a path put under "attachments" any other way could name any local file; the shared report must not carry it
+    SECRET["path"] = os.path.join(tempfile.mkdtemp(), "secret.txt")
+    with open(SECRET["path"], "w") as secret:
+        secret.write("s3cr3t")
+    folder = tempfile.mkdtemp()
+    _run([EvidenceSuite], html_report=os.path.join(folder, "run.html"))
+    with open(os.path.join(folder, "run.html"), encoding="utf-8") as doc:
+        page = doc.read()
+    assert "data:image/png;base64," in page  # Meta.attach() copies still embed
+    assert "czNjcjN0" not in page and "s3cr3t" not in page  # base64 and plain text of the planted file
+
+
+def html_report_escapes_quotes_for_attributes():
+    # escHtml is used inside quoted href=/download=/alt= attributes: a " in a link or file name must not break out
+    from test_junkie.reporter import html_template
+    folder = os.path.dirname(os.path.abspath(html_template.__file__))
+    with open(os.path.join(folder, "assets", "report.js"), encoding="utf-8") as source:
+        script = source.read()
+    body = script[script.index("function escHtml"):]
+    body = body[:body.index("\n}") + 2]
+    assert "&quot;" in body and "&#39;" in body, body
+    assert "data:|" not in script[script.index("const safeUrl"):][:120]  # links can't be data: URIs
+
+
 def keyword_suite_is_the_old_call_not_a_meta_key():
     # Meta.update(suite=self, ...) used to store the suite instance itself under "suite"
     _run([KeywordSuiteSuite])
@@ -433,4 +463,5 @@ CHECKS = [update_reaches_the_running_test_from_test_helpers_and_hooks, declared_
           json_report_has_meta_and_what_each_run_set, xml_report_has_properties_parameters_and_time,
           html_report_shows_meta_per_attempt, rerun_ignores_the_new_fields,
           append_link_and_attach_build_lists_per_attempt, append_and_attach_reject_bad_input,
-          html_report_embeds_small_attachments_and_links_big_ones, keyword_suite_is_the_old_call_not_a_meta_key]
+          html_report_embeds_small_attachments_and_links_big_ones, html_report_embeds_only_files_meta_attach_saved,
+          html_report_escapes_quotes_for_attributes, keyword_suite_is_the_old_call_not_a_meta_key]

@@ -15,6 +15,7 @@ from statistics import mean, median
 
 from test_junkie.constants import TestCategory, DecoratorType
 from test_junkie.debugger import LogJunkie
+from test_junkie import meta as meta_module
 from test_junkie.meta import report_value, ATTACHMENTS_KEY, ATTACH_EMBED_LIMIT
 from test_junkie.metrics import Aggregator
 from test_junkie.reporter.analyzer import Analyzer
@@ -125,11 +126,27 @@ class Reporter:
         the report stays one file, else a copy in "<report name>_files/" next to the report, linked relatively
         """
         paths = []
+        saved_in = meta_module._ATTACH_DIR
+
+        def is_attach_copy(path):
+            # only the copies Meta.attach() saved: a path set any other way (Meta.update(attachments=...)) could name
+            # any local file, and the report is shared
+            if not saved_in:
+                return False
+            try:
+                folder = os.path.realpath(saved_in)
+                return os.path.commonpath([folder, os.path.realpath(path)]) == folder
+            except ValueError:  # another drive on Windows
+                return False
 
         def collect(meta):
             for entry in (meta or {}).get(ATTACHMENTS_KEY) or []:
                 if isinstance(entry, dict) and isinstance(entry.get("path"), str) and entry["path"] not in paths:
-                    paths.append(entry["path"])
+                    if is_attach_copy(entry["path"]):
+                        paths.append(entry["path"])
+                    else:
+                        LogJunkie.warn("Attachment {} left out of the HTML report: not saved by Meta.attach()"
+                                       .format(entry["path"]))
         for detail in details_data.values():
             for variant in detail.get("variants") or []:
                 collect(variant.get("meta"))
