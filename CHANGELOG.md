@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9a8
+## 0.9a8 (2026-10-10)
 - Supports Python 3.9 through 3.15
 - A listener that raises no longer ends its suite; the error is listed under Problems and the run fails at the end
 - Tests a suite never reached (it ended early, e.g. `sys.exit()`) are reported as ignored
