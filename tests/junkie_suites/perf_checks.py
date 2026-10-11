@@ -39,31 +39,29 @@ def _suite_of(size, rules=None):
     return Suite(**kwargs)(type("ScalingSuite%d" % size, (), {"t%04d" % i: make(i) for i in range(size)}))
 
 
-def _run_seconds(size, rules=None):
+def _calls(size, rules=None):
+    """
+    Function calls (Python and builtin) one run of a `size`-test suite makes, counted by cProfile in this thread.
+    A count, not a time: it comes out the same on a busy CI runner as on an idle machine
+    """
+    import cProfile
+    import pstats
     from test_junkie.runner import Runner
     suite = _suite_of(size, rules)
-    start = time.perf_counter()
-    Runner([suite], quiet=True).run()
-    return time.perf_counter() - start
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        Runner([suite], quiet=True).run()
+    finally:
+        profiler.disable()
+    return pstats.Stats(profiler).total_calls
 
 
-def _best_seconds(size, rules=None, repeats=5):
-    """Fastest of several runs: noise on a busy CI runner only ever adds time, so the minimum is the real cost"""
-    import gc
-    best = None
-    for _ in range(repeats):
-        gc.collect()
-        seconds = _run_seconds(size, rules)
-        best = seconds if best is None else min(best, seconds)
-    return best
-
-
-def _marginal_ms_per_test(low, high, rules=None):
+def _calls_per_added_test(low, high, rules=None):
     """
-    Extra time per added test between two suite sizes - fixed per-run costs cancel out
+    Extra calls per added test between two suite sizes - fixed per-run costs cancel out
     """
-    # best of 5 per size: the median of 3 differences still let one slow moment through (3.4x on a GitHub runner)
-    return (_best_seconds(high, rules) - _best_seconds(low, rules)) * 1000 / (high - low)
+    return (_calls(high, rules) - _calls(low, rules)) / (high - low)
 
 
 def copies_are_cheap_and_independent():
@@ -87,14 +85,16 @@ def rules_still_get_independent_copies():
 
 def runtime_scales_linearly_with_suite_size():
     # before 0.9a5 every test deep-copied the whole suite twice for the Rules hooks, so each added test cost more
-    # the bigger the suite was (O(N^2) per run - 1,000 tests took ~55s). Linear code is ~1x here, the old code ~4.5x
+    # the bigger the suite was (O(N^2) per run - 1,000 tests took ~55s). Counted in calls, not timed: a wall-clock
+    # ratio failed on GitHub runners even as the best of 5 runs (3.4x), and the quadratic code is only ~6x here.
+    # Linear code is 1.00x (+-0.01); the old code is 5.8x
     for rules in (None, TagMutatingRules):
-        _run_seconds(20, rules)  # warm-up
-        small = _marginal_ms_per_test(200, 400, rules)
-        large = _marginal_ms_per_test(1600, 2000, rules)  # quadratic code would cost ~6x more per test here
-        assert large < max(small, 0.05) * 2.5, \
-            "each added test got {:.1f}x more expensive in a bigger suite ({:.3f} -> {:.3f} ms, rules={})".format(
-                large / small if small else float("inf"), small, large, rules)
+        _calls(20, rules)  # warm-up: first-run imports and caches
+        small = _calls_per_added_test(50, 100, rules)
+        large = _calls_per_added_test(400, 500, rules)
+        assert large < small * 1.5, \
+            "each added test got {:.2f}x more expensive in a bigger suite ({:.0f} -> {:.0f} calls, rules={})".format(
+                large / small, small, large, rules)
 
 
 def scheduler_waits_without_polling():

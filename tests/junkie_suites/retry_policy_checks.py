@@ -200,10 +200,13 @@ def delays_are_waited_between_runs():
 
 
 def backoff_doubles_up_to_max_delay():
-    _, times, counts = _policy_run()
+    retries, times, counts = _policy_run()
     assert counts["backs_off"] == 4
+    # the delays it chose are exact; the clock only shows each was waited (no upper bound: a busy machine adds time)
+    waited = [r["waited"] for r in retries if r["test"] == "backs_off"]
+    assert waited == [0.1, 0.2, 0.25], waited  # 0.1, 0.2, 0.4 capped at 0.25
     gaps = [b - a for a, b in zip(times["backs_off"], times["backs_off"][1:])]
-    assert 0.09 <= gaps[0] < 0.19 and 0.19 <= gaps[1] < 0.29 and 0.24 <= gaps[2] < 0.34, gaps  # 0.1, 0.2, 0.25 (cap)
+    assert len(gaps) == 3 and all(gap >= delay - 0.01 for gap, delay in zip(gaps, waited)), gaps
 
 
 def message_matches_the_raised_error_not_the_truncated_copy():

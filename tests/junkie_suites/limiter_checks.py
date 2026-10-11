@@ -26,25 +26,31 @@ from tests.junkie_suites import config_samples
 EVENTS = []  # (name, time.monotonic(), tests running at that moment)
 LISTENED = []
 _RUNNING = [0]
+_GROUPS = {}  # "grid" -> [running now, most running at once], by the part of the name before the "."
 _LOCK = threading.Lock()
 RUNNER = [None]
 
 
 def _work(name, seconds=0.0):
+    group = _GROUPS.setdefault(name.split(".")[0], [0, 0])
     with _LOCK:
         _RUNNING[0] += 1
+        group[0] += 1
+        group[1] = max(group)
         EVENTS.append((name, time.monotonic(), _RUNNING[0]))
     try:
         time.sleep(seconds)
     finally:
         with _LOCK:
             _RUNNING[0] -= 1
+            group[0] -= 1
 
 
 def _reset():
     del EVENTS[:]
     del LISTENED[:]
     _RUNNING[0] = 0
+    _GROUPS.clear()
 
 
 def _starts(prefix=""):
@@ -53,6 +59,41 @@ def _starts(prefix=""):
 
 def _gaps(starts):
     return [round(b - a, 3) for a, b in zip(starts, starts[1:])]
+
+
+class _Slots(dict):
+    """Stands in for Limiter's next-start table and keeps every value written to it (always under Limiter's lock)"""
+
+    def __init__(self):
+        super().__init__()
+        self.taken = []
+
+    def __setitem__(self, gate, next_start):
+        super().__setitem__(gate, next_start)
+        self.taken.append(next_start)
+
+
+def _run_recording_slots(suites, **kwargs):
+    """:return: LIST of next-start times the limiter reserved during the run, one per start it paced"""
+    slots, saved = _Slots(), Limiter._Limiter__NEXT_START
+    Limiter._Limiter__NEXT_START = slots
+    try:
+        _run(suites, **kwargs)
+    finally:
+        Limiter._Limiter__NEXT_START = saved
+    return slots.taken
+
+
+def _assert_paced(next_starts, starts, interval):
+    """
+    The slots the limiter reserved are `interval` apart, and no test started before its slot. Checked on the slots,
+    not on gaps between measured start times: a test logs its start some time after its slot, and on a busy machine
+    the earlier test can log later - under load a 0.3s gap measured as little as 0.016
+    """
+    slots = sorted(at - interval for at in next_starts)
+    assert len(slots) == len(starts), (slots, starts)
+    assert all(b - a > interval - 1e-6 for a, b in zip(slots, slots[1:])), _gaps(slots)
+    assert all(start > slot - 1e-6 for start, slot in zip(sorted(starts), slots)), (slots, starts)
 
 
 class KeepsFullError(Listener):
@@ -297,20 +338,20 @@ def limits_off_keeps_everything():
 # ── throttling ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 def test_throttling_is_run_wide():
-    _run([ThrottledA, ThrottledB], test_throttling=0.3, suite_multithreading_limit=2, test_multithreading_limit=4)
+    slots = _run_recording_slots([ThrottledA, ThrottledB], test_throttling=0.3, suite_multithreading_limit=2,
+                                 test_multithreading_limit=4)
     starts = _starts("t.")
     assert len(starts) == 4, EVENTS
-    # 0.9a7 slept per suite thread: two tests started together every 0.3 s
-    assert all(gap >= 0.25 for gap in _gaps(starts)), _gaps(starts)
+    _assert_paced(slots, starts, 0.3)  # 0.9a7 slept per suite thread: two tests started together every 0.3 s
 
 
 def suite_throttling_overrides_test_throttling():
-    _run([UnthrottledSuite, ThrottledA], test_throttling=0.4, suite_multithreading_limit=2,
-         test_multithreading_limit=4)
+    slots = _run_recording_slots([UnthrottledSuite, ThrottledA], test_throttling=0.4, suite_multithreading_limit=2,
+                                 test_multithreading_limit=4)
     unthrottled, throttled = _starts("u."), _starts("t.")
     assert len(unthrottled) == 3 and len(throttled) == 2, EVENTS
-    assert unthrottled[-1] - unthrottled[0] < 0.2, _gaps(unthrottled)  # throttling=0: no wait between its tests
-    assert _gaps(throttled)[0] >= 0.35, _gaps(throttled)  # the other suite still follows test_throttling
+    # the other suite still follows test_throttling; throttling=0 tests take no slot, so they never wait
+    _assert_paced(slots, throttled, 0.4)
 
 
 def run_limits_are_put_back_after_the_run():
@@ -340,27 +381,20 @@ def pool_caps_how_many_tests_hold_it():
     grid = [name for name, _, _ in EVENTS if name.startswith("grid.")]
     assert len(grid) == 6, EVENTS
     # at most 2 browser tests at once; the api tests (no pool) weren't held back
-    peak = _peak("grid.")
-    assert peak == 2, peak
-    assert _peak("") > 2, EVENTS
-
-
-def _peak(prefix):
-    """
-    :return: INT, most tests with `prefix` running at once, from start/end times
-    """
-    spans = [(at, at + 0.2) for name, at, _ in EVENTS if name.startswith(prefix)]
-    return max(sum(1 for s, e in spans if s <= at < e) for at, _ in spans)
+    # counted as the tests start and end: guessing each ran 0.2s from its logged start saw 4 at once under load
+    assert _GROUPS["grid"][1] == 2, _GROUPS
+    assert max(running for _, _, running in EVENTS) > 2, EVENTS
 
 
 def suite_uses_and_min_interval_pace_every_test():
     Limiter.pool("api", min_interval=0.3)
     try:
-        _run([PacedSuite], test_multithreading_limit=3)
+        slots = _run_recording_slots([PacedSuite], test_multithreading_limit=3)
     finally:
         Limiter.remove_pools()
     starts = _starts("paced.")
-    assert len(starts) == 3 and all(gap >= 0.25 for gap in _gaps(starts)), _gaps(starts)
+    assert len(starts) == 3, EVENTS
+    _assert_paced(slots, starts, 0.3)
 
 
 def unknown_pool_is_rejected_before_anything_runs():

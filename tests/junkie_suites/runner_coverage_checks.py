@@ -129,7 +129,7 @@ def gate_activity_cancelled_while_another_thread_holds_it():
         started = time.monotonic()
         with ParallelProcessor.activity(lambda: True):
             assert _GATE["active"] == 1, _GATE
-        assert time.monotonic() - started < 0.2, "waited for the gate although cancelled"
+        assert time.monotonic() - started < 2, "waited for the gate although cancelled"  # the holder keeps it 10s
         assert _GATE["active"] == 0, _GATE
     finally:
         stop()
@@ -223,7 +223,7 @@ def gate_acquire_cancelled_while_activity_drains():
         with ParallelProcessor.activity():
             started = time.monotonic()
             ParallelProcessor.acquire_exclusive(lambda: True)
-            assert time.monotonic() - started < 0.2, "waited for running tests although cancelled"
+            assert time.monotonic() - started < 2, "waited for running tests although cancelled"  # i.e. forever
             assert _GATE["owner"] == threading.get_ident() and _GATE["active"] == 1, _GATE
             ParallelProcessor.release_exclusive()
         assert _GATE == {"owner": None, "depth": 0, "active": 0}, _GATE
