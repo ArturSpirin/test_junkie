@@ -260,9 +260,14 @@ def format_result(size, result, timeout):
              step("xml", s.get("xml"), p.get("xml"))]
     line = "{} | {}".format(head, " | ".join(parts))
     if not result["finished"]:
-        why = "DID NOT FINISH within {:.0f} min ({} pass stopped)".format(timeout / 60.0, result["timed_out"]) \
-            if result.get("timed_out") else "child failed, exit code {}".format(result.get("returncode"))
-        line += " | {} (stopped after {:.0f} s)".format(why, result["elapsed"])
+        stopped = result.get("timed_out")
+        if stopped:
+            done = s if stopped == "time" else dict(p, run=None)
+            where = next((name for name in ("run",) + STEPS if name not in done), "after the last step")
+            why = "DID NOT FINISH within {:.0f} min ({} pass stopped in {})".format(timeout / 60.0, stopped, where)
+        else:
+            why = "child failed, exit code {}".format(result.get("returncode"))
+        line += " | {}, stopped after {:.0f} s".format(why, result["elapsed"])
     return line
 
 

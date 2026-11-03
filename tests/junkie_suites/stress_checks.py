@@ -51,7 +51,8 @@ def harness_stops_a_size_at_its_timeout():
         result = report_stress.run_size(size, out, timeout=1)
         assert not result["finished"] and result["timed_out"] == "time", result
         assert "xml" not in result["seconds"] and result["elapsed"] < 30, result
-        assert "DID NOT FINISH within" in report_stress.format_result(size, result, 1)
+        line = report_stress.format_result(size, result, 1)
+        assert "DID NOT FINISH within 0 min (time pass stopped in run)" in line, line
     finally:
         shutil.rmtree(out, ignore_errors=True)
 
