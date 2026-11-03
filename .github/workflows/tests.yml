@@ -27,6 +27,15 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip install -e .
 
+      # the HTML report's browser checks (tests/junkie_suites/report_correctness_checks.py), 3.13 only: Playwright's
+      # greenlet wheels aren't certain on the newest Python. Pinned, so Chromium doesn't change under the timings.
+      # Elsewhere those checks are skipped, with the reason on screen
+      - name: Install Playwright and Chromium (browser checks)
+        if: matrix.python-version == '3.13'
+        run: |
+          pip install playwright==1.64.1
+          python -m playwright install --with-deps chromium
+
       # both paths write coverage data (see .coveragerc), combined below into one report
       # TEST_JUNKIE_HOME keeps Test Junkie's config and temp files in a throwaway dir
       - name: Run pytest path
@@ -35,7 +44,7 @@ jobs:
           TEST_JUNKIE_HOME: ${{ runner.temp }}/tj_home
         run: |
           set -o pipefail
-          coverage run -m pytest -rfE tests/pytest tests/cli tests/cli_edge 2>&1 | tee pytest_output.txt
+          coverage run -m pytest -rfEs tests/pytest tests/cli tests/cli_edge 2>&1 | tee pytest_output.txt
 
       # tj run annotates its own failures here (::error per failed test, at the failing line)
       - name: Run test_junkie path
