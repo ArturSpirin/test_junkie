@@ -26,7 +26,7 @@ def harness_times_each_end_of_run_step():
             assert re.search(r"\b{} \d+\.\d\d s \d+\.\d MB".format(re.escape(step)), line), line
 
         # one report per pass would double the XML: it appends to an existing file
-        assert sorted(os.listdir(out)) == ["console.txt", "report.html", "report.xml"], os.listdir(out)
+        assert sorted(os.listdir(out)) == ["console.txt", "expected.json", "report.html", "report.xml"], os.listdir(out)
         cases = list(ElementTree.parse(os.path.join(out, "report.xml")).getroot().iter("testcase"))
         failed = [case for case in cases if case.find("failure") is not None]
         assert len(cases) == 20 and len(failed) == 6, (len(cases), len(failed))

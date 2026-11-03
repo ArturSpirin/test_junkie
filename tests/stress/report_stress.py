@@ -38,6 +38,8 @@ CASES = {"named-300": MATRIX[-1]}
 def label(size):
     name = size.get("name") or "{}-tests-{:.0f}pct-{}-reruns-{}-frames".format(
         size["tests"], size["fail_rate"] * 100, size["reruns"], size["frames"])
+    if size.get("skip_rate"):
+        name = "{}-{:.0f}pct-skipped".format(name, size["skip_rate"] * 100)
     return name if size.get("traceback_limit") is None else "{}-{}-chars".format(name, size["traceback_limit"])
 
 
@@ -78,24 +80,45 @@ def _passing(self):
     pass
 
 
-def build_suites(tests, fail_rate, reruns, frames, seed=1):
+def _picks(tests, fail_rate, skip_rate, seed):
+    """{index: AssertionError or RuntimeError} for the failing tests, and the set of skipped ones (never failing)"""
+    picked = sorted(random.Random(seed).sample(range(tests), int(round(tests * fail_rate))))
+    kinds = {index: (AssertionError if n % 2 == 0 else RuntimeError) for n, index in enumerate(picked)}
+    rest = [index for index in range(tests) if index not in kinds]
+    skipped = set(random.Random(seed + 1).sample(rest, min(len(rest), int(round(tests * skip_rate)))))
+    return kinds, skipped
+
+
+def build_suites(tests, fail_rate, reruns, frames, seed=1, skip_rate=0.0):
     """
     Suites StressSuite0001... of SUITE_SIZE tests each. A seeded pick of round(tests * fail_rate) tests fails on every
     attempt (worst case), half with AssertionError (failed), half with RuntimeError (error), each from `frames` levels
-    deep. retry=reruns + 1: retry counts all runs of a test
+    deep. A second seeded pick of round(tests * skip_rate) of the others is @test(skip=True). retry=reruns + 1: retry
+    counts all runs of a test
     """
     from test_junkie.decorators import Suite, test
-    picked = sorted(random.Random(seed).sample(range(tests), int(round(tests * fail_rate))))
-    kinds = {index: (AssertionError if n % 2 == 0 else RuntimeError) for n, index in enumerate(picked)}
+    kinds, skipped = _picks(tests, fail_rate, skip_rate, seed)
     suites = []
     for start in range(0, tests, SUITE_SIZE):
         members = {}
         for index in range(start, min(start + SUITE_SIZE, tests)):
             body = _failing(index, frames, kinds[index]) if index in kinds else _passing
             name = "test_%05d" % (index + 1)
-            members[name] = test(retry=reruns + 1)(_named(body, name))
+            members[name] = test(retry=reruns + 1, skip=index in skipped)(_named(body, name))
         suites.append(Suite()(type("StressSuite%04d" % (start // SUITE_SIZE + 1), (), members)))
-    return suites, len(picked)
+    return suites, len(kinds)
+
+
+def expected_counts(size, seed=1):
+    """
+    What the generated run is, in JUnit terms. Reruns are the runs of a test after its first: the runner retries an
+    error like a failure and records retry = runs done (checked on a 40-test run: every failing test has retry
+    reruns + 1 and that many statuses), so each always-failing test has `reruns` of them and nothing else has any
+    """
+    kinds, skipped = _picks(size["tests"], size["fail_rate"], size.get("skip_rate") or 0.0, seed)
+    failed = sum(1 for kind in kinds.values() if kind is AssertionError)
+    return {"tests": size["tests"], "passed": size["tests"] - len(kinds) - len(skipped), "failures": failed,
+            "errors": len(kinds) - failed, "skipped": len(skipped), "reruns": len(kinds) * size["reruns"]}
 
 
 def _named(body, name):
@@ -146,7 +169,8 @@ def run_pass(size, out_dir, memory, emit):
                  (Reporter, "__init__", Reporter.__dict__["__init__"]),
                  (Reporter, "generate_html_report", Reporter.__dict__["generate_html_report"]),
                  (XmlReporter, "create_xml_report", XmlReporter.__dict__["create_xml_report"])]
-    suites, failing = build_suites(size["tests"], size["fail_rate"], size["reruns"], size["frames"])
+    suites, failing = build_suites(size["tests"], size["fail_rate"], size["reruns"], size["frames"],
+                                   skip_rate=size.get("skip_rate") or 0.0)
     os.makedirs(out_dir, exist_ok=True)
     real_stdout = sys.stdout
     console_file = open(os.path.join(out_dir, "console.txt"), "w", encoding="utf-8")
@@ -192,6 +216,9 @@ def run_size(size, out_dir, passes=("time", "memory"), timeout=1800.0):
     if not env.get("TEST_JUNKIE_HOME"):
         home = env["TEST_JUNKIE_HOME"] = tempfile.mkdtemp(prefix="tj_stress_home_")
     result = {"seconds": {}, "peak": {}, "finished": True, "timed_out": None}
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "expected.json"), "w", encoding="utf-8") as expected:  # for report_check
+        json.dump(dict(expected_counts(size), size=size), expected, indent=2)
     begin = time.monotonic()
     try:
         for kind in passes:
@@ -249,8 +276,10 @@ def format_result(size, result, timeout):
     html_p = max(p["html_construct"], p["html_generate"]) if "html_construct" in p and "html_generate" in p else None
     head = "{} tests {:.0f}% fail/error {} reruns {} frames".format(
         size["tests"], size["fail_rate"] * 100, size["reruns"], size["frames"])
+    if size.get("skip_rate"):
+        head += " {:.0f}% skipped".format(size["skip_rate"] * 100)
     if size.get("traceback_limit") is not None:
-        head += " traceback limit {}".format(size["traceback_limit"])
+        head +=" traceback limit {}".format(size["traceback_limit"])
     if size.get("name"):
         head = "{} ({})".format(size["name"], head)
     parts = [step("run", s.get("run"), None), step("console.finish", s.get("console"), p.get("console")),
@@ -286,6 +315,8 @@ def main(argv=None):
                         help="share of tests that fail or error on every attempt, 0-1 (default 0.3)")
     parser.add_argument("--reruns", type=int, default=6, help="reruns of each failing test (default 6)")
     parser.add_argument("--frames", type=int, default=40, help="traceback depth of each failure (default 40)")
+    parser.add_argument("--skip-rate", type=float, default=0.0,
+                        help="share of the other tests marked @test(skip=True), 0-1 (default 0)")
     parser.add_argument("--traceback-limit", type=int,
                         help="characters of each traceback the run keeps (default: Test Junkie's, 3000)")
     parser.add_argument("--case", choices=sorted(CASES), help="a named size instead of the values above")
@@ -309,6 +340,8 @@ def main(argv=None):
         sizes = [{"tests": args.tests, "fail_rate": args.fail_rate, "reruns": args.reruns, "frames": args.frames}]
     if args.traceback_limit is not None:
         sizes = [dict(size, traceback_limit=args.traceback_limit) for size in sizes]
+    if args.skip_rate:
+        sizes = [dict(size, skip_rate=args.skip_rate) for size in sizes]
     passes = ("time", "memory") if args.passes == "both" else (args.passes,)
     root = args.out or tempfile.mkdtemp(prefix="tj_stress_")
     print("Python {} on {}, commit {}, passes: {}, cap {:.0f} s per size".format(
