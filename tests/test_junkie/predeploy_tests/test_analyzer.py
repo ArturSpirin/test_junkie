@@ -8,3 +8,7 @@ class AnalyzerSuite:
     @test()
     def report_insights(self):
         analyzer_samples.run_checks()
+
+    @test()
+    def similar_grouping_scales(self):
+        analyzer_samples.run_scaling_checks()
