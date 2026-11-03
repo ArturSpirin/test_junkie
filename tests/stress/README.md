@@ -17,12 +17,13 @@ python3.13 -m tests.stress.report_stress --tests 1000 --fail-rate 0.3 --reruns 6
 | `--fail-rate` | 0.3 | share of tests (0-1) that fail on every attempt; half fail (`AssertionError`), half error |
 | `--reruns` | 6 | reruns of each failing test (`@test(retry=reruns + 1)`) |
 | `--frames` | 40 | distinct frames in each failure's traceback |
+| `--skip-rate` | 0 | share of tests (0-1), from the non-failing ones, marked `@test(skip=True)` |
 | `--traceback-limit` | Test Junkie's (3000) | characters of each traceback the run keeps |
 | `--case named-300` | | 300 tests, all failing, 6 reruns |
 | `--matrix` | | 1k/0%, 1k/30%, 5k/10%, 20k/30% (6 reruns, 40 frames) and `named-300` |
 | `--pass` | `both` | `time`, `memory` or `both` |
 | `--timeout` | 1800 | seconds per size, all passes together |
-| `--out` | a temp dir, removed | keeps `OUT/<size>/report.html`, `report.xml` and `console.txt` |
+| `--out` | a temp dir, removed | keeps `OUT/<size>/report.html`, `report.xml`, `console.txt` and `expected.json` |
 
 One line per size (these from 0.9a8, 2026-11-03):
 
@@ -62,3 +63,27 @@ TJ_STRESS_LARGE=1 python3.13 -m test_junkie run -s tests/test_junkie/predeploy_t
 ```
 
 On PowerShell: `$env:TJ_STRESS_LARGE = "1"` first.
+
+## Report correctness
+
+`report_check.py` checks the reports one kept size folder holds against its `expected.json` (what was generated):
+
+```
+python3.13 -m tests.stress.report_check OUT/<size> [--browser] [--screenshot panel.png]
+```
+
+- **XML**: parsed with `xml.etree`, then validated with `xmlschema` against `xsd/junit-10.xsd`: the Jenkins xUnit
+  plugin's JUnit schema, vendored unchanged from
+  `https://github.com/jenkinsci/xunit-plugin/blob/0afa700702a6617f483cfd9407711976dc0bd74a/src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd`
+  (MIT). Errors are grouped by kind with counts, so the same kinds at every size mean nothing breaks with scale.
+- **Counts**: tests, passed, failures, errors, skipped and reruns, from the generated run, the XML's `<testsuite>`
+  attributes, the XML's elements, and the HTML page's data. A rerun is a run of a test after its first: in the XML a
+  `rerunFailure`/`rerunError`/`flaky*` element, in the HTML the Retries column.
+- **`--browser`**: opens the page in headless Chromium and times DOMContentLoaded, `load` (which waits on the page's
+  Google Fonts stylesheet, so it includes the network), the table, filtering to failures and errors, scrolling to the
+  last of them (mouse wheel), opening one, expanding its first attempt and wheeling its panel to the end. Timings
+  are reported, not judged. `--offline` blocks every non-file request, so the times don't depend on the network;
+  the small-size check always runs that way.
+  Needs `pip install playwright==1.64.1 && python -m playwright install chromium` (CI does this on 3.13 only).
+- `tests/junkie_suites/report_correctness_checks.py` runs a 40-test size (30% failing, 10% skipped, 2 reruns) in the
+  normal suite. Checks that fail on a known bug are `xfail(strict=True)` on pytest and skipped with the task key on TJ.

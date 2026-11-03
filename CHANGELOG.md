@@ -4,6 +4,7 @@
 - HTML report on failure-heavy runs in seconds, not minutes: similar-traceback groups no longer overlap and list distinct tests only, and grouping stops (the report says so) after `Analyzer.MAX_COMPARISONS` (2000) comparisons, each new traceback checked against at most `Analyzer.MAX_CANDIDATES` (10) groups; raise either class attribute to group more
 - With logging on at INFO (`tj run -v`), the end of a run logs a timed start and finish line for the summary and each report
 - Stress harness for the end-of-run step (repo only, not shipped): `python -m tests.stress.report_stress`
+- Report correctness check for the stress harness's reports (repo only, not shipped): `python -m tests.stress.report_check`
 - The test suite fails when the end-of-run step of a 200-test failure-heavy run goes over its time budget; larger sizes with `TJ_STRESS_LARGE=1` (repo only)
 
 ## 0.9a8 (2026-10-10)
