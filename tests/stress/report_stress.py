@@ -33,6 +33,41 @@ MATRIX = [  # criterion 5 of the task that added this harness
     {"tests": 300, "fail_rate": 1.0, "reruns": 6, "frames": 40, "name": "named-300"},
 ]
 CASES = {"named-300": MATRIX[-1]}
+SMALL = {"tests": 200, "fail_rate": 0.3, "reruns": 6, "frames": 40}  # the size the normal suite gates on
+# Seconds the whole end-of-run step (console + HTML construct + HTML generate + XML) may take, by label(size). The one
+# place the stress gate's thresholds live (tests/junkie_suites/stress_checks.py)
+BUDGETS = {
+    # the owner's budget, Tue Nov 3 2026 (TASK-1306)
+    "named-300": 30.0,
+    "20000-tests-30pct-6-reruns-40-frames": 300.0,
+    # no owner number: held to the 20k budget, a bigger run (post-fix total 2.72 s, TASK-1304)
+    "5000-tests-10pct-6-reruns-40-frames": 300.0,
+    # derived from TASK-1304's post-fix totals: under 2x named-300's 1.67 s and 1k/30%'s 1.27 s (both bigger runs) and
+    # ~20x this size's own ~0.14 s, so load or coverage won't trip it; under the pre-fix 6.23 s of the traceback
+    # analysis alone at this size, so the quadratic grouping coming back fails it
+    "200-tests-30pct-6-reruns-40-frames": 3.0,
+}
+
+
+def end_of_run_seconds(result):
+    """
+    Seconds of the whole end-of-run step in a run_size result, or None when a step never ran
+    """
+    if not all(step in result["seconds"] for step in STEPS):
+        return None
+    return sum(result["seconds"][step] for step in STEPS)
+
+
+def over_budget(size, result, timeout):
+    """
+    None when the size finished within BUDGETS[label(size)], else the reason with the harness line
+    """
+    budget = BUDGETS[label(size)]
+    total = end_of_run_seconds(result)
+    if result["finished"] and total is not None and total < budget:
+        return None
+    spent = "did not finish" if total is None else "{:.2f} s".format(total)
+    return "end-of-run step {}, budget {:.0f} s: {}".format(spent, budget, format_result(size, result, timeout))
 
 
 def label(size):

@@ -1,6 +1,6 @@
 """
-Keeps the end-of-run stress harness (tests/stress/report_stress.py) working, on the pytest and TJ test paths. A tiny
-size only: these check the harness, not the speed of the reports
+Keeps the end-of-run stress harness (tests/stress/report_stress.py) working, on the pytest and TJ test paths, and
+gates the end-of-run step's time on report_stress.BUDGETS: a small size in the normal suite, the large ones on demand
 """
 import os
 import re
@@ -57,4 +57,34 @@ def harness_stops_a_size_at_its_timeout():
         shutil.rmtree(out, ignore_errors=True)
 
 
-CHECKS = [harness_times_each_end_of_run_step, harness_stops_a_size_at_its_timeout]
+def _within_budget(size, timeout):
+    out = tempfile.mkdtemp(prefix="tj_stress_check_")
+    try:
+        result = report_stress.run_size(size, out, passes=("time",), timeout=timeout)
+        reason = report_stress.over_budget(size, result, timeout)
+        assert reason is None, reason
+        print("within budget {:.0f} s: {}".format(report_stress.BUDGETS[report_stress.label(size)],
+                                                 report_stress.format_result(size, result, timeout)))
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
+
+
+def small_run_stays_within_budget():
+    _within_budget(report_stress.SMALL, timeout=300)
+
+
+CHECKS = [harness_times_each_end_of_run_step, harness_stops_a_size_at_its_timeout, small_run_stays_within_budget]
+
+# The large sizes take minutes (mostly the 20k run phase): on demand only, with TJ_STRESS_LARGE=1 set before the run
+# starts. Without it both test paths report them skipped
+LARGE_ENABLED = os.environ.get("TJ_STRESS_LARGE") == "1"
+
+
+def _large(size):
+    def check():
+        _within_budget(size, timeout=1800)
+    check.__name__ = "large_run_stays_within_budget_{}".format(report_stress.label(size).replace("-", "_"))
+    return check
+
+
+LARGE_CHECKS = [_large(size) for size in report_stress.MATRIX if report_stress.label(size) in report_stress.BUDGETS]
