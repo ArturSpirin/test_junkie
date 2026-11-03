@@ -24,10 +24,11 @@ python3.13 -m tests.stress.report_stress --tests 1000 --fail-rate 0.3 --reruns 6
 | `--timeout` | 1800 | seconds per size, all passes together |
 | `--out` | a temp dir, removed | keeps `OUT/<size>/report.html`, `report.xml` and `console.txt` |
 
-One line per size:
+One line per size (these from 0.9a8, 2026-11-03):
 
 ```
-1000 tests 30% fail/error 6 reruns 40 frames | run 9.10 s | console.finish 0.40 s 5.1 MB | html 20.0 s 80.0 MB (construct 0.01 s 0.1 MB + generate 19.9 s 80.0 MB) | xml 0.30 s 9.0 MB
+1000 tests 0% fail/error 6 reruns 40 frames | run 0.08 s | console.finish 0.00 s 0.0 MB | html 0.06 s 11.9 MB (construct 0.01 s 0.2 MB + generate 0.05 s 11.9 MB) | xml 0.01 s 0.7 MB
+2000 tests 30% fail/error 6 reruns 40 frames | run 55.04 s | console.finish 4.30 s | html - (construct 0.13 s + generate -) | xml - | DID NOT FINISH within 30 min (time pass stopped in html_generate), stopped after 1801 s
 ```
 
 - `run` is the time from `Runner.run()` to the summary: the tests themselves, not an end-of-run step.
