@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- With logging on at INFO (`tj run -v`), the end of a run logs a timed start and finish line for the summary and each report
+
 ## 0.9a8 (2026-10-10)
 - Supports Python 3.9 through 3.15
 - A listener that raises no longer ends its suite; the error is listed under Problems and the run fails at the end

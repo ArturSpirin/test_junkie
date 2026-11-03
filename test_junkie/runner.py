@@ -6,6 +6,8 @@ import signal
 import threading
 import time
 import traceback
+from contextlib import contextmanager
+from datetime import datetime
 from test_junkie.console import Capture, Console, Router, RunState, TestInterrupted, capturing, unit_key
 from test_junkie.constants import SuiteCategory, TestCategory, Event, DocumentationLinks, TestOrder, Undefined
 from test_junkie.debugger import LogJunkie
@@ -29,6 +31,25 @@ from test_junkie.params import param_key, duplicates, reset as reset_param_ids
 # shared lock for __process_event() - can't create it inline there, @synchronized() would just
 # get a new Lock() every call
 _EVENT_PROPERTIES_LOCK = threading.Lock()
+
+
+def _now():
+    return datetime.now().isoformat(sep=" ", timespec="milliseconds")
+
+
+@contextmanager
+def _timed_step(name):
+    # start/finish lines around each end-of-run step, so a slow run's log shows which part was slow;
+    # the time is in the message itself so it stands with any handler format
+    LogJunkie.info("End of run: {} started at {}".format(name, _now()))
+    start = time.perf_counter()
+    outcome = "failed"
+    try:
+        yield
+        outcome = "finished"
+    finally:
+        LogJunkie.info("End of run: {} {} at {} in {:.3f}s".format(name, outcome, _now(),
+                                                                    time.perf_counter() - start))
 
 
 # Event -> name of the Listener hook that handles it
@@ -390,28 +411,37 @@ class Runner:
             LogJunkie.error("Another error in a suite/test thread: {!r}".format(error))
 
         runtime = time.time() - initial_start_time
-        aggregator = Aggregator(self.get_executed_suites())
+        with _timed_step("aggregator"):
+            aggregator = Aggregator(self.get_executed_suites())
         try:
             try:
-                self.exit_code = console.finish(aggregator, runtime, errors,
-                                                resources=resource_monitor.samples if resource_monitor else None)
+                with _timed_step("console summary"):
+                    self.exit_code = console.finish(aggregator, runtime, errors,
+                                                    resources=resource_monitor.samples if resource_monitor else None)
             finally:
                 router.uninstall()
                 if previous_handler is not None:
                     signal.signal(signal.SIGINT, previous_handler)
             if self.__settings.html_report:
-                from test_junkie.reporter.html_reporter import Reporter  # only loaded when a report is requested
-                reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
-                                    if resource_monitor is not None else None,
-                                    runtime=runtime,
-                                    aggregator=aggregator,
-                                    multi_threading_enabled=self.__processor.test_multithreading()
-                                    or self.__processor.suite_multithreading())
-                reporter.generate_html_report(self.__settings.html_report)
-            XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
+                with _timed_step("HTML report"):
+                    from test_junkie.reporter.html_reporter import Reporter  # only loaded when a report is requested
+                    reporter = Reporter(monitoring_file=resource_monitor.get_file_path()
+                                        if resource_monitor is not None else None,
+                                        runtime=runtime,
+                                        aggregator=aggregator,
+                                        multi_threading_enabled=self.__processor.test_multithreading()
+                                        or self.__processor.suite_multithreading())
+                    reporter.generate_html_report(self.__settings.html_report)
+            if self.__settings.xml_report:
+                with _timed_step("XML report"):
+                    XmlReporter.create_xml_report(write_file=self.__settings.xml_report,
+                                                  suites=self.get_executed_suites())
+            else:
+                XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
             if self.__settings.json_report:
-                from test_junkie.reporter.json_reporter import write_json_report
-                write_json_report(self.__settings.json_report, aggregator, runtime, self.seed)
+                with _timed_step("JSON report"):
+                    from test_junkie.reporter.json_reporter import write_json_report
+                    write_json_report(self.__settings.json_report, aggregator, runtime, self.seed)
         except Exception:
             if not errors:
                 raise
