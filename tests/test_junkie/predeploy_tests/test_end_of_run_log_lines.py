@@ -10,10 +10,10 @@ class EndOfRunLogLinesTestSuite:
 
     @test()
     def each_end_of_run_step_logs_timed_start_and_finish_lines(self):
-        folder = tempfile.mkdtemp()
-        lines = end_of_run_lines(html_report=os.path.join(folder, "report.html"),
-                                 xml_report=os.path.join(folder, "report.xml"),
-                                 json_report=os.path.join(folder, "report.json"))
+        with tempfile.TemporaryDirectory() as folder:
+            lines = end_of_run_lines(html_report=os.path.join(folder, "report.html"),
+                                     xml_report=os.path.join(folder, "report.xml"),
+                                     json_report=os.path.join(folder, "report.json"))
         check_lines(lines, ["aggregator", "console summary", "HTML report", "XML report", "JSON report"])
 
     @test()
