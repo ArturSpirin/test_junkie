@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Stress harness for the end-of-run step (repo only, not shipped): `python -m tests.stress.report_stress`
+
 ## 0.9a8 (2026-10-10)
 - Supports Python 3.9 through 3.15
 - A listener that raises no longer ends its suite; the error is listed under Problems and the run fails at the end
