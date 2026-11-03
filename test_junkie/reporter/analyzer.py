@@ -1,11 +1,29 @@
+import re
 from difflib import SequenceMatcher
+
+# line numbers, ids, counts and addresses: what usually differs between two failures of the same kind
+_VOLATILE = re.compile(r"0x[0-9a-fA-F]+|\d+")
+
+
+def _exception_type(traceback):
+    lines = traceback.strip().splitlines()
+    return lines[-1].split(":", 1)[0].strip() if lines else ""
 
 
 class Analyzer:
 
+    # similar-traceback grouping: a new kind of traceback is compared with at most MAX_CANDIDATES groups, and with
+    # none once the run has made MAX_COMPARISONS full comparisons. Raise them for more grouping on very large runs
+    MAX_CANDIDATES = 10
+    MAX_COMPARISONS = 2000
+
     def __init__(self, monitoring_enabled=False, multi_threading_enabled=False):
 
         self.multi_threading_enabled = multi_threading_enabled
+        self.__groups = []  # {"traceback", "matcher", "type", "test_ids"}, in the order they were made
+        self.__group_of = {}  # (masked traceback, exception type) -> group
+        self.__comparisons = 0
+        self.__not_compared = 0
         self.__analysis = {"missing_definitions": {},
                            "traceback_insights": {},
                            "resources": {"monitoring_enabled": monitoring_enabled,
@@ -38,17 +56,53 @@ class Analyzer:
 
             if traceback and traceback not in self.__analysis["traceback_insights"]:
                 self.__analysis["stable"] = False
-                self.__analysis["traceback_insights"].update({traceback: {"similar": [],
-                                                                          "exact": [],
+                self.__analysis["traceback_insights"].update({traceback: {"exact": [],
                                                                           "test_id": test_id}})
-                for key in self.__analysis["traceback_insights"].keys():
-                    if key != traceback:
-                        if Analyzer.is_similar(traceback, key):
-                            self.__analysis["traceback_insights"][key]["similar"].append(test_id)
+                self.__group(test_id, traceback)
             elif traceback and index == 0:
                 self.__analysis["traceback_insights"][traceback]["exact"].append(test_id)
 
             index += 1
+
+    def __group(self, test_id, traceback):
+        """
+        Puts a new distinct traceback in the first group it is similar to (is_similar against the group's first
+        traceback), or in a new group. Tracebacks that differ only in numbers, with the same exception type, join
+        without a comparison
+        """
+        exception_type = _exception_type(traceback)
+        key = (_VOLATILE.sub("#", traceback), exception_type)
+        group = self.__group_of.get(key)
+        if group is None:
+            group = self.__most_similar_group(traceback, exception_type)
+        if group is None:
+            group = {"traceback": traceback, "matcher": None, "type": exception_type, "test_ids": []}
+            self.__groups.append(group)
+        self.__group_of.setdefault(key, group)
+        if test_id not in group["test_ids"]:
+            group["test_ids"].append(test_id)
+
+    def __most_similar_group(self, traceback, exception_type):
+        if not self.__groups:
+            return None
+        if self.__comparisons >= self.MAX_COMPARISONS:
+            self.__not_compared += 1
+            return None
+        # same exception type first, then the biggest groups; sorted() keeps creation order among equals
+        candidates = sorted(self.__groups, key=lambda g: (g["type"] != exception_type, -len(g["test_ids"])))
+        for group in candidates[:self.MAX_CANDIDATES]:
+            if self.__comparisons >= self.MAX_COMPARISONS:
+                self.__not_compared += 1
+                return None
+            if group["matcher"] is None:  # b stays the representative: difflib indexes it once, not per comparison
+                group["matcher"] = SequenceMatcher(None, "", group["traceback"])
+            matcher = group["matcher"]
+            matcher.set_seq1(traceback)
+            if matcher.real_quick_ratio() >= 0.70 and matcher.quick_ratio() >= 0.70:
+                self.__comparisons += 1
+                if matcher.ratio() >= 0.70:
+                    return group
+        return None
 
     @property
     def structured_analysis(self):
@@ -78,24 +132,20 @@ class Analyzer:
                         len(self.__analysis["traceback_insights"])),
                     "traceback": None, "test_ids": []
                 })
-                ones_to_report_on = {}
-                for tb_str, category in self.__analysis["traceback_insights"].items():
-                    test_id = category["test_id"]
-                    if test_id not in ones_to_report_on:
-                        ones_to_report_on[test_id] = {"data": category, "traceback": tb_str}
-                    elif len(category["similar"]) > len(ones_to_report_on[test_id]["data"]["similar"]):
-                        ones_to_report_on[test_id] = {"data": category, "traceback": tb_str}
-
-                for test_id, data in ones_to_report_on.items():
-                    # only near-identical tracebacks are grouped - identical ones ("exact") are deliberately not
-                    if len(data["data"]["similar"]) > 0:
-                        affected_ids = [test_id] + list(data["data"]["similar"])
+                # only near-identical tracebacks are grouped - identical ones ("exact") are deliberately not
+                for group in self.__groups:
+                    if len(group["test_ids"]) > 1:
                         insights.append({
-                            "text": "{} test failures share a similar traceback.".format(
-                                len(data["data"]["similar"]) + 1),
-                            "traceback": data["traceback"],
-                            "test_ids": affected_ids
+                            "text": "{} test failures share a similar traceback.".format(len(group["test_ids"])),
+                            "traceback": group["traceback"],
+                            "test_ids": list(group["test_ids"])
                         })
+                if self.__not_compared:
+                    insights.append({
+                        "text": "Similar-traceback grouping stopped after {} comparisons; {} tracebacks were not "
+                                "compared.".format(self.__comparisons, self.__not_compared),
+                        "traceback": None, "test_ids": []
+                    })
 
         if self.__analysis["resources"]["monitoring_enabled"]:
             if len(self.__analysis["resources"]["cpu"]["high"]) > 10:
