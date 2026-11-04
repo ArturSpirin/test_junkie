@@ -184,7 +184,7 @@ _GROUPS = [
     ("Filters", [("tests", None), ("features", None), ("components", None), ("owners", None),
                  ("run_on_match_any", None), ("run_on_match_all", None), ("skip_on_match_any", None),
                  ("skip_on_match_all", None)]),
-    ("Reports and output", [("html_report", None), ("xml_report", None), ("json_report", None),
+    ("Reports and output", [("html_report", None), ("xml_report", None), ("xml_report_legacy", "off"), ("json_report", None),
                             ("monitor_resources", "off"),
                             ("code_cov", "off"), ("cov_rcfile", None), ("quiet", "off"), ("per_test", "off"),
                             ("no_capture", "off"), ("flag_flaky", "off"), ("fail_on_flaky", "off")]),

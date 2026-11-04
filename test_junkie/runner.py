@@ -435,7 +435,8 @@ class Runner:
             if self.__settings.xml_report:
                 with _timed_step("XML report"):
                     XmlReporter.create_xml_report(write_file=self.__settings.xml_report,
-                                                  suites=self.get_executed_suites())
+                                                  suites=self.get_executed_suites(),
+                                                  legacy=self.__settings.xml_report_legacy)
             else:
                 XmlReporter.create_xml_report(write_file=self.__settings.xml_report, suites=self.get_executed_suites())
             if self.__settings.json_report:
