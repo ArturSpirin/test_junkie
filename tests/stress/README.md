@@ -41,6 +41,29 @@ One line per size (these from 0.9a8, 2026-11-03):
 - The output files are the first pass's. The XML report appends to an existing file, so each pass writes fresh files.
 - `tests/junkie_suites/stress_checks.py` runs a 20-test size in the normal suite to keep the harness working.
 
+## Time-budget gate
+
+`BUDGETS` in `report_stress.py` holds the most seconds the whole end-of-run step (console + HTML + XML) may take per
+size, with where each number came from. `stress_checks.py` fails a size that goes over it, on both test paths.
+
+| Size | Budget | Runs |
+|---|---|---|
+| 200 tests, 30% fail/error, 6 reruns, 40 frames | 3 s | always, in the normal suite (about 1.5 s per path) |
+| `named-300` | 30 s | on demand |
+| 5000 tests, 10%, 6 reruns, 40 frames | 300 s | on demand |
+| 20000 tests, 30%, 6 reruns, 40 frames | 300 s | on demand |
+
+The large sizes run only when the environment variable `TJ_STRESS_LARGE=1` is set **before the test run starts** (it is
+read when the checks are imported); without it both paths report them skipped. They take several minutes, mostly the
+20k run phase:
+
+```
+TJ_STRESS_LARGE=1 python3.13 -m pytest -q -rfE tests/pytest/predeploy_tests/test_stress_harness.py
+TJ_STRESS_LARGE=1 python3.13 -m test_junkie run -s tests/test_junkie/predeploy_tests/test_stress_harness.py
+```
+
+On PowerShell: `$env:TJ_STRESS_LARGE = "1"` first.
+
 ## Report correctness
 
 `report_check.py` checks the reports one kept size folder holds against its `expected.json` (what was generated):
