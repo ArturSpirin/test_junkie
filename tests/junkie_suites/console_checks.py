@@ -378,6 +378,46 @@ def run_with_monitor_resources_prints_the_chart():
     assert out == "", out
 
 
+class _SlowPsutilImport:
+    # meta path finder that only delays "import psutil", then lets the normal finders load it
+    def find_spec(self, fullname, path, target=None):
+        if fullname == "psutil":
+            import time
+            time.sleep(0.8)
+        return None
+
+
+def monitor_samples_from_the_start_when_psutil_imports_slowly():
+    # the monitor imported psutil on its own thread after the run's clock started: in a big process that took
+    # ~0.2 s, and the short run below lost the samples its chart needs (full TJ runs failed the check above)
+    from test_junkie.metrics import ResourceMonitor
+    seen = []
+    original = ResourceMonitor.shutdown
+
+    def keep(self):
+        original(self)
+        seen.append(list(self.samples))
+    loaded = sys.modules.pop("psutil", None)
+    before = {name for name in sys.modules if name.startswith("psutil.")}
+    finder = _SlowPsutilImport()
+    sys.meta_path.insert(0, finder)
+    ResourceMonitor.shutdown = keep
+    try:
+        _, out = _run([ConsoleSlowSuite], monitor_resources=True)
+    finally:
+        ResourceMonitor.shutdown = original
+        sys.meta_path.remove(finder)
+        for name in [name for name in sys.modules if name.startswith("psutil.") and name not in before]:
+            del sys.modules[name]
+        if loaded is not None:
+            sys.modules["psutil"] = loaded
+        else:
+            sys.modules.pop("psutil", None)
+    tests = [line for line in out.splitlines() if line.startswith("   tests ")]
+    assert tests and tests[0].count("o") >= 1, out
+    assert seen and len(seen[0]) >= 3, seen
+
+
 def tj_run_dash_m_reaches_the_run():
     # tj run -m used to be dropped by the CLI: nothing was monitored unless -m was saved with tj config update
     from tests.junkie_suites.cli_checks import run_cli, _write
@@ -458,5 +498,6 @@ CHECKS = [header_marks_a_count_that_is_an_estimate, logger_that_does_not_propaga
           live_bars_redraw_in_place, ctrl_c_cancels_a_threaded_run, ctrl_c_interrupts_a_sequential_test,
           second_ctrl_c_stops_immediately, resource_chart_sequential_layout,
           resource_chart_threaded_lanes_and_running_row, resource_chart_too_short_to_sample,
-          run_with_monitor_resources_prints_the_chart, tj_run_dash_m_reaches_the_run,
+          run_with_monitor_resources_prints_the_chart, monitor_samples_from_the_start_when_psutil_imports_slowly,
+          tj_run_dash_m_reaches_the_run,
           github_annotations_point_at_the_failing_line]
