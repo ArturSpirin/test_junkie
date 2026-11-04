@@ -423,6 +423,11 @@ class ResourceMonitor(threading.Thread):
 
     def __init__(self):
 
+        # import on the caller's thread, before the run's clock starts: inside a big process the first import
+        # took ~0.2 s on the sampling thread, and a short run lost its first samples to it
+        import psutil
+        self.psutil = psutil
+        psutil.cpu_percent()  # the first call has nothing to compare with and always returns 0.0
         self.file_path = "{dir}{sep}.resources_{timestamp}".format(dir=Config.get_root_dir(),
                                                                    sep=os.sep,
                                                                    timestamp=time.time())
@@ -445,11 +450,10 @@ class ResourceMonitor(threading.Thread):
                 raise
 
     def run(self):
-        import psutil
+        psutil = self.psutil
         self.mkdir_p(Config.get_root_dir())
         with open(self.file_path, "w+") as records:
             records.write("")
-        psutil.cpu_percent()  # the first call has nothing to compare with and always returns 0.0
         # wait() instead of sleep(): returns the moment shutdown() is called, and nothing is written after that
         while not self.exit.wait(ResourceMonitor.INTERVAL):
             now, cpu, memory = time.time(), psutil.cpu_percent(), psutil.virtual_memory().percent
