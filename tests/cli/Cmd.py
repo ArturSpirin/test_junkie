@@ -1,5 +1,10 @@
+import os
 import subprocess
+import sys
 import traceback
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PYTHON = sys.executable  # the interpreter under test, not whatever `python3` is on PATH
 
 
 class Cmd:
@@ -12,8 +17,11 @@ class Cmd:
     def run(cmd):
 
         try:
+            # put the checkout first so the CLI imports the branch's code, not an installed copy
+            env = dict(os.environ, PYTHONPATH=ROOT + (os.pathsep + os.environ["PYTHONPATH"]
+                                                      if os.environ.get("PYTHONPATH") else ""))
             try:
-                out = subprocess.check_output(cmd)
+                out = subprocess.check_output(cmd, env=env)
             except subprocess.CalledProcessError as ex:
                 out = ex.output
             output = str(out).replace("\\r", "").replace("\\t", "").strip().split("\\n")
