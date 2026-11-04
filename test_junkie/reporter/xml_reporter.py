@@ -103,16 +103,37 @@ class XmlReporter:
                 run("rerunFailure" if status == TestCategory.FAIL else "rerunError", index)
 
     @staticmethod
+    def __properties_to_system_out(case):
+        """
+        junit-10 has no <properties> in <testcase>: an old or legacy case's meta becomes the `key: value` lines a new
+        run writes, after any <system-out> text the case already had. The values go through report_text like a new
+        run's, so one over VALUE_LIMIT is cut the same way
+        """
+        lines = []
+        for properties in case.findall("properties"):
+            lines.extend(_meta_line(prop.get("name", ""), prop.get("value", "")) for prop in properties.iter("property"))
+            case.remove(properties)
+        if not lines:
+            return
+        from xml.etree.ElementTree import SubElement
+        outputs = case.findall("system-out")
+        for output in outputs:
+            case.remove(output)
+        earlier = [output.text for output in outputs if output.text]
+        SubElement(case, "system-out").text = "\n".join(earlier + lines)
+
+    @staticmethod
     def __normalise(root, legacy):
         """
         Brings a report being appended to into this run's layout. junit-10 (default): <testsuites> root, errors and
-        skipped on every suite, no passed/status. Legacy keeps the file's root as it is and puts passed back
+        skipped on every suite, no passed/status, case meta in <system-out>. Legacy keeps the file's root as it is and puts passed back
         """
         if not legacy:
             if root.tag == "root":
                 root.tag = "testsuites"
             for case in root.iter("testcase"):
                 case.attrib.pop("status", None)
+                XmlReporter.__properties_to_system_out(case)
         for suite in root.iter("testsuite"):
             suite.attrib.setdefault("errors", "0")
             suite.attrib.setdefault("skipped", "0")

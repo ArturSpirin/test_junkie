@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-- **Format change:** `report.xml` now validates against JUnit's junit-10 schema (Jenkins xUnit): root `<testsuites>` with `tests`/`failures`/`errors` totals, `errors` and `skipped` on each `<testsuite>`, no `passed` or `status` attributes, and a test's meta in its `<system-out>` as one `key: value` line per entry (backslash, CR and LF escaped as `\\`, `\r`, `\n`) instead of `<properties>`. `xml_report_legacy=True` (`tj run --xml-report-legacy`) writes the old layout with a `FutureWarning`, until 2.0
+- **Format change:** `report.xml` validates against JUnit's junit-10 schema (Jenkins); `xml_report_legacy=True` keeps the old layout until 2.0
 - **Format change:** `report.xml` counts errors and skips as JUnit does: an errored or ignored test (its setup failed) is an `<error>` counted in `errors`, a skipped or cancelled test is a `<skipped/>` counted in `skipped`, and only failed tests are `<failure>` in `failures` (all were failures before). `xml_report_legacy` brings back the old layout only, not the old counts. Appending to a report written before this mixes old-style and new-style test cases in one file
 - HTML report on failure-heavy runs in seconds, not minutes: similar-traceback groups no longer overlap and list distinct tests only, and grouping stops (the report says so) after `Analyzer.MAX_COMPARISONS` (2000) comparisons, each new traceback checked against at most `Analyzer.MAX_CANDIDATES` (10) groups; raise either class attribute to group more
 - With logging on at INFO (`tj run -v`), the end of a run logs a timed start and finish line for the summary and each report
