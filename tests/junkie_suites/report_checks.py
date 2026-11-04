@@ -183,11 +183,121 @@ def xml_report_stays_valid_with_control_characters():
         root = parse(path).getroot()
     failures = [f for f in root.iter("failure")]
     assert len(failures) == 2 and failures[0].get("message") == "expected 200 got 500", [f.attrib for f in failures]
-    notes = [p.get("value") for p in root.iter("property") if p.get("name") == "note"]
-    assert notes == ["bellhere", "bellhere"], notes
+    notes = [out.text for out in root.iter("system-out")]
+    assert notes == ["note: bellhere", "note: bellhere"], notes
+
+
+@Suite()
+class MetaSuite:
+
+    @test(parameters=[1, 2])
+    def with_meta(self, parameter):
+        from test_junkie.meta import Meta
+        Meta.update(page=parameter, note="line one\nline two", path="C:\\data")
+        assert parameter == 1, "fails for 2"
+
+    @test()
+    def without_meta(self):
+        pass
+
+
+def _xml(*suites, **run_kwargs):
+    """The path of a report.xml written by a run of these suites"""
+    from test_junkie.runner import Runner
+    path = run_kwargs.pop("path", None) or os.path.join(tempfile.mkdtemp(), "report.xml")
+    Runner(list(suites), quiet=True, xml_report=path).run(**run_kwargs)
+    return path
+
+
+def _junit_10_errors(path):
+    from tests.stress import report_check
+    result = report_check.validate_xml(path)
+    return result["examples"] if not result["valid"] else None
+
+
+def xml_report_has_testsuites_root_and_totals():
+    # junit-10 (Jenkins xUnit): <testsuites> root, errors on every suite, no passed=/status= (TASK-1315)
+    from xml.etree.ElementTree import parse
+    root = parse(_xml(VariantsSuite, ColoredFailureSuite)).getroot()
+    suites = list(root.iter("testsuite"))
+    assert root.tag == "testsuites" and len(suites) == 2, root.tag
+    for name in ("tests", "failures", "errors"):
+        assert root.get(name) == str(sum(int(suite.get(name)) for suite in suites)), (name, root.attrib)
+    assert root.get("tests") == "5" and root.get("failures") == "2", root.attrib
+    assert all(suite.get("errors") is not None and suite.get("passed") is None for suite in suites), \
+        [suite.attrib for suite in suites]
+    assert all(case.get("status") is None for case in root.iter("testcase"))
+
+
+def xml_report_with_meta_validates():
+    # meta used to go in <properties> inside <testcase>, which junit-10 doesn't allow: now <system-out>, one
+    # `key: value` line per entry, newlines and backslashes escaped so each entry stays one line
+    from xml.etree.ElementTree import parse
+    path = _xml(MetaSuite)
+    assert _junit_10_errors(path) is None, _junit_10_errors(path)
+    cases = {case.get("name"): case for case in parse(path).getroot().iter("testcase")}
+    assert cases["with_meta[2]"].find("system-out").text.split("\n") == \
+        ["page: 2", "note: line one\\nline two", "path: C:\\\\data"], cases["with_meta[2]"].find("system-out").text
+    assert cases["without_meta"].find("system-out") is None and cases["with_meta[1]"].find("properties") is None
+
+
+def xml_report_legacy_keeps_old_attributes():
+    # xml_report_legacy=True: the old layout until 2.0, with a FutureWarning (shown by default, unlike a
+    # DeprecationWarning raised outside __main__)
+    import warnings
+    from xml.etree.ElementTree import parse
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        path = _xml(MetaSuite, xml_report_legacy=True)
+    assert [w for w in caught if issubclass(w.category, FutureWarning) and "2.0" in str(w.message)], \
+        [str(w.message) for w in caught]
+    root = parse(path).getroot()
+    suite = root.find("testsuite")
+    assert root.tag == "root" and suite.get("passed") == "2" and suite.get("failures") == "1", suite.attrib
+    cases = {case.get("name"): case for case in root.iter("testcase")}
+    assert cases["with_meta[1]"].get("status") == "success" and cases["with_meta[2]"].get("status") == "failure"
+    properties = {p.get("name"): p.get("value") for p in cases["with_meta[2]"].find("properties")}
+    assert properties == {"page": "2", "note": "line one\nline two", "path": "C:\\data"}, properties
+    assert cases["with_meta[2]"].find("system-out") is None
+
+
+def xml_report_rerun_without_exception_has_type():
+    # junit-10's rerunType needs type=: a run with no exception recorded used to give flaky*/rerun* none
+    from test_junkie.constants import TestCategory
+    from test_junkie.reporter.xml_reporter import XmlReporter
+    from xml.etree.ElementTree import Element
+    add_runs = getattr(XmlReporter, "_XmlReporter__add_runs")
+    failed, flaky = Element("testcase"), Element("testcase")
+    add_runs(failed, "failure", {"statuses": [TestCategory.FAIL, TestCategory.ERROR, TestCategory.FAIL]})
+    add_runs(flaky, TestCategory.SUCCESS, {"statuses": [TestCategory.ERROR, TestCategory.FAIL, TestCategory.SUCCESS],
+                                           "exceptions": [None, "not an exception"]})
+    assert [(e.tag, e.get("type")) for e in failed] == [("failure", "failure"), ("rerunError", "error"),
+                                                        ("rerunFailure", "failure")], [e.attrib for e in failed]
+    assert [(e.tag, e.get("type")) for e in flaky] == [("flakyError", "error"), ("flakyFailure", "failure")], \
+        [e.attrib for e in flaky]
+
+
+def xml_report_appends_to_old_format_file():
+    # a report.xml from before TASK-1315 (<root>, passed=, status=) comes out as valid junit-10 after the next run
+    from xml.etree.ElementTree import parse
+    path = os.path.join(tempfile.mkdtemp(), "report.xml")
+    with open(path, "w", encoding="utf-8") as doc:
+        doc.write('<root><testsuite name="OldSuite" tests="2" passed="1" failures="1">'
+                  '<testcase name="old_pass" classname="OldSuite" status="success" />'
+                  '<testcase name="old_fail" classname="OldSuite" status="failure"><failure type="failure" />'
+                  '</testcase></testsuite></root>')
+    _xml(VariantsSuite, path=path)
+    assert _junit_10_errors(path) is None, _junit_10_errors(path)
+    root = parse(path).getroot()
+    old = root.find("testsuite[@name='OldSuite']")
+    assert root.tag == "testsuites" and old.get("passed") is None and old.get("errors") == "0", old.attrib
+    assert root.get("tests") == "6" and root.get("failures") == "2", root.attrib
+    assert all(case.get("status") is None for case in root.iter("testcase"))
 
 
 CHECKS = [report_keeps_tests_with_uncopyable_exceptions, report_variants_and_parameters,
           report_handles_a_suite_that_never_ran, report_resource_data_and_long_runtimes,
           report_inlines_its_assets, reports_into_folders_that_dont_exist_yet,
-          xml_report_stays_valid_with_control_characters]
+          xml_report_stays_valid_with_control_characters, xml_report_has_testsuites_root_and_totals,
+          xml_report_with_meta_validates, xml_report_legacy_keeps_old_attributes,
+          xml_report_rerun_without_exception_has_type, xml_report_appends_to_old_format_file]

@@ -45,6 +45,9 @@ def xml_counts(path):
         values = [int(suite.get(name)) for suite in suites if suite.get(name) is not None]
         return sum(values) if values else None
     attributes = {name: total(name) for name in ("tests", "passed", "failures", "errors", "skipped")}
+    if attributes["passed"] is None and attributes["tests"] is not None:  # junit-10 has no passed= (TASK-1315)
+        attributes["passed"] = attributes["tests"] - sum(attributes[name] or 0
+                                                         for name in ("failures", "errors", "skipped"))
     elements = collections.Counter(tests=0, passed=0, failures=0, errors=0, skipped=0, reruns=0)
     for case in root.iter("testcase"):
         elements["tests"] += 1
