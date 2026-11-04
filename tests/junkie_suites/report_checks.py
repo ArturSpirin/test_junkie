@@ -295,6 +295,32 @@ def xml_report_appends_to_old_format_file():
     assert all(case.get("status") is None for case in root.iter("testcase"))
 
 
+def xml_report_appends_to_file_with_case_properties():
+    # an old or legacy report.xml keeps meta in <properties> under <testcase>, which junit-10 rejects: appending a
+    # default run turns them into the escaped `key: value` <system-out> lines a new run writes (TASK-1334)
+    from xml.etree.ElementTree import parse
+    path = os.path.join(tempfile.mkdtemp(), "report.xml")
+    with open(path, "w", encoding="utf-8") as doc:
+        doc.write('<root><testsuite name="OldSuite" tests="2" passed="1" failures="1">'
+                  '<testcase name="old_pass" classname="OldSuite" status="success"><properties>'
+                  '<property name="note" value="line one&#10;line two" /><property name="path" value="C:\\data" />'
+                  '<property name="empty" /></properties></testcase>'
+                  '<testcase name="old_fail" classname="OldSuite" status="failure"><properties>'
+                  '<property name="page" value="2" /></properties><failure type="failure" />'
+                  '<system-out>earlier output</system-out></testcase></testsuite></root>')
+    _xml(VariantsSuite, path=path)
+    assert _junit_10_errors(path) is None, _junit_10_errors(path)
+    root = parse(path).getroot()
+    assert not list(root.iter("properties")), [case.get("name") for case in root.iter("testcase")
+                                                if case.find("properties") is not None]
+    cases = {case.get("name"): case for case in root.find("testsuite[@name='OldSuite']")}
+    assert cases["old_pass"].find("system-out").text.split("\n") == \
+        ["note: line one\\nline two", "path: C:\\\\data", "empty: "], cases["old_pass"].find("system-out").text
+    assert [child.tag for child in cases["old_fail"]] == ["failure", "system-out"], list(cases["old_fail"])
+    assert cases["old_fail"].find("system-out").text == "earlier output\npage: 2", \
+        cases["old_fail"].find("system-out").text
+
+
 FAILS_THEN_ERRORS = []
 
 
@@ -366,4 +392,4 @@ CHECKS = [report_keeps_tests_with_uncopyable_exceptions, report_variants_and_par
           xml_report_stays_valid_with_control_characters, xml_report_has_testsuites_root_and_totals,
           xml_report_with_meta_validates, xml_report_legacy_keeps_old_attributes,
           xml_report_rerun_without_exception_has_type, xml_report_appends_to_old_format_file,
-          xml_report_maps_each_status]
+          xml_report_appends_to_file_with_case_properties, xml_report_maps_each_status]
