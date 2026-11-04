@@ -8,7 +8,7 @@ import re
 import tempfile
 import threading
 
-from test_junkie.decorators import Suite, test, beforeTest
+from test_junkie.decorators import Suite, test, beforeTest, beforeClass
 
 
 class ConnectionDropped(Exception):
@@ -269,7 +269,7 @@ def xml_report_rerun_without_exception_has_type():
     add_runs = getattr(XmlReporter, "_XmlReporter__add_runs")
     failed, flaky = Element("testcase"), Element("testcase")
     add_runs(failed, "failure", {"statuses": [TestCategory.FAIL, TestCategory.ERROR, TestCategory.FAIL]})
-    add_runs(flaky, TestCategory.SUCCESS, {"statuses": [TestCategory.ERROR, TestCategory.FAIL, TestCategory.SUCCESS],
+    add_runs(flaky, None, {"statuses": [TestCategory.ERROR, TestCategory.FAIL, TestCategory.SUCCESS],
                                            "exceptions": [None, "not an exception"]})
     assert [(e.tag, e.get("type")) for e in failed] == [("failure", "failure"), ("rerunError", "error"),
                                                         ("rerunFailure", "failure")], [e.attrib for e in failed]
@@ -295,9 +295,75 @@ def xml_report_appends_to_old_format_file():
     assert all(case.get("status") is None for case in root.iter("testcase"))
 
 
+FAILS_THEN_ERRORS = []
+
+
+@Suite()
+class EachStatusSuite:
+
+    @test()
+    def passes(self):
+        pass
+
+    @test()
+    def fails(self):
+        assert False, "wrong total"
+
+    @test()
+    def errors(self):
+        raise RuntimeError("connection reset")
+
+    @test(skip=True)
+    def skipped(self):
+        pass
+
+    @test(retry=2)
+    def fails_then_errors(self):
+        FAILS_THEN_ERRORS.append(1)
+        if len(FAILS_THEN_ERRORS) == 1:
+            assert False, "first run"
+        raise RuntimeError("second run")
+
+
+@Suite()
+class BrokenSetupSuite:
+
+    @beforeClass()
+    def before_class(self):
+        raise RuntimeError("no database")
+
+    @test()
+    def ignored(self):
+        pass
+
+
+def xml_report_maps_each_status():
+    # a failure is <failure>, an error or ignored test <error>, a skipped one <skipped/>, each counted in its own
+    # attribute; the main element's exception is from the first run with the final status (TASK-1316)
+    from xml.etree.ElementTree import parse
+    del FAILS_THEN_ERRORS[:]
+    path = _xml(EachStatusSuite, BrokenSetupSuite)
+    assert _junit_10_errors(path) is None, _junit_10_errors(path)
+    root = parse(path).getroot()
+    cases = {case.get("name"): [child.tag for child in case] for case in root.iter("testcase")}
+    assert cases == {"passes": [], "fails": ["failure"], "errors": ["error"], "skipped": ["skipped"],
+                     "fails_then_errors": ["error", "rerunFailure"], "ignored": ["error"]}, cases
+    suites = {suite.get("name"): {name: suite.get(name) for name in ("tests", "failures", "errors", "skipped")}
+              for suite in root.iter("testsuite")}
+    assert suites == {"EachStatusSuite": {"tests": "5", "failures": "1", "errors": "2", "skipped": "1"},
+                      "BrokenSetupSuite": {"tests": "1", "failures": "0", "errors": "1", "skipped": "0"}}, suites
+    assert root.get("failures") == "1" and root.get("errors") == "3", root.attrib
+    case = root.find("testsuite/testcase[@name='errors']/error")
+    assert case.get("type") == "RuntimeError" and "connection reset" in case.text and len(case) == 0, case.attrib
+    mixed = root.find("testsuite/testcase[@name='fails_then_errors']")
+    assert mixed.find("error").get("type") == "RuntimeError" and mixed.find("error").get("message") == "second run"
+    assert mixed.find("rerunFailure").get("type") == "AssertionError", mixed.find("rerunFailure").attrib
+
+
 CHECKS = [report_keeps_tests_with_uncopyable_exceptions, report_variants_and_parameters,
           report_handles_a_suite_that_never_ran, report_resource_data_and_long_runtimes,
           report_inlines_its_assets, reports_into_folders_that_dont_exist_yet,
           xml_report_stays_valid_with_control_characters, xml_report_has_testsuites_root_and_totals,
           xml_report_with_meta_validates, xml_report_legacy_keeps_old_attributes,
-          xml_report_rerun_without_exception_has_type, xml_report_appends_to_old_format_file]
+          xml_report_rerun_without_exception_has_type, xml_report_appends_to_old_format_file,
+          xml_report_maps_each_status]

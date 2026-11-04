@@ -553,8 +553,8 @@ def reports_cover_skips_broken_hooks_and_lost_attachments():
         with open(html, encoding="utf-8") as page:
             assert "data:text/plain" not in page.read()  # the removed attachment is left out
         cases = {case.get("name"): case for case in parse(xml).getroot().iter("testcase")}
-        skipped = cases["skipped"].find("failure")
-        assert skipped is not None and skipped.get("type") == "failure", cases
+        # a skipped test is <skipped/>, not a failure (TASK-1316)
+        assert [child.tag for child in cases["skipped"]] == ["skipped"], [child.tag for child in cases["skipped"]]
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 

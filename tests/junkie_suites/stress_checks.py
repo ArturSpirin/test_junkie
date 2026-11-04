@@ -28,11 +28,11 @@ def harness_times_each_end_of_run_step():
         # one report per pass would double the XML: it appends to an existing file
         assert sorted(os.listdir(out)) == ["console.txt", "expected.json", "report.html", "report.xml"], os.listdir(out)
         cases = list(ElementTree.parse(os.path.join(out, "report.xml")).getroot().iter("testcase"))
-        failed = [case for case in cases if case.find("failure") is not None]
+        failed = [case for case in cases if case.find("failure") is not None or case.find("error") is not None]
         assert len(cases) == 20 and len(failed) == 6, (len(cases), len(failed))
         reruns = [child.tag for case in failed for child in case if child.tag.startswith("rerun")]
         assert sorted(set(reruns)) == ["rerunError", "rerunFailure"] and len(reruns) == 6, reruns
-        trace = failed[0].find("failure").text
+        trace = next(child for child in failed[0] if child.tag in ("failure", "error")).text
         # 40 distinct frames with their source lines; recursion would fold into "[Previous line repeated ...]"
         assert trace.count(", in stress_frame_") == 40 and "repeated" not in trace, trace
         assert "    stress_frame_002(kind, message)" in trace and "synthetic failure" in trace, trace

@@ -335,7 +335,10 @@ class Settings:
 
     @property
     def xml_report_legacy(self):
-        """tj run --xml-report-legacy: the pre-junit-10 report.xml layout (passed=, status=), until 2.0"""
+        """
+        tj run --xml-report-legacy: the pre-junit-10 report.xml layout (passed=, status=), until 2.0. It brings back
+        the old shape only, not the old counts: errors and skips are <error>/<skipped/>, not failures
+        """
         if self.__xml_report_legacy is Undefined:
             self.__xml_report_legacy = bool(self.__get_value(key="xml_report_legacy", default=False))
         return self.__xml_report_legacy

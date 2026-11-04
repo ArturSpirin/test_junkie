@@ -28,6 +28,17 @@ LEGACY_WARNING = ("xml_report_legacy writes the old report.xml layout (<root>, p
                   "<properties> in <testcase>), which JUnit tools like Jenkins reject. It will be removed in "
                   "Test Junkie 2.0. See {}")
 
+# a test's final status -> its JUnit element (None: passed); ignore (setup broke) is an error, cancel never ran
+_JUNIT = {TestCategory.SUCCESS: None, TestCategory.FAIL: "failure", TestCategory.ERROR: "error",
+          TestCategory.IGNORE: "error", TestCategory.SKIP: "skipped", TestCategory.CANCEL: "skipped"}
+# the <testsuite> attribute each element is counted in
+_COUNT = {"failure": "failures", "error": "errors", "skipped": "skipped"}
+
+
+def _junit_kind(status):
+    """The JUnit element for a final status; an unknown status is a failure, as it always was"""
+    return _JUNIT.get(status, "failure")
+
 
 class XmlReporter:
 
@@ -48,11 +59,12 @@ class XmlReporter:
         return {"type": type(error).__name__, "message": _xml_safe(str(error).split("\n")[0])}
 
     @staticmethod
-    def __add_runs(test, test_status, data):
+    def __add_runs(test, kind, data):
         """
         Surefire's layout for retried tests, which CI tools and flaky-test trackers read. A test that passed after
-        failing gets a <flakyFailure>/<flakyError> per failed run. A test that never passed gets <failure> for its
-        first run and a <rerunFailure>/<rerunError> for each retry that failed too.
+        failing gets a <flakyFailure>/<flakyError> per failed run. A test that failed or errored gets <failure> or
+        <error> by its final status, with the exception of its first run with that status, and a
+        <rerunFailure>/<rerunError> for each other run that failed too. A skipped or cancelled test gets <skipped/>.
         """
         from xml.etree.ElementTree import SubElement
         statuses = data.get("statuses") or []
@@ -63,27 +75,32 @@ class XmlReporter:
         def run(tag, index):
             element = SubElement(test, tag, **XmlReporter.__error_attrs(errors[index] if index < len(errors) else None))
             if element.get("type") is None:  # required on flaky*/rerun* (junit-10 rerunType), no exception recorded
-                element.set("type", "error" if tag.endswith("Error") else "failure")
+                element.set("type", "error" if tag.lower().endswith("error") else "failure")
             trace = traces[index] if index < len(traces) else None
             if trace:
-                if tag == "failure":  # Surefire: <failure> holds the trace as text, <stackTrace> is for flaky*/rerun*
+                if tag in ("failure", "error"):  # Surefire: these hold the trace as text, <stackTrace> is for flaky*/rerun*
                     element.text = _xml_safe(trace)
                 else:
                     SubElement(element, "stackTrace").text = _xml_safe(trace)
             return element
 
-        if test_status != "failure":
+        if kind is None:
             for index, status in enumerate(statuses[:-1]):
                 if status in bad:
                     run("flakyFailure" if status == TestCategory.FAIL else "flakyError", index)
             return
-        if statuses:
-            run("failure", 0)
-            for index, status in enumerate(statuses[1:], 1):
-                if status in bad:
-                    run("rerunFailure" if status == TestCategory.FAIL else "rerunError", index)
-        else:  # never ran (ignored, skipped, cancelled before starting)
-            SubElement(test, "failure", type="failure")
+        if kind == "skipped":  # junit-10: a <testcase> holds one of skipped, error or failure
+            SubElement(test, "skipped")
+            return
+        if not statuses:  # never ran (ignored before starting)
+            SubElement(test, kind, type=kind)
+            return
+        same = TestCategory.FAIL if kind == "failure" else TestCategory.ERROR
+        main = next((index for index, status in enumerate(statuses) if status == same), 0)
+        run(kind, main)
+        for index, status in enumerate(statuses):
+            if index != main and status in bad:
+                run("rerunFailure" if status == TestCategory.FAIL else "rerunError", index)
 
     @staticmethod
     def __normalise(root, legacy):
@@ -119,17 +136,20 @@ class XmlReporter:
         """
         Writes (or appends to) a JUnit XML report that validates against junit-10.xsd (Jenkins xUnit). A test's meta
         goes in its <system-out>, one `key: value` line per entry. legacy=True (xml_report_legacy) writes the old
-        layout instead, until 2.0: <root>, passed=/status= attributes and <properties> in <testcase>
+        layout instead, until 2.0: <root>, passed=/status= attributes and <properties> in <testcase>. Legacy brings
+        back the old shape only: in both layouts an error or ignored test is an <error>, a skipped or cancelled test
+        a <skipped/>, each counted in errors/skipped rather than failures
         """
 
-        def __update_tag_stats(tag, status):
+        def __update_tag_stats(tag, kind):
 
             tag.set("tests", str(int(tag.get("tests")) + 1))
-            if status == TestCategory.SUCCESS:
+            if kind is None:
                 if legacy:
                     tag.set("passed", str(int(tag.get("passed")) + 1))
             else:
-                tag.set("failures", str(int(tag.get("failures")) + 1))
+                count = _COUNT[kind]
+                tag.set(count, str(int(tag.get(count)) + 1))
             return tag
 
         if write_file is not None:
@@ -166,9 +186,8 @@ class XmlReporter:
                         for class_param, class_param_data in test_metrics.items():
                             for param, param_data in class_param_data.items():
 
-                                test_status = param_data["status"]
-                                if test_status != TestCategory.SUCCESS:
-                                    test_status = "failure"
+                                kind = _junit_kind(param_data["status"])
+                                test_status = "success" if kind is None else "failure"  # legacy status=
 
                                 suite = suites_by_name.get(test_suite)
                                 if suite is None:
@@ -179,14 +198,14 @@ class XmlReporter:
                                     suite.set("errors", "0")
                                     suite.set("skipped", "0")
                                     suites_by_name[test_suite] = suite
-                                __update_tag_stats(suite, test_status)
+                                __update_tag_stats(suite, kind)
                                 test = SubElement(suite, "testcase", name=_xml_safe(XmlReporter.__case_name(test_name, param_data)),
                                                   classname=_xml_safe(test_suite))
                                 if legacy:
                                     test.set("status", str(test_status))
                                 runtimes = param_data.get("performance") or []
-                                if runtimes:  # Surefire: the first run's time for a failure, else the last run's
-                                    seconds = runtimes[0] if test_status == "failure" else runtimes[-1]
+                                if runtimes:  # Surefire: the first run's time for a failure or error, else the last run's
+                                    seconds = runtimes[0] if kind in ("failure", "error") else runtimes[-1]
                                     test.set("time", "{:.3f}".format(seconds or 0))
                                 values = test_object.get_meta(param_data.get("param"), param_data.get("class_param"),
                                                               copy_of_meta=True)
@@ -194,7 +213,7 @@ class XmlReporter:
                                     properties = SubElement(test, "properties")
                                     for key, value in values.items():
                                         SubElement(properties, "property", name=_xml_safe(key), value=_xml_safe(report_text(value)))
-                                XmlReporter.__add_runs(test, test_status, param_data)
+                                XmlReporter.__add_runs(test, kind, param_data)
                                 if values and not legacy:  # junit-10 has no <properties> in <testcase>
                                     SubElement(test, "system-out").text = "\n".join(
                                         _meta_line(key, value) for key, value in values.items())

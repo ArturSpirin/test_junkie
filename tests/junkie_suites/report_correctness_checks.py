@@ -51,9 +51,6 @@ def xml_failure_error_skip_counts_match():
         assert xml["attributes"][count] == xml["elements"][count] == want[count], (count, xml, want)
 
 
-xml_failure_error_skip_counts_match.known_bug = "TASK-1316: XML counts errors and skipped tests as failures"
-
-
 def xml_validates_against_junit_10():
     result = report_check.validate_xml(os.path.join(_report(), "report.xml"))
     assert result["valid"], result["errors"]
