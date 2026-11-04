@@ -299,6 +299,7 @@ class CliRunner:
                            per_test=args.per_test,
                            flag_flaky=getattr(args, "flag_flaky", Undefined),
                            fail_on_flaky=getattr(args, "fail_on_flaky", Undefined),
+                           xml_report_legacy=getattr(args, "xml_report_legacy", Undefined),
                            retry=args.retry,
                            no_retry=args.no_retry,
                            retry_policy=getattr(args, "retry_policy", Undefined),

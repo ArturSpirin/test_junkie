@@ -306,7 +306,7 @@ def json_report_has_meta_and_what_each_run_set():
     assert odd["long"].startswith("x" * 2000) and odd["long"].endswith("[cut 1000 characters]")
 
 
-def xml_report_has_properties_parameters_and_time():
+def xml_report_has_meta_parameters_and_time():
     from xml.etree.ElementTree import parse
     path = os.path.join(tempfile.mkdtemp(), "report.xml")
     _run([NewStyleSuite], xml_report=path)
@@ -314,7 +314,9 @@ def xml_report_has_properties_parameters_and_time():
     assert sorted(cases) == ["orders[suite: admin, 1]", "orders[suite: admin, 2]",
                              "orders[suite: viewer, 1]", "orders[suite: viewer, 2]"], sorted(cases)
     case = cases["orders[suite: viewer, 2]"]
-    properties = {p.get("name"): p.get("value") for p in case.find("properties")}
+    # junit-10 has no <properties> in <testcase>: meta is one `key: value` line per entry in <system-out>
+    assert case.find("properties") is None, [c.tag for c in case]
+    properties = dict(line.split(": ", 1) for line in case.find("system-out").text.split("\n"))
     assert properties["account"] == "viewer" and properties["page"] == "2" and properties["name"] == "Orders"
     assert case.get("classname") == "NewStyleSuite" and float(case.get("time")) >= 0
 
@@ -460,7 +462,7 @@ CHECKS = [update_reaches_the_running_test_from_test_helpers_and_hooks, declared_
           bind_carries_the_test_into_threads, old_style_writes_exactly_the_slot_it_names,
           outside_a_test_old_style_warns_once_new_style_raises, class_hooks_write_suite_meta,
           retries_carry_forward_and_keep_each_attempt, on_failure_sees_body_values_not_after_test,
-          json_report_has_meta_and_what_each_run_set, xml_report_has_properties_parameters_and_time,
+          json_report_has_meta_and_what_each_run_set, xml_report_has_meta_parameters_and_time,
           html_report_shows_meta_per_attempt, rerun_ignores_the_new_fields,
           append_link_and_attach_build_lists_per_attempt, append_and_attach_reject_bad_input,
           html_report_embeds_small_attachments_and_links_big_ones, html_report_embeds_only_files_meta_attach_saved,

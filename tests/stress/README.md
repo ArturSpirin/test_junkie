@@ -77,7 +77,8 @@ python3.13 -m tests.stress.report_check OUT/<size> [--browser] [--screenshot pan
   `https://github.com/jenkinsci/xunit-plugin/blob/0afa700702a6617f483cfd9407711976dc0bd74a/src/main/resources/org/jenkinsci/plugins/xunit/types/model/xsd/junit-10.xsd`
   (MIT). Errors are grouped by kind with counts, so the same kinds at every size mean nothing breaks with scale.
 - **Counts**: tests, passed, failures, errors, skipped and reruns, from the generated run, the XML's `<testsuite>`
-  attributes, the XML's elements, and the HTML page's data. A rerun is a run of a test after its first: in the XML a
+  attributes (junit-10 has no `passed`, so it is tests − failures − errors − skipped), the XML's elements, and the
+  HTML page's data. A rerun is a run of a test after its first: in the XML a
   `rerunFailure`/`rerunError`/`flaky*` element, in the HTML the Retries column.
 - **`--browser`**: opens the page in headless Chromium and times DOMContentLoaded, `load` (which waits on the page's
   Google Fonts stylesheet, so it includes the network), the table, filtering to failures and errors, scrolling to the

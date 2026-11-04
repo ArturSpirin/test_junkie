@@ -48,6 +48,7 @@ class Settings:
         self.__resources_mon = Undefined
         self.__html_report = Undefined
         self.__xml_report = Undefined
+        self.__xml_report_legacy = Undefined
         self.__quiet = Undefined
         self.__per_test = Undefined
         self.__flag_flaky = Undefined
@@ -331,3 +332,10 @@ class Settings:
         if self.__xml_report is Undefined:
             self.__xml_report = self.__report("xml_report", ".xml", DocumentationLinks.XML_REPORT)
         return self.__xml_report
+
+    @property
+    def xml_report_legacy(self):
+        """tj run --xml-report-legacy: the pre-junit-10 report.xml layout (passed=, status=), until 2.0"""
+        if self.__xml_report_legacy is Undefined:
+            self.__xml_report_legacy = bool(self.__get_value(key="xml_report_legacy", default=False))
+        return self.__xml_report_legacy

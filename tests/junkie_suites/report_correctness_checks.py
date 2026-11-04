@@ -59,9 +59,6 @@ def xml_validates_against_junit_10():
     assert result["valid"], result["errors"]
 
 
-xml_validates_against_junit_10.known_bug = "TASK-1315: report.xml is not valid against junit-10.xsd"
-
-
 def html_totals_match():
     want, html = _expected(), report_check.html_counts(os.path.join(_report(), "report.html"))
     assert html["counts"] == {count: want[count] for count in report_check.COUNTS}, (html, want)

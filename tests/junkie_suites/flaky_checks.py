@@ -132,7 +132,7 @@ def xml_report_marks_flaky_runs():
     # failing keeps a <flakyFailure>/<flakyError> per failed run, with the error and its stack trace
     cases = _xml_cases()
     case = cases["passes_second_time"][0]
-    assert case.get("status") == "success" and case.find("failure") is None
+    assert case.find("failure") is None and case.find("error") is None, [c.tag for c in case]
     flaky = case.findall("flakyFailure")
     assert len(flaky) == 1 and flaky[0].get("type") == "AssertionError", [c.tag for c in case]
     assert flaky[0].get("message") == "not yet" and "not yet" in flaky[0].find("stackTrace").text
