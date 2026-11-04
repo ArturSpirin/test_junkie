@@ -8,6 +8,7 @@
 - Report correctness check for the stress harness's reports (repo only, not shipped): `python -m tests.stress.report_check`
 - The test suite fails when the end-of-run step of a 200-test failure-heavy run goes over its time budget; larger sizes with `TJ_STRESS_LARGE=1` (repo only)
 - `tj run -m` samples from the start of the run: a short run no longer loses its first samples to loading `psutil`
+- The CLI tests run the CLI with the interpreter under test and the checkout's code, not `python3` and an installed copy (repo only)
 
 ## 0.9a8 (2026-10-10)
 - Supports Python 3.9 through 3.15
