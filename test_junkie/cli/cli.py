@@ -57,7 +57,8 @@ _OPTIONS = [
     ("xml_report", None, "--xml-report", ("--xml_report",), "str",
      "Write a JUnit XML report to this file, or to report.xml in this folder", "run"),
     ("xml_report_legacy", None, "--xml-report-legacy", ("--xml_report_legacy",), "flag",
-     "Write the XML report in the old layout (passed=, status=) that JUnit tools reject. Goes in 2.0", "run"),
+     "Write the XML report in the old layout (passed=, status=) that JUnit tools reject; errors and skips still "
+     "count as errors and skips, not failures. Goes in 2.0", "run"),
     ("json_report", None, "--json-report", ("--json_report",), "str",
      "Write a JSON report to this file, or to report.json in this folder", "run"),
     ("traceback_limit", None, "--traceback-limit", (), "count",
