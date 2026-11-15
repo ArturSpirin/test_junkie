@@ -6,7 +6,7 @@ from test_junkie.decorators import Suite, test
 from test_junkie.tempdir import TempDir
 from tests.junkie_suites import TempDirSuites as fixture
 from tests.junkie_suites.TempDirSuites import TempDirSharedSuite, TempDirResultsSuite, \
-    TempDirBeforeTestFailsSuite, TempDirRetrySuite, TempDirNotAskedSuite
+    TempDirBeforeTestFailsSuite, TempDirRetrySuite, TempDirNotAskedSuite, TempDirSkipAfterTestSuite
 
 
 @Suite()
@@ -56,6 +56,14 @@ class TempDirTestSuite:
         assert [w for w, _ in seen] == ["before"]
         assert not os.path.exists(str(seen[0][1]))
         assert aggregator.get_basic_report()["tests"]["error"] == 1
+
+    @test()
+    def after_test_gets_the_directory_after_a_runtime_skip(self):
+        seen, aggregator = fixture.run(TempDirSkipAfterTestSuite)
+        assert [w for w, _ in seen] == ["test", "after"]
+        assert seen[0][1] == seen[1][1]
+        assert not os.path.exists(str(seen[0][1]))
+        assert aggregator.get_basic_report()["tests"]["skip"] == 1
 
     @test()
     def a_retry_gets_a_new_empty_directory(self):

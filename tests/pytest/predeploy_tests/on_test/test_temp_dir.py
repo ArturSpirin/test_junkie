@@ -5,7 +5,7 @@ from unittest import mock
 from test_junkie.tempdir import TempDir
 from tests.junkie_suites import TempDirSuites as fixture
 from tests.junkie_suites.TempDirSuites import TempDirSharedSuite, TempDirResultsSuite, \
-    TempDirBeforeTestFailsSuite, TempDirRetrySuite, TempDirNotAskedSuite
+    TempDirBeforeTestFailsSuite, TempDirRetrySuite, TempDirNotAskedSuite, TempDirSkipAfterTestSuite
 
 
 def test_before_test_test_and_after_test_share_one_directory():
@@ -51,6 +51,14 @@ def test_the_directory_is_removed_when_before_test_fails():
     assert [w for w, _ in seen] == ["before"]
     assert not os.path.exists(str(seen[0][1]))
     assert aggregator.get_basic_report()["tests"]["error"] == 1
+
+
+def test_after_test_gets_the_directory_after_a_runtime_skip():
+    seen, aggregator = fixture.run(TempDirSkipAfterTestSuite)
+    assert [w for w, _ in seen] == ["test", "after"]
+    assert seen[0][1] == seen[1][1]
+    assert not os.path.exists(str(seen[0][1]))
+    assert aggregator.get_basic_report()["tests"]["skip"] == 1
 
 
 def test_a_retry_gets_a_new_empty_directory():

@@ -90,6 +90,22 @@ class TempDirBeforeTestFailsSuite:
 
 
 @Suite()
+class TempDirSkipAfterTestSuite:
+    # afterTest runs after a runtime skip() and gets the test's directory, still there until it returns
+
+    @afterTest()
+    def after(self, temp_dir):
+        SEEN.append(("after", temp_dir))
+        assert (temp_dir / "made_in_test.txt").read_text() == "x"
+
+    @test()
+    def skips(self, temp_dir):
+        SEEN.append(("test", temp_dir))
+        (temp_dir / "made_in_test.txt").write_text("x")
+        skip("not today")
+
+
+@Suite()
 class TempDirRetrySuite:
     # a retry gets a new, empty directory
 
