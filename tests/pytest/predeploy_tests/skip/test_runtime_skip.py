@@ -14,6 +14,9 @@ Covered:
   - ON_COMPLETE fires (ON_IN_PROGRESS was already emitted before body ran)
   - ON_IN_PROGRESS fires
   - runtime skip works per test-parameter
+  - @afterTest and Rules.after_test run after a runtime skip, before ON_SKIP
+  - @afterTest failing after a skip records ERROR, no ON_SKIP, no retry
+  - @afterTest does not run after a failed @beforeTest
 """
 from test_junkie.constants import TestCategory
 from test_junkie.errors import SkipTest
@@ -26,6 +29,10 @@ from tests.junkie_suites.skip.RuntimeSkipSuites import (
     RuntimeSkipMixedSuite,
     RuntimeSkipEventSuite, _events,
     RuntimeSkipWithParamsSuite,
+    RuntimeSkipAfterTestSuite, _hooks,
+    RuntimeSkipRulesAfterTestSuite,
+    RuntimeSkipAfterTestFailsSuite,
+    BeforeTestFailsSuite,
 )
 
 
@@ -129,3 +136,46 @@ def test_runtime_skip_with_test_parameters():
     report = aggregator.get_basic_report()["tests"]
     assert report[TestCategory.SKIP] == 1
     assert report[TestCategory.SUCCESS] == 2
+
+
+# ── afterTest after a runtime skip ────────────────────────────────────────────
+
+def test_runtime_skip_runs_after_test():
+    _hooks.clear()
+    aggregator = Runner([RuntimeSkipAfterTestSuite]).run()
+    assert _hooks == ["open", "close"]
+    assert aggregator.get_basic_report()["tests"][TestCategory.SKIP] == 1
+
+
+def test_runtime_skip_runs_rules_after_test():
+    _hooks.clear()
+    Runner([RuntimeSkipRulesAfterTestSuite]).run()
+    assert _hooks == ["rules.after_test"]
+
+
+def test_runtime_skip_after_test_runs_before_on_skip():
+    _events.clear()
+    Runner([RuntimeSkipEventSuite]).run()
+    assert _events.index("after_test") < _events.index("skip")
+
+
+def test_runtime_skip_after_test_fails_is_error_not_retried():
+    _events.clear()
+    RuntimeSkipAfterTestFailsSuite.call_count = 0
+    aggregator = Runner([RuntimeSkipAfterTestFailsSuite]).run()
+    report = aggregator.get_basic_report()["tests"]
+    assert RuntimeSkipAfterTestFailsSuite.call_count == 1
+    assert report[TestCategory.ERROR] == 1
+    assert report[TestCategory.SKIP] == 0
+    assert "skip" not in _events
+    assert "error" in _events
+    assert "complete" in _events
+
+
+# ── failed beforeTest: afterTest does not run ─────────────────────────────────
+
+def test_failed_before_test_does_not_run_after_test():
+    _hooks.clear()
+    aggregator = Runner([BeforeTestFailsSuite]).run()
+    assert _hooks == ["open"]
+    assert aggregator.get_basic_report()["tests"][TestCategory.ERROR] == 1
