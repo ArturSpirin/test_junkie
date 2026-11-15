@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- A `@test(skip=...)` callable that declares `parameter` and/or `suite_parameter` is called once per combination and skips only the combinations it returns `True` for; callables that take only `meta` (or nothing) work as before
 - A test, `@beforeTest` or `@afterTest` that names a `temp_dir` argument gets a new, empty `pathlib.Path` directory for that test, removed after it whatever the result; keyword-only arguments (`*, temp_dir=None`) are now passed by name too
 - `test_junkie.patch.Patch` (`setattr`, `delattr`, `setitem`, `delitem`, `setenv`, `delenv`) patches for one test and undoes it when the test ends, whatever its result; listeners and `@afterTest` still see the patched values
 - `@afterTest` and `Rules.after_test` run after a test skipped at runtime with `skip()`, so per-test resources are released; if `@afterTest` fails there, the test is an error, not a skip. `@afterTest` still doesn't run after a failed `@beforeTest`, now documented

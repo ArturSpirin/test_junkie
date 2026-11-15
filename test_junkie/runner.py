@@ -647,6 +647,8 @@ class Runner:
                 if not isinstance(parameters, list):
                     continue
                 for param in parameters:
+                    if Runner.__combination_skipped(test, param, class_param):
+                        continue  # its skip= callable skips it: not a test the error stopped
                     Runner.__ignore_unit(self.__context, suite, test, param, class_param, error, trace, status)
         if suite.metrics.get_metrics()["status"] is None:
             # interrupted: cancel, unless a test didn't succeed - the same order as get_outcome()
@@ -679,8 +681,52 @@ class Runner:
                 if rerun is not None and known and known_class_params:
                     chosen = parameters_to_run(rerun, test, parameters, class_params, class_param)
                 for param in parameters if chosen is None else chosen:
+                    if known and known_class_params and Runner.__combination_skipped(test, param, class_param):
+                        continue  # its skip= callable skips it: it wouldn't have run
                     Runner.__ignore_unit(self.__context, suite, test, param, class_param, None, None,
                                          TestCategory.CANCEL)
+
+    @staticmethod
+    def __combination_skipped(test, param, class_param):
+        """
+        :return: BOOLEAN, True if a skip= callable that declares parameter / suite_parameter skips this combination,
+                 for listing the tests a suite never got to. A callable that raises counts as not skipping
+        """
+        recorded = class_param if test.runs_per_suite_parameter() else None
+        if test.get_status(param, recorded) is not None:
+            return False  # has a result already, nothing to list
+        try:
+            return test.can_skip_combination(param, class_param)
+        except Exception:
+            return False
+
+    @staticmethod
+    def __skip_combinations(context, suite, test, parameters, class_param, start_time):
+        """
+        Records as skipped each combination a skip= callable that declares parameter / suite_parameter skips.
+        The callable is asked once per result slot, with the suite parameter running: a test that doesn't run per
+        suite parameter has one slot per parameter, so it's asked under the first suite parameter only, and later
+        ones find the skip already recorded (and must not dispatch it: a non-SUCCESS slot would run as a retry)
+        :return: LIST, the parameters left to run under this suite parameter
+        """
+        if not test.skips_per_combination() or not isinstance(parameters, list):
+            return parameters
+        recorded = class_param if test.runs_per_suite_parameter() else None
+        left = []
+        for param in parameters:
+            status = test.get_status(param, recorded)
+            if status == TestCategory.SKIP:
+                continue
+            if status is None and test.can_skip_combination(param, class_param):
+                test.metrics.update_metrics(status=TestCategory.SKIP, start_time=start_time, param=param,
+                                            class_param=recorded)
+                Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test, param=param,
+                                       class_param=recorded)
+                context.console.unit_done(suite, unit_key(test, param, class_param), TestCategory.SKIP,
+                                          Runner.__label(suite, test, param, class_param))
+                continue
+            left.append(param)
+        return left
 
     @staticmethod
     def __ignore_unit(context, suite, test, param, class_param, error, trace, status=TestCategory.IGNORE):
@@ -800,6 +846,15 @@ class Runner:
                                                                   TestCategory.IGNORE, Runner.__label(suite, test))
                                         continue
 
+                                    # combinations its skip= callable skips are recorded now, before the test is
+                                    # reserved or runs alone: skipping holds nothing up
+                                    parameters = self.__skip_combinations(context, suite, test,
+                                                                          self.__parameters(test, class_param),
+                                                                          class_param, test_start_time)
+                                    if not parameters and test.skips_per_combination():
+                                        tests.remove(test)
+                                        continue
+
                                     # held until its last parameter is done, so nothing it conflicts with starts
                                     # in between; reserved in one step with the check, so two can't both start
                                     waited, blockers = ParallelProcessor.reserve(test, state)
@@ -815,7 +870,7 @@ class Runner:
                                             ParallelProcessor.release(test)
                                             raise
                                     try:
-                                        for param in self.__parameters(test, class_param):
+                                        for param in parameters:
                                             if unsuccessful_tests is not None and \
                                                     not test.is_qualified_for_retry(param, class_param=class_param):
                                                 # If does not qualify with current parameter, will move to the next
