@@ -32,6 +32,10 @@ class test(object):
 
 
 class beforeTest(object):
+    """
+    Runs before every test. If it fails, the test is recorded as an error and @afterTest does not run for it,
+    so release anything it set up before failing yourself
+    """
 
     def __init__(self, **decorator_kwargs):
         self.decorator_kwargs = decorator_kwargs
@@ -58,6 +62,10 @@ class beforeClass(object):
 
 
 class afterTest(object):
+    """
+    Runs after every test that got past @beforeTest: one that passed, failed, was skipped at runtime with skip()
+    or was cancelled mid-run. It does not run after a failed @beforeTest
+    """
 
     def __init__(self, **decorator_kwargs):
         self.decorator_kwargs = decorator_kwargs

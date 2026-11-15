@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- `@afterTest` and `Rules.after_test` run after a test skipped at runtime with `skip()`, so per-test resources are released; if `@afterTest` fails there, the test is an error, not a skip. `@afterTest` still doesn't run after a failed `@beforeTest`, now documented
 - `@Suite(every_test_per_parameter=True)` runs every test once per suite parameter, and its hooks get that parameter, even when the test doesn't declare `suite_parameter`; off by default, and does nothing on a suite without `parameters`
 - `shortcuts.capture_output()` captures what a test prints to stdout and stderr for assertions, per thread, so it is safe in parallel runs
 - `tj run -s tests` from a project root imports the project's own helper modules (`tests.support`) without `PYTHONPATH=.`, even when another `tests` package is installed in site-packages
