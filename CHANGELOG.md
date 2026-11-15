@@ -2,6 +2,7 @@
 
 ## Unreleased
 - `@Suite(every_test_per_parameter=True)` runs every test once per suite parameter, and its hooks get that parameter, even when the test doesn't declare `suite_parameter`; off by default, and does nothing on a suite without `parameters`
+- `tj run -s tests` from a project root imports the project's own helper modules (`tests.support`) without `PYTHONPATH=.`, even when another `tests` package is installed in site-packages
 - **Format change:** `report.xml` validates against JUnit's junit-10 schema (Jenkins); `xml_report_legacy=True` keeps the old layout until 2.0
 - **Format change:** `report.xml` counts errors and skips as JUnit does: an errored or ignored test (its setup failed) is an `<error>` counted in `errors`, a skipped or cancelled test is a `<skipped/>` counted in `skipped`, and only failed tests are `<failure>` in `failures` (all were failures before). `xml_report_legacy` brings back the old layout only, not the old counts. Appending to a report written before this mixes old-style and new-style test cases in one file
 - HTML report on failure-heavy runs in seconds, not minutes: similar-traceback groups no longer overlap and list distinct tests only, and grouping stops (the report says so) after `Analyzer.MAX_COMPARISONS` (2000) comparisons, each new traceback checked against at most `Analyzer.MAX_CANDIDATES` (10) groups; raise either class attribute to group more
