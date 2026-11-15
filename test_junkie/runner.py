@@ -1146,6 +1146,7 @@ class Runner:
                         try:
                             start_time = time.time()  # before test start time
                             if run_before_test() is False:  # if before test failed, moving on without running the test
+                                # @afterTest does not run after a failed @beforeTest (as in unittest's tearDown)
                                 continue  # everything recorded at this point in the metrics and flow is solid
                             # Running actual test
                             start_time = time.time()  # test start time
@@ -1174,6 +1175,10 @@ class Runner:
                             run_after_test(False)  # cleanup still runs
                             return
                         except SkipTest:
+                            # cleanup still runs: @beforeTest passed, so its resources need releasing
+                            start_time = time.time()  # after test start time
+                            if run_after_test() is False:
+                                return  # @afterTest failed: recorded as its error above, a skip is never retried
                             test.metrics.update_metrics(status=TestCategory.SKIP,
                                                         start_time=test_start_time,
                                                         param=parameter,

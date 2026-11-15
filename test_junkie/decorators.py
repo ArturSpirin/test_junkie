@@ -38,8 +38,10 @@ class test(object):
 
 class beforeTest(object):
     """
-    Runs before each test. It can name these arguments to be given them: test (a read-only TestView),
-    suite_parameter, and temp_dir - the same directory the test gets, see @test
+    Runs before every test. It can name these arguments to be given them: test (a read-only TestView),
+    suite_parameter, and temp_dir - the same directory the test gets, see @test.
+    If it fails, the test is recorded as an error and @afterTest does not run for it,
+    so release anything it set up before failing yourself (temp_dir is still removed)
     """
 
     def __init__(self, **decorator_kwargs):
@@ -68,8 +70,10 @@ class beforeClass(object):
 
 class afterTest(object):
     """
-    Runs after each test. It can name these arguments to be given them: test
-    (a read-only TestView), suite_parameter, and temp_dir - the same directory the test got, removed after this runs
+    Runs after every test that got past @beforeTest: one that passed, failed, was skipped at runtime with skip()
+    or was cancelled mid-run. It does not run after a failed @beforeTest. It can name these arguments to be given
+    them: test (a read-only TestView), suite_parameter, and temp_dir - the same directory the test got, removed
+    after this runs
     """
 
     def __init__(self, **decorator_kwargs):
