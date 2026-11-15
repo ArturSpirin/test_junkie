@@ -4,6 +4,7 @@ Also captures what tests print and log while they run, so it's only shown for te
 """
 import inspect
 import io
+import itertools
 import logging
 import math
 import os
@@ -133,6 +134,7 @@ class TestInterrupted(BaseException):
 # ── output capture ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 _LOCAL = threading.local()
+_STAMPS = itertools.count(1)  # orders Captures and capture_output() blocks pushed on a thread; next() is atomic
 
 
 class Capture(object):
@@ -143,6 +145,7 @@ class Capture(object):
     def __init__(self):
         self.out = io.StringIO()
         self.log = []
+        self.stamp = 0
 
     def output(self):
         return self.out.getvalue()
@@ -167,6 +170,7 @@ class capturing(object):
 
     def __enter__(self):
         if self.__router is not None:
+            self.__capture.stamp = next(_STAMPS)
             _stack(self.__router).append(self.__capture)
         return self.__capture
 
@@ -191,6 +195,11 @@ class _Stream(object):
     def write(self, text):
         if not isinstance(text, str):
             text = str(text)
+        # before the active check: a run that ended under a capture_output() block leaves an inactive _Stream in the
+        # chain, and that one still has to feed the block
+        helper = _helper_for(self.__router)
+        if helper is not None:
+            return helper._write(self.__kind, text)
         if self.__router.active:
             stack = _stack(self.__router)
             if stack and self.__router.capture_enabled:
@@ -219,8 +228,165 @@ class _Stream(object):
     def original(self):
         return self.__original
 
+    @property
+    def routing(self):
+        """
+        True while its run is going: it then routes what each thread writes, so capture_output() needs no wrapper
+        """
+        return self.__router.active
+
     def __getattr__(self, name):  # encoding, fileno, buffer, ... - whatever the real stream has
         return getattr(self.__original, name)
+
+
+class CapturedOutput(object):
+    """
+    What the current thread wrote to sys.stdout and sys.stderr inside a capture_output() block
+    """
+
+    def __init__(self):
+        self.__out = io.StringIO()
+        self.__err = io.StringIO()
+        self.stamp = 0
+
+    @property
+    def stdout(self):
+        return self.__out.getvalue()
+
+    @property
+    def stderr(self):
+        return self.__err.getvalue()
+
+    def _write(self, kind, text):
+        (self.__out if kind == "out" else self.__err).write(text)
+        return len(text)
+
+
+def _helpers():
+    helpers = getattr(_LOCAL, "helpers", None)
+    if helpers is None:
+        helpers = _LOCAL.helpers = []
+    return helpers
+
+
+def _helper_for(router):
+    """
+    The capture_output() block that takes this thread's writes, or None. A block takes them unless the router's
+    running test started after it: a run started inside the block keeps its own tests' output in its own report
+    """
+    helpers = getattr(_LOCAL, "helpers", None)
+    if not helpers:
+        return None
+    helper = helpers[-1]
+    if router is not None:
+        stack = _stack(router)
+        if stack and stack[-1].stamp > helper.stamp:
+            return None
+    return helper
+
+
+class _HelperStream(object):
+    """
+    Stands in for sys.stdout / sys.stderr while a capture_output() block is open and no run is routing that stream.
+    Threads with no open block pass straight through
+    """
+
+    def __init__(self, original, kind):
+        self.__original = original
+        self.__kind = kind
+
+    def write(self, text):
+        if not isinstance(text, str):
+            text = str(text)
+        helper = _helper_for(None)
+        if helper is not None:
+            return helper._write(self.__kind, text)
+        return self.__original.write(text)
+
+    def writelines(self, lines):
+        for line in lines:
+            self.write(line)
+
+    def flush(self):
+        try:
+            self.__original.flush()
+        except Exception:
+            pass
+
+    def isatty(self):
+        try:
+            return self.__original.isatty()
+        except Exception:
+            return False
+
+    @property
+    def original(self):
+        return self.__original
+
+    def __getattr__(self, name):
+        return getattr(self.__original, name)
+
+
+_HELPER_LOCK = threading.Lock()
+_HELPER_STATE = {"open": 0, "out": None, "err": None}  # open blocks on all threads, installed _HelperStreams
+
+
+def _needs_helper_stream(stream):
+    return not (isinstance(stream, _Stream) and stream.routing)
+
+
+def _open_helper():
+    with _HELPER_LOCK:
+        _HELPER_STATE["open"] += 1
+        # per stream, on every enter: a block opened during a run needs no wrapper, one opened later outside it does
+        if _HELPER_STATE["out"] is None and _needs_helper_stream(sys.stdout):
+            _HELPER_STATE["out"] = sys.stdout = _HelperStream(sys.stdout, "out")
+        if _HELPER_STATE["err"] is None and _needs_helper_stream(sys.stderr):
+            _HELPER_STATE["err"] = sys.stderr = _HelperStream(sys.stderr, "err")
+
+
+def _close_helper():
+    with _HELPER_LOCK:
+        _HELPER_STATE["open"] -= 1
+        if _HELPER_STATE["open"] > 0:
+            return
+        # the same rule as Router.uninstall: put the stream back only if nothing replaced ours since
+        if _HELPER_STATE["out"] is not None and sys.stdout is _HELPER_STATE["out"]:
+            sys.stdout = _HELPER_STATE["out"].original
+        if _HELPER_STATE["err"] is not None and sys.stderr is _HELPER_STATE["err"]:
+            sys.stderr = _HELPER_STATE["err"].original
+        _HELPER_STATE["out"] = _HELPER_STATE["err"] = None
+
+
+class capture_output(object):
+    """
+    Captures what the current thread writes to sys.stdout and sys.stderr inside the block:
+
+        with capture_output() as output:
+            print("hello")
+        assert output.stdout == "hello\\n"
+
+    Safe in parallel runs: only the thread that entered the block is captured. What it captures is not repeated in
+    the test's report output. Blocks nest; the innermost one gets the text. Not captured: threads the test starts
+    itself, output written below Python (os.write, subprocesses, C extensions), and log records of handlers made
+    before the block (they keep going into the test's captured log)
+    """
+
+    def __init__(self):
+        self.__output = CapturedOutput()
+
+    def __enter__(self):
+        _open_helper()
+        self.__output.stamp = next(_STAMPS)
+        _helpers().append(self.__output)
+        return self.__output
+
+    def __exit__(self, *exc):
+        helpers = _helpers()
+        if self.__output in helpers:
+            helpers.remove(self.__output)
+        _close_helper()
+        return False
 
 
 def _capture_record(router, stack, record):
