@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- `test_junkie.patch.Patch` (`setattr`, `delattr`, `setitem`, `delitem`, `setenv`, `delenv`) patches for one test and undoes it when the test ends, whatever its result; listeners and `@afterTest` still see the patched values
 - `@Suite(every_test_per_parameter=True)` runs every test once per suite parameter, and its hooks get that parameter, even when the test doesn't declare `suite_parameter`; off by default, and does nothing on a suite without `parameters`
 - `shortcuts.capture_output()` captures what a test prints to stdout and stderr for assertions, per thread, so it is safe in parallel runs
 - `tj run -s tests` from a project root imports the project's own helper modules (`tests.support`) without `PYTHONPATH=.`, even when another `tests` package is installed in site-packages
