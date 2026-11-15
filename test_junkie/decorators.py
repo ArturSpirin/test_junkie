@@ -19,6 +19,11 @@ class Suite(object):
 
 
 class test(object):
+    """
+    Marks a test. The test can name these arguments to be given them: parameter, suite_parameter, and temp_dir -
+    a pathlib.Path of a new, empty directory for this attempt, shared with its @beforeTest and @afterTest and
+    removed after the attempt whatever its result (a retry gets a new one)
+    """
 
     def __init__(self, **decorator_kwargs):
         self.decorator_kwargs = decorator_kwargs
@@ -32,6 +37,10 @@ class test(object):
 
 
 class beforeTest(object):
+    """
+    Runs before each test. It can name these arguments to be given them: test (a read-only TestView),
+    suite_parameter, and temp_dir - the same directory the test gets, see @test
+    """
 
     def __init__(self, **decorator_kwargs):
         self.decorator_kwargs = decorator_kwargs
@@ -58,6 +67,10 @@ class beforeClass(object):
 
 
 class afterTest(object):
+    """
+    Runs after each test. It can name these arguments to be given them: test
+    (a read-only TestView), suite_parameter, and temp_dir - the same directory the test got, removed after this runs
+    """
 
     def __init__(self, **decorator_kwargs):
         self.decorator_kwargs = decorator_kwargs

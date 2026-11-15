@@ -23,6 +23,7 @@ from test_junkie.builder import Builder
 from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.rules import Rules
 from test_junkie.settings import Settings
+from test_junkie.tempdir import TempDir
 from test_junkie.views import TestView
 from test_junkie.conflicts import ConflictMap
 from test_junkie.retry import reset_circuits
@@ -962,7 +963,8 @@ class Runner:
                 if not test.skip_before_test():
                     before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
                                                                    suite=suite, class_parameter=class_parameter,
-                                                                   test=test, parameter=parameter)
+                                                                   test=test, parameter=parameter,
+                                                                   temp_dir=scratch)
                     if before_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(before_test_error, pre_processed=True)
                         return False
@@ -1005,7 +1007,8 @@ class Runner:
                 if not test.skip_after_test():
                     after_test_error = Runner.__process_decorator(decorator_type=DecoratorType.AFTER_TEST,
                                                                   suite=suite, class_parameter=class_parameter,
-                                                                  test=test, parameter=parameter)
+                                                                  test=test, parameter=parameter,
+                                                                  temp_dir=scratch)
                     if after_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(after_test_error, pre_processed=True)
                         return False
@@ -1138,6 +1141,7 @@ class Runner:
                     _slot = test.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {})
                     meta_previous = enter_context(RunContext(suite, test, parameter, class_parameter,
                                                              len(_slot.get("statuses") or []) + 1))
+                    scratch = TempDir()  # this attempt's temp_dir, made only if something asks for it
                     try:
                         try:
                             start_time = time.time()  # before test start time
@@ -1152,7 +1156,7 @@ class Runner:
                             try:
                                 Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
                                                            test=test, parameter=parameter,
-                                                           class_parameter=class_parameter)
+                                                           class_parameter=class_parameter, temp_dir=scratch)
                             finally:
                                 if in_main:
                                     context.state.main_thread_in_test = False
@@ -1190,6 +1194,7 @@ class Runner:
                                                        class_param=class_parameter, param=parameter)
                                 return
                     finally:
+                        scratch.remove()  # every way out of the attempt passes here: pass, fail, skip, cancel
                         leave_context(meta_previous)
                         Limiter.release(pools)
                         attempt.__exit__(None, None, None)
@@ -1340,7 +1345,7 @@ class Runner:
 
     @staticmethod
     # @synchronized(threading.Lock())
-    def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None):
+    def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None, temp_dir=None):
 
         def update_metrics(_decorator_type, error=None, _trace=None):
             suite.metrics.update_decorator_metrics(_decorator_type, start_time, error, _trace)
@@ -1363,6 +1368,8 @@ class Runner:
                             kwargs["suite_parameter"] = class_parameter
                         if "test" in names and test is not None:  # per-test hooks only: a read-only view
                             kwargs["test"] = TestView(test)
+                        if "temp_dir" in names and temp_dir is not None:  # per-test hooks only
+                            kwargs["temp_dir"] = temp_dir.path()
                         func["decorated_function"](suite.get_class_instance(), **kwargs)
                     except Exception as decorator_error:
                         trace = traceback.format_exc()
@@ -1377,15 +1384,14 @@ class Runner:
             if functions_list:  # will updated only if we had decorated function(s)
                 update_metrics(decorator_type)
         else:
-            if test.accepts_test_and_suite_parameters():
-                test.get_function_object()(suite.get_class_instance(),
-                                           parameter=parameter, suite_parameter=class_parameter)
-            elif test.accepts_suite_parameters():
-                test.get_function_object()(suite.get_class_instance(), suite_parameter=class_parameter)
-            elif test.accepts_test_parameters():
-                test.get_function_object()(suite.get_class_instance(), parameter=parameter)
-            else:
-                test.get_function_object()(suite.get_class_instance())
+            kwargs = {}
+            if test.accepts_test_parameters():
+                kwargs["parameter"] = parameter
+            if test.accepts_suite_parameters():
+                kwargs["suite_parameter"] = class_parameter
+            if temp_dir is not None and "temp_dir" in arg_names(test.get_function_object()):
+                kwargs["temp_dir"] = temp_dir.path()
+            test.get_function_object()(suite.get_class_instance(), **kwargs)
 
     @staticmethod
     def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None,
