@@ -8,5 +8,5 @@ def test_report_insights():
 
 
 def test_similar_grouping_scales():
-    # every new traceback was compared with every known one: 446 s for 300 failures (TASK-1281)
+    # every new traceback was compared with every known one: 446 s for 300 failures
     analyzer_samples.run_scaling_checks()

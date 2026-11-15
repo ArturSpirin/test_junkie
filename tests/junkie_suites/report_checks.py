@@ -216,7 +216,7 @@ def _junit_10_errors(path):
 
 
 def xml_report_has_testsuites_root_and_totals():
-    # junit-10 (Jenkins xUnit): <testsuites> root, errors on every suite, no passed=/status= (TASK-1315)
+    # junit-10 (Jenkins xUnit): <testsuites> root, errors on every suite, no passed=/status=
     from xml.etree.ElementTree import parse
     root = parse(_xml(VariantsSuite, ColoredFailureSuite)).getroot()
     suites = list(root.iter("testsuite"))
@@ -278,7 +278,7 @@ def xml_report_rerun_without_exception_has_type():
 
 
 def xml_report_appends_to_old_format_file():
-    # a report.xml from before TASK-1315 (<root>, passed=, status=) comes out as valid junit-10 after the next run
+    # an old-format report.xml (<root>, passed=, status=) comes out as valid junit-10 after the next run
     from xml.etree.ElementTree import parse
     path = os.path.join(tempfile.mkdtemp(), "report.xml")
     with open(path, "w", encoding="utf-8") as doc:
@@ -297,7 +297,7 @@ def xml_report_appends_to_old_format_file():
 
 def xml_report_appends_to_file_with_case_properties():
     # an old or legacy report.xml keeps meta in <properties> under <testcase>, which junit-10 rejects: appending a
-    # default run turns them into the escaped `key: value` <system-out> lines a new run writes (TASK-1334)
+    # default run turns them into the escaped `key: value` <system-out> lines a new run writes
     from xml.etree.ElementTree import parse
     path = os.path.join(tempfile.mkdtemp(), "report.xml")
     with open(path, "w", encoding="utf-8") as doc:
@@ -365,7 +365,7 @@ class BrokenSetupSuite:
 
 def xml_report_maps_each_status():
     # a failure is <failure>, an error or ignored test <error>, a skipped one <skipped/>, each counted in its own
-    # attribute; the main element's exception is from the first run with the final status (TASK-1316)
+    # attribute; the main element's exception is from the first run with the final status
     from xml.etree.ElementTree import parse
     del FAILS_THEN_ERRORS[:]
     path = _xml(EachStatusSuite, BrokenSetupSuite)

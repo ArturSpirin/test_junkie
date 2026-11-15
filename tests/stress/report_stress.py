@@ -37,12 +37,12 @@ SMALL = {"tests": 200, "fail_rate": 0.3, "reruns": 6, "frames": 40}  # the size 
 # Seconds the whole end-of-run step (console + HTML construct + HTML generate + XML) may take, by label(size). The one
 # place the stress gate's thresholds live (tests/junkie_suites/stress_checks.py)
 BUDGETS = {
-    # the owner's budget, Tue Nov 3 2026 (TASK-1306)
+    # the agreed budgets
     "named-300": 30.0,
     "20000-tests-30pct-6-reruns-40-frames": 300.0,
-    # no owner number: held to the 20k budget, a bigger run (post-fix total 2.72 s, TASK-1304)
+    # no budget of its own: held to the 20k budget, a bigger run (post-fix total 2.72 s)
     "5000-tests-10pct-6-reruns-40-frames": 300.0,
-    # derived from TASK-1304's post-fix totals: under 2x named-300's 1.67 s and 1k/30%'s 1.27 s (both bigger runs) and
+    # derived from the post-fix totals: under 2x named-300's 1.67 s and 1k/30%'s 1.27 s (both bigger runs) and
     # ~20x this size's own ~0.14 s, so load or coverage won't trip it; under the pre-fix 6.23 s of the traceback
     # analysis alone at this size, so the quadratic grouping coming back fails it
     "200-tests-30pct-6-reruns-40-frames": 3.0,
