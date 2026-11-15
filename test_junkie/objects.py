@@ -16,17 +16,23 @@ _DECLARED = object()  # SuiteObject.get_meta(): no suite parameter given, the de
 
 @functools.lru_cache(maxsize=None)
 def _cached_arg_names(func):
-    return inspect.getfullargspec(func).args
+    return _names(inspect.getfullargspec(func))
+
+
+def _names(spec):
+    # keyword-only too: `def test(self, *, temp_dir=None)` is passed temp_dir by name like any other argument
+    return spec.args + spec.kwonlyargs
 
 
 def arg_names(func):
     """
-    :return: LIST of the function's argument names. Cached - inspect.getfullargspec() was called ~6 times per test
+    :return: LIST of the function's argument names, keyword-only ones included.
+             Cached - inspect.getfullargspec() was called ~6 times per test
     """
     try:
         return _cached_arg_names(func)
     except TypeError:  # unhashable callable
-        return inspect.getfullargspec(func).args
+        return _names(inspect.getfullargspec(func))
 
 class _FuncEval:
 
