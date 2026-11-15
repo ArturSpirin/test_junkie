@@ -2,6 +2,10 @@
 
 ## Unreleased
 - `shortcuts.raises(ValueError, match=...)` asserts a block raises: the test fails (FAIL, not ERROR) on no exception, another one, or a message that doesn't match; `caught.value` holds the exception
+- A `@test(skip=...)` callable that declares `parameter` and/or `suite_parameter` is called once per combination and skips only the combinations it returns `True` for; callables that take only `meta` (or nothing) work as before
+- A test, `@beforeTest` or `@afterTest` that names a `temp_dir` argument gets a new, empty `pathlib.Path` directory for that test, removed after it whatever the result; keyword-only arguments (`*, temp_dir=None`) are now passed by name too
+- `test_junkie.patch.Patch` (`setattr`, `delattr`, `setitem`, `delitem`, `setenv`, `delenv`) patches for one test and undoes it when the test ends, whatever its result; listeners and `@afterTest` still see the patched values
+- `@afterTest` and `Rules.after_test` run after a test skipped at runtime with `skip()`, so per-test resources are released; if `@afterTest` fails there, the test is an error, not a skip. `@afterTest` still doesn't run after a failed `@beforeTest`, now documented
 - `@Suite(every_test_per_parameter=True)` runs every test once per suite parameter, and its hooks get that parameter, even when the test doesn't declare `suite_parameter`; off by default, and does nothing on a suite without `parameters`
 - `shortcuts.capture_output()` captures what a test prints to stdout and stderr for assertions, per thread, so it is safe in parallel runs
 - `tj run -s tests` from a project root imports the project's own helper modules (`tests.support`) without `PYTHONPATH=.`, even when another `tests` package is installed in site-packages

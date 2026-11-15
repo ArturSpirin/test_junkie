@@ -10,6 +10,10 @@ from tests.junkie_suites.skip.RuntimeSkipSuites import (
     RuntimeSkipMixedSuite,
     RuntimeSkipEventSuite, _events,
     RuntimeSkipWithParamsSuite,
+    RuntimeSkipAfterTestSuite, _hooks,
+    RuntimeSkipRulesAfterTestSuite,
+    RuntimeSkipAfterTestFailsSuite,
+    BeforeTestFailsSuite,
 )
 
 
@@ -107,3 +111,42 @@ class RuntimeSkipTestSuite:
         report = aggregator.get_basic_report()["tests"]
         assert report[TestCategory.SKIP] == 1
         assert report[TestCategory.SUCCESS] == 2
+
+    @test()
+    def runs_after_test(self):
+        _hooks.clear()
+        aggregator = Runner([RuntimeSkipAfterTestSuite]).run()
+        assert _hooks == ["open", "close"]
+        assert aggregator.get_basic_report()["tests"][TestCategory.SKIP] == 1
+
+    @test()
+    def runs_rules_after_test(self):
+        _hooks.clear()
+        Runner([RuntimeSkipRulesAfterTestSuite]).run()
+        assert _hooks == ["rules.after_test"]
+
+    @test()
+    def after_test_runs_before_on_skip(self):
+        _events.clear()
+        Runner([RuntimeSkipEventSuite]).run()
+        assert _events.index("after_test") < _events.index("skip")
+
+    @test()
+    def after_test_fails_is_error_not_retried(self):
+        _events.clear()
+        RuntimeSkipAfterTestFailsSuite.call_count = 0
+        aggregator = Runner([RuntimeSkipAfterTestFailsSuite]).run()
+        report = aggregator.get_basic_report()["tests"]
+        assert RuntimeSkipAfterTestFailsSuite.call_count == 1
+        assert report[TestCategory.ERROR] == 1
+        assert report[TestCategory.SKIP] == 0
+        assert "skip" not in _events
+        assert "error" in _events
+        assert "complete" in _events
+
+    @test()
+    def failed_before_test_does_not_run_after_test(self):
+        _hooks.clear()
+        aggregator = Runner([BeforeTestFailsSuite]).run()
+        assert _hooks == ["open"]
+        assert aggregator.get_basic_report()["tests"][TestCategory.ERROR] == 1

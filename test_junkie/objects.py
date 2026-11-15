@@ -16,17 +16,23 @@ _DECLARED = object()  # SuiteObject.get_meta(): no suite parameter given, the de
 
 @functools.lru_cache(maxsize=None)
 def _cached_arg_names(func):
-    return inspect.getfullargspec(func).args
+    return _names(inspect.getfullargspec(func))
+
+
+def _names(spec):
+    # keyword-only too: `def test(self, *, temp_dir=None)` is passed temp_dir by name like any other argument
+    return spec.args + spec.kwonlyargs
 
 
 def arg_names(func):
     """
-    :return: LIST of the function's argument names. Cached - inspect.getfullargspec() was called ~6 times per test
+    :return: LIST of the function's argument names, keyword-only ones included.
+             Cached - inspect.getfullargspec() was called ~6 times per test
     """
     try:
         return _cached_arg_names(func)
     except TypeError:  # unhashable callable
-        return inspect.getfullargspec(func).args
+        return _names(inspect.getfullargspec(func))
 
 class _FuncEval:
 
@@ -38,13 +44,43 @@ class _FuncEval:
         return "{}.{}".format(obj.get_class_module(), obj.get_class_name())
 
     @staticmethod
-    def eval_skip(obj):
+    def skips_per_combination(obj):
+        """
+        :return: BOOLEAN, True if obj's skip= is a function or bound method that declares parameter and/or
+                 suite_parameter: it's asked once per combination, in the parameter loop
+        """
+        val = obj.get_skip()
+        if not (inspect.isfunction(val) or inspect.ismethod(val)):
+            return False
+        names = arg_names(val)
+        return "parameter" in names or "suite_parameter" in names
 
+    @staticmethod
+    def _skip_kwargs(obj, func, combination):
+        names = arg_names(func)
+        if combination is None:  # once for the whole test or suite: meta only, as always
+            return {"meta": obj.get_meta()} if "meta" in names else {}
+        kwargs = {}
+        if "meta" in names:
+            kwargs["meta"] = obj.get_meta(combination["parameter"], combination["recorded_suite_parameter"])
+        if "parameter" in names:
+            kwargs["parameter"] = combination["parameter"]
+        if "suite_parameter" in names:
+            kwargs["suite_parameter"] = combination["suite_parameter"]
+        return kwargs
+
+    @staticmethod
+    def eval_skip(obj, combination=None):
+        """
+        :param combination: None for the test (or suite) as a whole, else DICT with "parameter", "suite_parameter"
+                            (the one running) and "recorded_suite_parameter" (the one its results and meta are kept
+                            under) of one combination, for a callable that declares parameter / suite_parameter
+        """
         val = obj.get_skip()
         if not isinstance(val, bool):
             if inspect.isfunction(val):
                 try:
-                    val = val(meta=obj.get_meta()) if "meta" in arg_names(val) else val()
+                    val = val(**_FuncEval._skip_kwargs(obj, val, combination))
                 except Exception as e:
                     raise TestJunkieExecutionError(
                         "skip function '{name}' in {where} raised an unexpected error: {err}. "
@@ -52,9 +88,7 @@ class _FuncEval:
                             name=val.__name__, where=_FuncEval._where(obj), err=e, link=DocumentationLinks.SKIP)) from e
             elif inspect.ismethod(val):
                 try:
-                    val = getattr(val.__self__, val.__name__)(meta=obj.get_meta()) \
-                        if "meta" in arg_names(val) \
-                        else getattr(val.__self__, val.__name__)()
+                    val = getattr(val.__self__, val.__name__)(**_FuncEval._skip_kwargs(obj, val, combination))
                 except Exception as e:
                     raise TestJunkieExecutionError(
                         "skip method '{name}' in {where} raised an unexpected error: {err}. "
@@ -208,6 +242,11 @@ class SuiteObject(object):
                     return False
             return True
 
+        if _FuncEval.skips_per_combination(self):
+            raise BadParameters(
+                "skip= in @Suite() of {where} declares parameter or suite_parameter, but a suite is skipped as a "
+                "whole, before its parameters run. Declare it on the test's skip= instead. See documentation: {link}"
+                .format(where=_FuncEval._where(self), link=DocumentationLinks.SKIP))
         can_skip = _FuncEval.eval_skip(self)
 
         if settings.features is not None and can_skip is False:
@@ -432,7 +471,28 @@ class TestObject(object):
         return self.get_kwargs().get("skip", False)
 
     def can_skip(self):
+        """
+        :return: BOOLEAN, True if the test is skipped as a whole. False for a skip= callable that declares parameter
+                 or suite_parameter: that one is asked per combination (can_skip_combination)
+        """
+        if self.skips_per_combination():
+            return False
         return _FuncEval.eval_skip(self)
+
+    def skips_per_combination(self):
+        return _FuncEval.skips_per_combination(self)
+
+    def can_skip_combination(self, parameter, class_parameter):
+        """
+        :param class_parameter: the suite parameter running now; the callable gets it as suite_parameter
+        :return: BOOLEAN, True if a skip= callable that declares parameter / suite_parameter skips this combination.
+                 Called once per combination, so its cost is per combination
+        """
+        if not self.skips_per_combination():
+            return False
+        recorded = class_parameter if self.runs_per_suite_parameter() else None
+        return _FuncEval.eval_skip(self, {"parameter": parameter, "suite_parameter": class_parameter,
+                                          "recorded_suite_parameter": recorded})
 
     def skip_before_test_rule(self):
         return self.get_kwargs().get("skip_before_test_rule", False)

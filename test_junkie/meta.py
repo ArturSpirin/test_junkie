@@ -53,7 +53,7 @@ class TestJunkieMetaWarning(UserWarning):
 
 class RunContext(object):
 
-    __slots__ = ("suite", "test", "parameter", "class_parameter", "attempt")
+    __slots__ = ("suite", "test", "parameter", "class_parameter", "attempt", "patches", "patches_closed")
 
     def __init__(self, suite, test=None, parameter=None, class_parameter=None, attempt=None):
         self.suite = suite
@@ -61,6 +61,8 @@ class RunContext(object):
         self.parameter = parameter
         self.class_parameter = class_parameter
         self.attempt = attempt
+        self.patches = []  # undo functions from test_junkie.patch, run when the attempt ends
+        self.patches_closed = False  # True once they ran: later Patch.* calls raise
 
 
 def current_context():

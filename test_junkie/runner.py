@@ -15,6 +15,7 @@ from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
 from test_junkie.listener import Listener
 from test_junkie.meta import RunContext, enter_context, leave_context
+from test_junkie.patch import undo_patches
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.objects import Limiter, arg_names, _FuncEval
 from test_junkie.parallels import ParallelProcessor
@@ -23,6 +24,7 @@ from test_junkie.builder import Builder
 from test_junkie.reporter.xml_reporter import XmlReporter
 from test_junkie.rules import Rules
 from test_junkie.settings import Settings
+from test_junkie.tempdir import TempDir
 from test_junkie.views import TestView
 from test_junkie.conflicts import ConflictMap
 from test_junkie.retry import reset_circuits
@@ -645,6 +647,8 @@ class Runner:
                 if not isinstance(parameters, list):
                     continue
                 for param in parameters:
+                    if Runner.__combination_skipped(test, param, class_param):
+                        continue  # its skip= callable skips it: not a test the error stopped
                     Runner.__ignore_unit(self.__context, suite, test, param, class_param, error, trace, status)
         if suite.metrics.get_metrics()["status"] is None:
             # interrupted: cancel, unless a test didn't succeed - the same order as get_outcome()
@@ -677,8 +681,52 @@ class Runner:
                 if rerun is not None and known and known_class_params:
                     chosen = parameters_to_run(rerun, test, parameters, class_params, class_param)
                 for param in parameters if chosen is None else chosen:
+                    if known and known_class_params and Runner.__combination_skipped(test, param, class_param):
+                        continue  # its skip= callable skips it: it wouldn't have run
                     Runner.__ignore_unit(self.__context, suite, test, param, class_param, None, None,
                                          TestCategory.CANCEL)
+
+    @staticmethod
+    def __combination_skipped(test, param, class_param):
+        """
+        :return: BOOLEAN, True if a skip= callable that declares parameter / suite_parameter skips this combination,
+                 for listing the tests a suite never got to. A callable that raises counts as not skipping
+        """
+        recorded = class_param if test.runs_per_suite_parameter() else None
+        if test.get_status(param, recorded) is not None:
+            return False  # has a result already, nothing to list
+        try:
+            return test.can_skip_combination(param, class_param)
+        except Exception:
+            return False
+
+    @staticmethod
+    def __skip_combinations(context, suite, test, parameters, class_param, start_time):
+        """
+        Records as skipped each combination a skip= callable that declares parameter / suite_parameter skips.
+        The callable is asked once per result slot, with the suite parameter running: a test that doesn't run per
+        suite parameter has one slot per parameter, so it's asked under the first suite parameter only, and later
+        ones find the skip already recorded (and must not dispatch it: a non-SUCCESS slot would run as a retry)
+        :return: LIST, the parameters left to run under this suite parameter
+        """
+        if not test.skips_per_combination() or not isinstance(parameters, list):
+            return parameters
+        recorded = class_param if test.runs_per_suite_parameter() else None
+        left = []
+        for param in parameters:
+            status = test.get_status(param, recorded)
+            if status == TestCategory.SKIP:
+                continue
+            if status is None and test.can_skip_combination(param, class_param):
+                test.metrics.update_metrics(status=TestCategory.SKIP, start_time=start_time, param=param,
+                                            class_param=recorded)
+                Runner.__process_event(event=Event.ON_SKIP, suite=suite, test=test, param=param,
+                                       class_param=recorded)
+                context.console.unit_done(suite, unit_key(test, param, class_param), TestCategory.SKIP,
+                                          Runner.__label(suite, test, param, class_param))
+                continue
+            left.append(param)
+        return left
 
     @staticmethod
     def __ignore_unit(context, suite, test, param, class_param, error, trace, status=TestCategory.IGNORE):
@@ -798,6 +846,15 @@ class Runner:
                                                                   TestCategory.IGNORE, Runner.__label(suite, test))
                                         continue
 
+                                    # combinations its skip= callable skips are recorded now, before the test is
+                                    # reserved or runs alone: skipping holds nothing up
+                                    parameters = self.__skip_combinations(context, suite, test,
+                                                                          self.__parameters(test, class_param),
+                                                                          class_param, test_start_time)
+                                    if not parameters and test.skips_per_combination():
+                                        tests.remove(test)
+                                        continue
+
                                     # held until its last parameter is done, so nothing it conflicts with starts
                                     # in between; reserved in one step with the check, so two can't both start
                                     waited, blockers = ParallelProcessor.reserve(test, state)
@@ -813,7 +870,7 @@ class Runner:
                                             ParallelProcessor.release(test)
                                             raise
                                     try:
-                                        for param in self.__parameters(test, class_param):
+                                        for param in parameters:
                                             if unsuccessful_tests is not None and \
                                                     not test.is_qualified_for_retry(param, class_param=class_param):
                                                 # If does not qualify with current parameter, will move to the next
@@ -962,7 +1019,8 @@ class Runner:
                 if not test.skip_before_test():
                     before_test_error = Runner.__process_decorator(decorator_type=DecoratorType.BEFORE_TEST,
                                                                    suite=suite, class_parameter=class_parameter,
-                                                                   test=test, parameter=parameter)
+                                                                   test=test, parameter=parameter,
+                                                                   temp_dir=scratch)
                     if before_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(before_test_error, pre_processed=True)
                         return False
@@ -1005,7 +1063,8 @@ class Runner:
                 if not test.skip_after_test():
                     after_test_error = Runner.__process_decorator(decorator_type=DecoratorType.AFTER_TEST,
                                                                   suite=suite, class_parameter=class_parameter,
-                                                                  test=test, parameter=parameter)
+                                                                  test=test, parameter=parameter,
+                                                                  temp_dir=scratch)
                     if after_test_error is not None:  # updating **test** metrics (no decorator passed in)
                         process_failure(after_test_error, pre_processed=True)
                         return False
@@ -1136,12 +1195,15 @@ class Runner:
                     # this thread's run context for Meta.update(): the run number counts every run of this
                     # combination, suite retry passes included, so it lines up with the reports' runs
                     _slot = test.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {})
-                    meta_previous = enter_context(RunContext(suite, test, parameter, class_parameter,
-                                                             len(_slot.get("statuses") or []) + 1))
+                    run_context = RunContext(suite, test, parameter, class_parameter,
+                                             len(_slot.get("statuses") or []) + 1)
+                    meta_previous = enter_context(run_context)
+                    scratch = TempDir()  # this attempt's temp_dir, made only if something asks for it
                     try:
                         try:
                             start_time = time.time()  # before test start time
                             if run_before_test() is False:  # if before test failed, moving on without running the test
+                                # @afterTest does not run after a failed @beforeTest (as in unittest's tearDown)
                                 continue  # everything recorded at this point in the metrics and flow is solid
                             # Running actual test
                             start_time = time.time()  # test start time
@@ -1152,7 +1214,7 @@ class Runner:
                             try:
                                 Runner.__process_decorator(decorator_type=DecoratorType.TEST_CASE, suite=suite,
                                                            test=test, parameter=parameter,
-                                                           class_parameter=class_parameter)
+                                                           class_parameter=class_parameter, temp_dir=scratch)
                             finally:
                                 if in_main:
                                     context.state.main_thread_in_test = False
@@ -1170,6 +1232,10 @@ class Runner:
                             run_after_test(False)  # cleanup still runs
                             return
                         except SkipTest:
+                            # cleanup still runs: @beforeTest passed, so its resources need releasing
+                            start_time = time.time()  # after test start time
+                            if run_after_test() is False:
+                                return  # @afterTest failed: recorded as its error above, a skip is never retried
                             test.metrics.update_metrics(status=TestCategory.SKIP,
                                                         start_time=test_start_time,
                                                         param=parameter,
@@ -1190,12 +1256,20 @@ class Runner:
                                                        class_param=class_parameter, param=parameter)
                                 return
                     finally:
-                        leave_context(meta_previous)
-                        Limiter.release(pools)
-                        attempt.__exit__(None, None, None)
-                        if context is not None:
-                            test.metrics.record_output(parameter, class_parameter, retry_attempt,
-                                                       capture.output(), capture.log)
+                        # Patch.* undone here, after the listeners above saw the patched values. In its own try:
+                        # a leaked context or pool slot would break every test after this one
+                        try:
+                            undo_patches(run_context)
+                        finally:
+                            # every way out of the attempt passes here: pass, fail, skip, cancel. After the
+                            # patches are undone, in case one pointed into it; remove() never raises
+                            scratch.remove()
+                            leave_context(meta_previous)
+                            Limiter.release(pools)
+                            attempt.__exit__(None, None, None)
+                            if context is not None:
+                                test.metrics.record_output(parameter, class_parameter, retry_attempt,
+                                                           capture.output(), capture.log)
             else:  # every run it was allowed failed
                 gave_up = len(run_errors) > 1
         finally:
@@ -1340,7 +1414,7 @@ class Runner:
 
     @staticmethod
     # @synchronized(threading.Lock())
-    def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None):
+    def __process_decorator(decorator_type, suite, test=None, parameter=None,  class_parameter=None, temp_dir=None):
 
         def update_metrics(_decorator_type, error=None, _trace=None):
             suite.metrics.update_decorator_metrics(_decorator_type, start_time, error, _trace)
@@ -1363,6 +1437,8 @@ class Runner:
                             kwargs["suite_parameter"] = class_parameter
                         if "test" in names and test is not None:  # per-test hooks only: a read-only view
                             kwargs["test"] = TestView(test)
+                        if "temp_dir" in names and temp_dir is not None:  # per-test hooks only
+                            kwargs["temp_dir"] = temp_dir.path()
                         func["decorated_function"](suite.get_class_instance(), **kwargs)
                     except Exception as decorator_error:
                         trace = traceback.format_exc()
@@ -1377,15 +1453,14 @@ class Runner:
             if functions_list:  # will updated only if we had decorated function(s)
                 update_metrics(decorator_type)
         else:
-            if test.accepts_test_and_suite_parameters():
-                test.get_function_object()(suite.get_class_instance(),
-                                           parameter=parameter, suite_parameter=class_parameter)
-            elif test.accepts_suite_parameters():
-                test.get_function_object()(suite.get_class_instance(), suite_parameter=class_parameter)
-            elif test.accepts_test_parameters():
-                test.get_function_object()(suite.get_class_instance(), parameter=parameter)
-            else:
-                test.get_function_object()(suite.get_class_instance())
+            kwargs = {}
+            if test.accepts_test_parameters():
+                kwargs["parameter"] = parameter
+            if test.accepts_suite_parameters():
+                kwargs["suite_parameter"] = class_parameter
+            if temp_dir is not None and "temp_dir" in arg_names(test.get_function_object()):
+                kwargs["temp_dir"] = temp_dir.path()
+            test.get_function_object()(suite.get_class_instance(), **kwargs)
 
     @staticmethod
     def __process_event(event, suite, test=None, param=None, class_param=None, error=None, formatted_traceback=None,
