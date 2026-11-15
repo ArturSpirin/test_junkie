@@ -622,6 +622,13 @@ class TestObject(object):
 
         return "suite_parameter" in arg_names(self.get_function_object())
 
+    def runs_per_suite_parameter(self):
+        """
+        :return: BOOLEAN, True if this test runs (and is recorded) once per suite parameter: it declares
+                 suite_parameter, or its suite has @Suite(every_test_per_parameter=True)
+        """
+        return self.accepts_suite_parameters() or bool(self.suite.get_kwargs().get("every_test_per_parameter", False))
+
     def __not_ran(self, param, class_param):
         """
         :param param: test parameter

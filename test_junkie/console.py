@@ -439,10 +439,10 @@ def expected_units(suite, rerun=None):
             continue
         params = test.get_parameters()
         count = len(params) if isinstance(params, list) and params else 1
-        units = count * (suite_count if test.accepts_suite_parameters() else 1)
+        units = count * (suite_count if test.runs_per_suite_parameter() else 1)
         known = isinstance(params, list) and params and isinstance(class_params, list) and class_params
         if rerun is not None and known:  # parameters given as functions aren't known until they run
-            runs_under = class_params if test.accepts_suite_parameters() else [None]
+            runs_under = class_params if test.runs_per_suite_parameter() else [None]
             chosen = [parameters_to_run(rerun, test, params, class_params, param) for param in runs_under]
             if chosen[0] is not None:  # None: its parameters changed since, all of them run
                 units = sum(len(params) for params in chosen)
@@ -462,7 +462,7 @@ def units_estimated(suite, rerun=None):
 
 
 def unit_key(test, param, class_param):
-    return test.get_test_id(), param_key(class_param if test.accepts_suite_parameters() else None), param_key(param)
+    return test.get_test_id(), param_key(class_param if test.runs_per_suite_parameter() else None), param_key(param)
 
 
 def _short(value, limit=60):
@@ -1080,7 +1080,7 @@ class Console(object):
 
     def __params(self, test, param, class_param):
         parts = []
-        if class_param is not None and test.accepts_suite_parameters():
+        if class_param is not None and test.runs_per_suite_parameter():
             parts.append("suite: {}".format(_short(class_param, 40)))
         if param is not None:
             parts.append(_short(param))
