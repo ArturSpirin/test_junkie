@@ -521,7 +521,7 @@ class Runner:
         if not parameters or not isinstance(parameters, list):
             return True  # gets reported as bad parameters
         chosen = self.__parameters(test, class_param)
-        if test.accepts_suite_parameters():
+        if test.runs_per_suite_parameter():
             return bool(chosen)
         # it runs once, under the first suite parameter - after that it has nothing left
         return any(test.get_status(param, None) is None for param in chosen)
@@ -637,7 +637,7 @@ class Runner:
                 continue
             if rerun is not None and not rerun.includes_test(suite.get_class_name(), test.get_function_name()):
                 continue
-            for class_param in class_params if test.accepts_suite_parameters() else class_params[:1]:
+            for class_param in class_params if test.runs_per_suite_parameter() else class_params[:1]:
                 try:
                     parameters = self.__parameters(test, class_param)
                 except Exception:
@@ -672,7 +672,7 @@ class Runner:
             known = isinstance(parameters, list) and bool(parameters)
             if not known:
                 parameters = [None]
-            for class_param in class_params if test.accepts_suite_parameters() else class_params[:1]:
+            for class_param in class_params if test.runs_per_suite_parameter() else class_params[:1]:
                 chosen = None
                 if rerun is not None and known and known_class_params:
                     chosen = parameters_to_run(rerun, test, parameters, class_params, class_param)
@@ -686,7 +686,7 @@ class Runner:
         Records one test run that never got a result as ignored (or as cancelled)
         :param context: the run's _RunContext to update the console, None if the caller does that itself
         """
-        recorded = class_param if test.accepts_suite_parameters() else None
+        recorded = class_param if test.runs_per_suite_parameter() else None
         if test.get_status(param, recorded) is not None:
             return
         test.metrics.update_metrics(status=status, start_time=time.time(), param=param,
@@ -802,7 +802,7 @@ class Runner:
                                     # in between; reserved in one step with the check, so two can't both start
                                     waited, blockers = ParallelProcessor.reserve(test, state)
                                     if blockers and waited >= 0.05:
-                                        test.metrics.record_conflict_wait(class_param if test.accepts_suite_parameters()
+                                        test.metrics.record_conflict_wait(class_param if test.runs_per_suite_parameter()
                                                                           else None, waited, blockers)
 
                                     if exclusive:  # runs alone: no new test or hook anywhere in the run until it's done
@@ -888,7 +888,7 @@ class Runner:
     def __label(suite, test, parameter=None, class_parameter=None):
         label = "{}.{}".format(suite.get_class_name(), test.get_function_name())
         parts = []
-        if class_parameter is not None and test.accepts_suite_parameters():
+        if class_parameter is not None and test.runs_per_suite_parameter():
             parts.append("suite: {}".format(class_parameter))
         if parameter is not None:
             parts.append(param_key(parameter))
@@ -943,7 +943,7 @@ class Runner:
             # a deferred test is retried after the class is set up again - its line is printed then. No `return`
             # here: Python 3.14 warns about return in finally (PEP 765)
             if not deferred:
-                recorded = class_parameter if test.accepts_suite_parameters() else None
+                recorded = class_parameter if test.runs_per_suite_parameter() else None
                 data = test.metrics.get_metrics().get(param_key(recorded), {}).get(param_key(parameter), {})
                 context.console.unit_done(suite, key, data.get("status"), label,
                                           runtime=sum(t for t in data.get("performance", []) if t),
@@ -1018,7 +1018,7 @@ class Runner:
                     process_failure(after_test_error)  # updating **test** metrics (no decorator passed in)
                 return False
 
-        if not test.accepts_suite_parameters():
+        if not test.runs_per_suite_parameter():
             # for reporting purposes, so reports are properly nested
             class_parameter = None
 
@@ -1027,7 +1027,7 @@ class Runner:
         if resume is not None:
             pass  # a held retry: decided already, runs straight away (a failed setup is handled by the caller)
         elif before_class_error is not None or cancelled:
-            if not test.accepts_suite_parameters():
+            if not test.runs_per_suite_parameter():
                 if None in test.suite.metrics.get_metrics()[DecoratorType.BEFORE_CLASS]["exceptions"] \
                         and test.get_status(parameter, class_parameter) is not None:
                     return  # fixes ticket: #19
@@ -1050,7 +1050,7 @@ class Runner:
             return
 
         status = test.get_status(parameter, class_parameter)
-        if resume is None and not test.accepts_suite_parameters() and status is not None:
+        if resume is None and not test.runs_per_suite_parameter() and status is not None:
             """
             making sure that we do not run tests with suite parameters if suite parameters are not accepted in the
             test signature. But we still want to run all other parameters and tests without any params.
@@ -1235,7 +1235,7 @@ class Runner:
             for item in held:
                 test, parameter, class_parameter = item["test"], item["parameter"], item["class_parameter"]
                 if before_class_error is not None:  # set up again and failed: the held retry is ignored
-                    recorded = class_parameter if test.accepts_suite_parameters() else None
+                    recorded = class_parameter if test.runs_per_suite_parameter() else None
                     test.metrics.update_metrics(status=TestCategory.IGNORE, start_time=time.time(), param=parameter,
                                                 class_param=recorded, exception=before_class_error["exception"],
                                                 formatted_traceback=before_class_error["traceback"])
@@ -1267,7 +1267,7 @@ class Runner:
                 return
         with _RESET_LOCK:  # cancelled: what's still held keeps the failure it has
             for item in _HELD_RESETS.pop(suite.get_class_object(), []):
-                recorded = item["class_parameter"] if item["test"].accepts_suite_parameters() else None
+                recorded = item["class_parameter"] if item["test"].runs_per_suite_parameter() else None
                 data = item["test"].metrics.get_metrics().get(param_key(recorded), {}).get(
                     param_key(item["parameter"]), {})
                 context.console.unit_done(suite, unit_key(item["test"], item["parameter"], item["class_parameter"]),

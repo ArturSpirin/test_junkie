@@ -82,7 +82,7 @@ def parameters_to_run(rerun, test, parameters, suite_parameters, suite_parameter
              the test's parameters - they changed since the run it repeats, so all of them run
     """
     suite, name = test.suite.get_class_name(), test.get_function_name()
-    accepts = test.accepts_suite_parameters()
+    accepts = test.runs_per_suite_parameter()
 
     def included(parameter, suite_param):
         return rerun.includes(suite, name, parameter, suite_param if accepts else None)
