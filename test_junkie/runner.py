@@ -15,6 +15,7 @@ from test_junkie.decorators import DecoratorType, synchronized
 from test_junkie.errors import ConfigError, TestJunkieExecutionError, TestListenerError, BadParameters, SkipTest
 from test_junkie.listener import Listener
 from test_junkie.meta import RunContext, enter_context, leave_context
+from test_junkie.patch import undo_patches
 from test_junkie.metrics import Aggregator, ResourceMonitor
 from test_junkie.objects import Limiter, arg_names, _FuncEval
 from test_junkie.parallels import ParallelProcessor
@@ -1136,8 +1137,9 @@ class Runner:
                     # this thread's run context for Meta.update(): the run number counts every run of this
                     # combination, suite retry passes included, so it lines up with the reports' runs
                     _slot = test.metrics.get_metrics().get(param_key(class_parameter), {}).get(param_key(parameter), {})
-                    meta_previous = enter_context(RunContext(suite, test, parameter, class_parameter,
-                                                             len(_slot.get("statuses") or []) + 1))
+                    run_context = RunContext(suite, test, parameter, class_parameter,
+                                             len(_slot.get("statuses") or []) + 1)
+                    meta_previous = enter_context(run_context)
                     try:
                         try:
                             start_time = time.time()  # before test start time
@@ -1195,12 +1197,17 @@ class Runner:
                                                        class_param=class_parameter, param=parameter)
                                 return
                     finally:
-                        leave_context(meta_previous)
-                        Limiter.release(pools)
-                        attempt.__exit__(None, None, None)
-                        if context is not None:
-                            test.metrics.record_output(parameter, class_parameter, retry_attempt,
-                                                       capture.output(), capture.log)
+                        # Patch.* undone here, after the listeners above saw the patched values. In its own try:
+                        # a leaked context or pool slot would break every test after this one
+                        try:
+                            undo_patches(run_context)
+                        finally:
+                            leave_context(meta_previous)
+                            Limiter.release(pools)
+                            attempt.__exit__(None, None, None)
+                            if context is not None:
+                                test.metrics.record_output(parameter, class_parameter, retry_attempt,
+                                                           capture.output(), capture.log)
             else:  # every run it was allowed failed
                 gave_up = len(run_errors) > 1
         finally:
