@@ -235,26 +235,115 @@ def run_import_error_and_guess_root():
 
 def guess_root_with_a_relative_source():
     # with a relative -s (tj run -s suites --guess-root) the first guess was "suites" itself, and walking up from a
-    # relative path stopped there - so it gave up instead of trying the project root above it
+    # relative path stopped there - so it gave up instead of trying the project root above it.
+    # The helpers sit one folder above the working directory, so the run directory retry doesn't cover them
     project = tempfile.mkdtemp()
     os.makedirs(os.path.join(project, "proj_rel_helpers_tj"))
     with open(os.path.join(project, "proj_rel_helpers_tj", "__init__.py"), "w") as doc:
         doc.write("VALUE = 1\n")
-    os.makedirs(os.path.join(project, "suites"))
-    with open(os.path.join(project, "suites", "needs_rel_root.py"), "w") as doc:
+    run_dir = os.path.join(project, "sub")
+    os.makedirs(os.path.join(run_dir, "suites"))
+    with open(os.path.join(run_dir, "suites", "needs_rel_root.py"), "w") as doc:
         doc.write("from proj_rel_helpers_tj import VALUE\n" +
                   PASSING_SUITE.replace("CliPassingSuite", "NeedsRelRootSuite"))
     saved = list(sys.path)
     # python -m pytest / python -m test_junkie put the working directory on sys.path, which would hide the bug
     sys.path[:] = [entry for entry in sys.path if entry not in ("", ".")]
     try:
-        code, out = run_cli("run", "-s", "suites", cwd=project)
+        code, out = run_cli("run", "-s", "suites", cwd=run_dir)
         assert code == 120 and "There is an import error" in out, out
-        code, out = run_cli("run", "-s", "suites", "--guess-root", cwd=project)
+        code, out = run_cli("run", "-s", "suites", "--guess-root", cwd=run_dir)
         assert code is None and "1 suite, 1 test" in out and "PASSED" in out, out
     finally:
         sys.path[:] = saved
         sys.modules.pop("proj_rel_helpers_tj", None)
+
+
+def _helper_project(package, suite_file, imports="support"):
+    """
+    The TCMS shape: a plain pyproject.toml (no [tool.test_junkie]), `<package>/__init__.py`, `<package>/support.py`
+    and a suite in `<package>` doing `from <package>.<imports> import VALUE`
+    """
+    project = tempfile.mkdtemp()
+    with open(os.path.join(project, "pyproject.toml"), "w") as doc:
+        doc.write('[project]\nname = "helper-project"\n')
+    os.makedirs(os.path.join(project, package))
+    for name, source in (("__init__.py", ""), ("support.py", "VALUE = 1\n"),
+                         (suite_file, "from {}.{} import VALUE\n".format(package, imports) +
+                          PASSING_SUITE.replace("CliPassingSuite", "HelperSuite_" + package))):
+        with open(os.path.join(project, package, name), "w") as doc:
+            doc.write(source)
+    return project
+
+
+@contextlib.contextmanager
+def _like_the_tj_command(project, package, shadow=False):
+    """
+    No working directory on sys.path (the tj / tj3 scripts, python -P), restored afterwards with sys.modules.
+    shadow: plant a foreign `package` in sys.modules first, the way a stray site-packages `tests` gets imported
+    """
+    import types
+    saved_path, saved = list(sys.path), sys.modules.get(package)
+    sys.path[:] = [entry for entry in sys.path
+                   if entry not in ("", ".") and os.path.normcase(os.path.abspath(entry)) != os.path.normcase(project)]
+    stub = None
+    if shadow:
+        stub = types.ModuleType(package)
+        stub.__path__ = [tempfile.mkdtemp()]  # an empty package somewhere else, like site-packages\tests
+        sys.modules[package] = stub
+    try:
+        yield stub
+    finally:
+        sys.path[:] = saved_path
+        root = os.path.normcase(project) + os.sep
+        for name, module in list(sys.modules.items()):  # the package, the stub and the suite files, nothing else
+            if name == package or name.startswith(package + ".") or \
+                    os.path.normcase(getattr(module, "__file__", None) or "").startswith(root):
+                sys.modules.pop(name, None)
+        if saved is not None:
+            sys.modules[package] = saved
+
+
+def run_directory_is_tried_when_there_is_no_project_config():
+    # tj run -s tests from the project root, no tj.cfg / [tool.test_junkie]: `tests.support` didn't import (exit 120)
+    project = _helper_project("run_dir_pkg_tj", "run_dir_suite_tj.py")
+    with _like_the_tj_command(project, "run_dir_pkg_tj"):
+        code, out = run_cli("run", "-s", "run_dir_pkg_tj", cwd=project)
+    assert code is None and "1 suite, 1 test" in out and "[PASSED]" in out, out
+
+
+def shadowing_package_is_evicted_before_the_retry():
+    # a same-named package imported from elsewhere stayed in sys.modules, so `<pkg>.support` kept failing whatever
+    # went on sys.path - the case behind `tj run -s tests` with a stray site-packages `tests`
+    project = _helper_project("shadow_pkg_tj", "shadow_suite_tj.py")
+    with _like_the_tj_command(project, "shadow_pkg_tj", shadow=True):
+        code, out = run_cli("run", "-s", "shadow_pkg_tj", cwd=project)
+        assert sys.modules.get("shadow_pkg_tj") is not None and \
+            os.path.normcase(project) in os.path.normcase(sys.modules["shadow_pkg_tj"].__file__), out
+    assert code is None and "1 suite, 1 test" in out and "[PASSED]" in out, out
+
+
+def project_config_retry_evicts_a_shadowing_package():
+    # the project config folder retry had the same hole as above
+    project = _helper_project("cfg_shadow_pkg_tj", "cfg_shadow_suite_tj.py")
+    with _like_the_tj_command(project, "cfg_shadow_pkg_tj"):
+        code, out = run_cli("config", "update", "-s", "cfg_shadow_pkg_tj", "--config", "./tj.cfg", cwd=project)
+        assert code is None, out
+    with _like_the_tj_command(project, "cfg_shadow_pkg_tj", shadow=True):
+        code, out = run_cli("run", cwd=project)
+    assert code is None and "tj.cfg" in out and "1 suite, 1 test" in out and "[PASSED]" in out, out
+
+
+def installed_package_is_not_evicted_without_a_project_copy():
+    # the project has no `<pkg>` of its own, so the cached one is the only one there is: it stays, the error stays
+    project = tempfile.mkdtemp()
+    with open(os.path.join(project, "no_copy_suite_tj.py"), "w") as doc:
+        doc.write("from no_copy_pkg_tj.missing import VALUE\n" +
+                  PASSING_SUITE.replace("CliPassingSuite", "NoCopySuite"))
+    with _like_the_tj_command(project, "no_copy_pkg_tj", shadow=True) as stub:
+        code, out = run_cli("run", "-s", "no_copy_suite_tj.py", cwd=project)
+        assert sys.modules.get("no_copy_pkg_tj") is stub, out
+    assert code == 120 and "No module named 'no_copy_pkg_tj.missing'" in out, out
 
 
 def config_commands():
@@ -770,7 +859,9 @@ def pyproject_table_is_read_only():
 
 
 CHECKS = [bare_and_unknown_commands, version_shows_where_things_are, old_option_spellings_still_work_but_help_shows_the_new_ones, audit_tag_flags_match_tj_run, tests_and_suites_take_patterns, seed_repeats_a_random_order, retry_overrides, retry_policy_flag, flaky_flags, report_folders_and_json_report, rerun_from_a_json_report, audit_json_and_fail_on_gaps, project_config_is_found_and_used, pyproject_table_is_read_only,
-          audit_lists_every_suite, guess_root_with_a_relative_source, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
+          audit_lists_every_suite, guess_root_with_a_relative_source, run_directory_is_tried_when_there_is_no_project_config,
+          shadowing_package_is_evicted_before_the_retry, project_config_retry_evicts_a_shadowing_package,
+          installed_package_is_not_evicted_without_a_project_copy, config_update_show_restore, run_shows_the_saved_config_it_used, audit_views_gaps_and_listing, audit_no_flags_filter_out_suites_that_have_them,
           audit_no_test_meta_checks_the_tests_meta, audit_only_covers_the_requested_suites, audit_by_feature_and_verbose, audit_unknown_view_is_rejected,
           audit_and_run_without_sources_explain_what_is_missing, audit_reports_when_nothing_matches,
           run_exit_codes, run_with_missing_config_file, run_import_error_and_guess_root, config_commands,

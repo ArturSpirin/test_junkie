@@ -57,6 +57,41 @@ def _load_source(module_name, file_path):
     return module
 
 
+def _evict_shadowing_package(error, root):
+    """
+    A failed import can leave a package of the same name from elsewhere (e.g. a stray `tests` in site-packages) in
+    sys.modules, so `tests.support` keeps failing whatever folder goes on sys.path. Before a retry from `root`, drop
+    the top-level package named in the error, and its submodules, when `root` has its own copy and the cached one
+    lives outside `root`. Nothing else is touched
+    :return: BOOLEAN, True if something was evicted
+    """
+    name = getattr(error, "name", None)
+    if not name:
+        return False
+    top = name.split(".")[0]
+    cached = sys.modules.get(top)
+    if cached is None:
+        return False
+    if not (os.path.isdir(os.path.join(root, top)) or os.path.isfile(os.path.join(root, top + ".py"))):
+        return False
+    root = os.path.normcase(os.path.abspath(root))
+
+    def inside(path):
+        path = os.path.normcase(os.path.abspath(path))
+        return path == root or path.startswith(root + os.sep)
+
+    locations = list(getattr(cached, "__path__", None) or [])  # a namespace package's _NamespacePath too
+    if getattr(cached, "__file__", None):
+        locations.append(cached.__file__)
+    if any(inside(location) for location in locations):
+        return False
+    for module_name in list(sys.modules):
+        if module_name == top or module_name.startswith(top + "."):
+            sys.modules.pop(module_name, None)
+    importlib.invalidate_caches()
+    return True
+
+
 class CliRunner:
 
     # cheap text pre-filter only - which classes are suites is decided by importing the file and checking the
@@ -176,6 +211,7 @@ class CliRunner:
                           assumed_root=CliUtils.format_color_string(value=possibility, color="yellow")))
             try:
                 sys.path.insert(0, possibility)
+                _evict_shadowing_package(error, possibility)
                 return _load_source(_module_name, _file_path)
             except ImportError as error:
                 if len(possibility.split(os.sep)) > 2:
@@ -187,10 +223,15 @@ class CliRunner:
             with suppressed_stdout(suppress=True):
                 module = _load_source(module_name, _file_path)
         except ImportError as error:
-            root = os.path.dirname(os.path.abspath(self.project_config)) if self.project_config else None
-            if root and root not in sys.path:
-                # the folder with the project's tj.cfg / pyproject.toml is the project root: try it first
-                sys.path.insert(0, root)
+            # the folder with the project's tj.cfg / pyproject.toml is the project root, else the run directory
+            # (`tj run -s tests` from the root, with no project config): try it first
+            root = os.path.dirname(os.path.abspath(self.project_config)) if self.project_config else os.getcwd()
+            on_path = os.path.normcase(os.path.abspath(root)) in \
+                [os.path.normcase(os.path.abspath(path or os.curdir)) for path in sys.path]
+            evicted = _evict_shadowing_package(error, root)
+            if not on_path or evicted:
+                if not on_path:
+                    sys.path.insert(0, root)
                 try:
                     with suppressed_stdout(suppress=True):
                         module = _load_source(module_name, _file_path)

@@ -46,13 +46,14 @@ class CovBadConflict:
         pass
 '''
 
-# fails to import the first time, and is interrupted when --guess-root loads it again
+# fails to import the first time and on the run directory retry, and is interrupted when --guess-root loads it again
 INTERRUPTED_GUESS_ROOT = '''
 import os
-if os.environ.get("TJ_COV_GUESS_ROOT_RETRY"):
+loads = int(os.environ.get("TJ_COV_GUESS_ROOT_RETRY", "0"))
+if loads >= 2:
     raise KeyboardInterrupt
-os.environ["TJ_COV_GUESS_ROOT_RETRY"] = "1"
-raise ImportError("first load fails")
+os.environ["TJ_COV_GUESS_ROOT_RETRY"] = str(loads + 1)
+raise ImportError("load fails")
 
 from test_junkie.decorators import Suite, test
 
